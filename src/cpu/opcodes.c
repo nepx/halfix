@@ -126,6 +126,7 @@
 static void interrupt_guard(void)
 {
     // Update cpu.cycles to have the right value
+    cpu.cycles += cpu_get_cycles() - cpu.cycles;
     if (cpu.cycles_to_run != 1) {
         cpu.refill_counter = cpu.cycles_to_run - 2;
         cpu.cycles_to_run = 2;
