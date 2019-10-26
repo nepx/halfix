@@ -1,0 +1,346 @@
+{
+    "src/cpu/access.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h",
+            "include/io.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/trace.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h",
+            "include/cpu/opcodes.h",
+            "include/cpu/instruction.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/seg.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/cpu.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h",
+            "include/cpu/fpu.h",
+            "include/cpu/instrument.h",
+            "include/cpuapi.h",
+            "include/util.h",
+            "include/devices.h",
+            "include/io.h",
+            "include/pc.h",
+            "include/drive.h",
+            "include/state.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/mmu.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h",
+            "include/cpu/instrument.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/ops/ctrlflow.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h",
+            "include/display.h",
+            "include/cpu/instruction.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/smc.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/decoder.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h",
+            "include/cpu/opcodes.h",
+            "include/cpu/instruction.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/eflags.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h",
+            "include/cpu/opcodes.h",
+            "include/cpu/instruction.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/prot.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/opcodes.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/opcodes.h",
+            "include/cpu/instruction.h",
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h",
+            "include/cpu/fpu.h",
+            "include/cpu/instrument.h",
+            "include/cpu/ops.h",
+            "include/cpuapi.h",
+            "include/util.h",
+            "include/devices.h",
+            "include/io.h",
+            "include/pc.h",
+            "include/drive.h",
+            "include/state.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/ops/arith.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h",
+            "include/cpu/opcodes.h",
+            "include/cpu/instruction.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/ops/io.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/io.h",
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/ops/string.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h",
+            "include/cpu/opcodes.h",
+            "include/cpu/instruction.h",
+            "include/cpu/ops.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/ops/stack.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/ops/misc.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h",
+            "include/cpuapi.h",
+            "include/util.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/ops/bit.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h",
+            "include/cpu/opcodes.h",
+            "include/cpu/instruction.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/softfloat.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/softfloat/softfloat.h",
+            "include/softfloat/softfloat-round-pack.h",
+            "include/softfloat/softfloat.h",
+            "include/softfloat/softfloat-macros.h",
+            "include/softfloat/softfloat-specialize.h",
+            "include/softfloat/softfloat-macros.h",
+            "include/softfloat/fpu-constants.h",
+            "include/softfloat/softfloatx80.h",
+            "include/softfloat/softfloat-specialize.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    },
+    "src/cpu/fpu.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h",
+            "include/cpu/fpu.h",
+            "include/cpu/instrument.h",
+            "include/devices.h",
+            "include/util.h",
+            "include/io.h",
+            "include/pc.h",
+            "include/drive.h",
+            "include/state.h",
+            "include/softfloat/softfloat.h",
+            "include/softfloat/softfloatx80.h",
+            "include/softfloat/softfloat.h",
+            "include/softfloat/softfloat-specialize.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+
+        ]
+    }
+}

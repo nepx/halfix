@@ -1,0 +1,11 @@
+These files are useful utilities that you can use. 
+ 
+ autogen_bit.js: Automatically generate bit operations
+ autogen_jcc.js: Automatically generates conditional jump opcodes
+ autogen_savestate.js: Automatically generates generates savestate fields
+ autogen.js: Contains useful methods. Doesn't do anything when run
+ ftable_lookup.js: Looks through an Emscripten-generated file and looks up the name of a function given an index into a function pointer table. 
+ imgsplit.js: Split disk image files in a way that Halfix can understand. 
+ opcode-list.js: A public-domain list of x86 opcodes, provided for convienience. 
+
+All files should be run from the project's root directory. 

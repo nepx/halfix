@@ -1,0 +1,147 @@
+{
+    "src/main.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/drive.h",
+            "include/state.h",
+            "include/pc.h",
+            "include/drive.h",
+            "include/util.h",
+            "include/devices.h",
+            "include/util.h",
+            "include/io.h",
+            "include/pc.h",
+            "include/display.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+            "@flags=!emscripten"
+        ]
+    },
+    "src/pc.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/pc.h",
+            "include/drive.h",
+            "include/state.h",
+            "include/cpuapi.h",
+            "include/util.h",
+            "include/devices.h",
+            "include/io.h",
+            "include/pc.h",
+            "include/display.h",
+            "include/io.h",
+            "include/state.h",
+            "include/util.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+        ]
+    },
+    "src/util.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/util.h",
+            "include/cpuapi.h",
+            "include/util.h",
+            "include/display.h",
+            "include/state.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": []
+    },
+    "src/state.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/state.h",
+            "include/util.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": []
+    },
+    "src/io.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/io.h",
+            "include/cpuapi.h",
+            "include/util.h",
+            "include/util.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": []
+    },
+    "src/display.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/display.h",
+            "include/devices.h",
+            "include/util.h",
+            "include/io.h",
+            "include/pc.h",
+            "include/drive.h",
+            "include/state.h",
+            "include/util.h",
+            "include/state.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+        ]
+    },
+    "src/drive.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/drive.h",
+            "include/state.h",
+            "include/state.h",
+            "include/util.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+        ]
+    },
+    "src/emscripten/emscripten.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h",
+            "include/display.h",
+            "include/devices.h",
+            "include/util.h",
+            "include/io.h",
+            "include/pc.h",
+            "include/drive.h",
+            "include/state.h",
+            "include/drive.h",
+            "include/pc.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+            "@flags=emscripten"
+        ]
+    }
+}

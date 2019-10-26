@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Halfix x86 Emulator</title>
+</head>
+
+<body>
+    <button onclick="lockPointer()">Lock Mouse Pointer</button>
+    <!-- | <button id="savebutton">Save Emulator State</button> --> | <button id="pause">Pause</button><br>
+    <p>
+        Loading file <code id="netfile">(none)</code>: <progress id="netstat" value="0" max="0"></progress>, Total Bytes
+        Loaded: <span id="totalbytes"></span> 
+        <span>Speed: <span id="speed"></span> MIPS</span> 
+        <span id="error"></span></p>
+    <hr>
+    <canvas id="screen">Your browser does not support canvas.</canvas><br />
+    <pre id="messages"></pre>
+    <textarea id="log"></textarea>
+    <p>On mobile, tap on the text box to raise keyboard</p>
+    <script src="src/emscripten/xhrfile.js"></script>
+    <script src="lib/jszip.min.js"></script>
+    <script src="lib/pako_inflate.min.js"></script>
+    <script src="runtime.js"></script>
+    <script>
+        function lockPointer() {
+            Module["canvas"].requestPointerLock();
+        }
+    </script>
+</body>
+
+</html>
