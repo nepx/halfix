@@ -1,0 +1,4 @@
+# Don't include build files
+*.o
+*.a
+halfix
