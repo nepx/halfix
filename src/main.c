@@ -2,8 +2,8 @@
 #include "display.h"
 #include "drive.h"
 #include "pc.h"
+#include "platform.h"
 #include "util.h"
-#include <alloca.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,9 +16,9 @@
 
 static struct pc_settings pc;
 
-static int load_file(struct loaded_file *lf, char *path)
+static int load_file(struct loaded_file* lf, char* path)
 {
-    FILE *f = fopen(path, "rb");
+    FILE* f = fopen(path, "rb");
     if (!f)
         return -1;
     fseek(f, 0, SEEK_END);
@@ -34,14 +34,12 @@ static int load_file(struct loaded_file *lf, char *path)
     return 0;
 }
 
-struct cfg_option
-{
-    const char *name;
+struct cfg_option {
+    const char* name;
     const int value;
 };
 
-enum
-{
+enum {
     CFG_NONE = 0,
     CFG_MEMORY,
     CFG_CPU,
@@ -60,53 +58,58 @@ enum
     CFG_BOOTNONE
 };
 static const struct cfg_option general_opts[] = {
-    {"memory", CFG_MEMORY},
-    {"vgamemory", CFG_MEMORY},
-    {"cpu", CFG_CPU},
-    {"bios", CFG_BIOS},
-    {"vgabios", CFG_BIOS},
-    {"vbe", CFG_VBE},
-    {"pci", CFG_PCI_APIC},
-    {"apic", CFG_PCI_APIC},
-    {NULL, CFG_NONE}};
+    { "memory", CFG_MEMORY },
+    { "vgamemory", CFG_MEMORY },
+    { "cpu", CFG_CPU },
+    { "bios", CFG_BIOS },
+    { "vgabios", CFG_BIOS },
+    { "vbe", CFG_VBE },
+    { "pci", CFG_PCI_APIC },
+    { "apic", CFG_PCI_APIC },
+    { NULL, CFG_NONE }
+};
 static const struct cfg_option drive_opts[] = {
-    {"inserted", CFG_INSERTED},
-    {"file", CFG_FILE},
-    {NULL, CFG_NONE}};
+    { "inserted", CFG_INSERTED },
+    { "file", CFG_FILE },
+    { NULL, CFG_NONE }
+};
 static const struct cfg_option boot_opts[] = {
-    {"a", CFG_BOOTORDER},
-    {"b", CFG_BOOTORDER},
-    {"c", CFG_BOOTORDER},
-    {NULL, CFG_NONE}};
+    { "a", CFG_BOOTORDER },
+    { "b", CFG_BOOTORDER },
+    { "c", CFG_BOOTORDER },
+    { NULL, CFG_NONE }
+};
 static const struct cfg_option boot_devices[] = {
-    {"hd", CFG_BOOTDISK},
-    {"cd", CFG_BOOTCD},
-    {"fd", CFG_BOOTFLOPPY},
-    {"none", CFG_BOOTNONE},
-    {NULL, CFG_NONE}};
+    { "hd", CFG_BOOTDISK },
+    { "cd", CFG_BOOTCD },
+    { "fd", CFG_BOOTFLOPPY },
+    { "none", CFG_BOOTNONE },
+    { NULL, CFG_NONE }
+};
 
 static const struct cfg_option sections[] = {
     // Has the index into section_list array
-    {"general", 0},
-    {"hda", 1},
-    {"hdb", 2},
-    {"hdc", 3},
-    {"hdd", 4},
-    {"boot", 5},
-    {NULL, CFG_NONE}};
-static const struct cfg_option *section_list[] = {
+    { "general", 0 },
+    { "hda", 1 },
+    { "hdb", 2 },
+    { "hdc", 3 },
+    { "hdd", 4 },
+    { "boot", 5 },
+    { NULL, CFG_NONE }
+};
+static const struct cfg_option* section_list[] = {
     general_opts,
     drive_opts,
     drive_opts,
     drive_opts,
     drive_opts,
-    boot_opts};
+    boot_opts
+};
 
 // Returns 1 if generic whitespace, 2 if newline, 0 otherwise
 static inline int is_whitespace(char x)
 {
-    if (x <= 32)
-    {
+    if (x <= 32) {
         if (x == '\n')
             return 2;
         else
@@ -117,15 +120,13 @@ static inline int is_whitespace(char x)
 
 static int pos = 0, length = 0;
 // Similar to strchr, but with some error checking and length information
-static char *scanchr(char *y, char x, int *len, int newline_ok)
+static char* scanchr(char* y, char x, int* len, int newline_ok)
 {
     int start = pos;
-    while (pos < length)
-    {
+    while (pos < length) {
         if (!newline_ok && *y == '\n')
             break;
-        if (*y == x)
-        {
+        if (*y == x) {
             *len = pos++ - start;
             return y + 1; // Move past char that we were looking for
         }
@@ -136,13 +137,12 @@ static char *scanchr(char *y, char x, int *len, int newline_ok)
     return NULL;
 }
 
-static int parse_u32(char *y, uint32_t *dest)
+static int parse_u32(char* y, uint32_t* dest)
 {
     uint32_t res = 0;
     if (!(*y >= '0' && *y <= '9'))
         return -1;
-    while (pos < length && *y >= '0' && *y <= '9')
-    {
+    while (pos < length && *y >= '0' && *y <= '9') {
         res *= 10;
         res += *y - '0';
         y++;
@@ -152,11 +152,10 @@ static int parse_u32(char *y, uint32_t *dest)
     return 0;
 }
 
-static int parse_string(char *y, int *len)
+static int parse_string(char* y, int* len)
 {
     int start = pos;
-    while (pos < length && *y >= 32)
-    {
+    while (pos < length && *y >= 32) {
         y++;
         pos++;
     }
@@ -165,47 +164,41 @@ static int parse_string(char *y, int *len)
 }
 
 // Parse configuration file.
-int parse_cfg(char *buf)
+int parse_cfg(char* buf)
 {
     UNUSED(pc);
     UNUSED(load_file);
     UNUSED(sections);
     UNUSED(section_list);
-    const struct cfg_option *current_section = general_opts;
+    const struct cfg_option* current_section = general_opts;
     int id_index = 0; // General options
     length = strlen(buf);
 top:
-    while (pos < length)
-    {
+    while (pos < length) {
         // Start reading line.
         int chr = buf[pos++];
         if (is_whitespace(chr))
             continue;
-        switch (chr)
-        {
+        switch (chr) {
         case '#': // Comment
             while (pos < length && is_whitespace(buf[pos]) != 2)
                 pos++;
             break;
-        case '[':
-        { // Section header
+        case '[': { // Section header
             int keylen, start = pos - 1;
-            char *endbracket = scanchr(&buf[pos], ']', &keylen, 0);
-            if (!endbracket)
-            {
+            char* endbracket = scanchr(&buf[pos], ']', &keylen, 0);
+            if (!endbracket) {
                 fprintf(stderr, "Unexpected newline or EOF in section header\n");
                 return -1;
             }
             int i = 0;
-            for (;;)
-            {
+            for (;;) {
                 if (!sections[i].name)
                     break;
                 int temp_keylen = keylen, temp2;
                 if ((temp2 = strlen(sections[i].name)) < temp_keylen)
                     temp_keylen = temp2;
-                if (!memcmp(&buf[start + 1], sections[i].name, keylen))
-                { // Don't include the final ']'
+                if (!memcmp(&buf[start + 1], sections[i].name, keylen)) { // Don't include the final ']'
                     current_section = section_list[id_index = sections[i].value];
                     goto top;
                 }
@@ -215,39 +208,31 @@ top:
             fprintf(stderr, "Unknown section '%s'\n", &buf[start + 1]);
             return -1;
         }
-        default:
-        {
+        default: {
             int keylen, start = pos - 1;
-            char *equals = scanchr(&buf[pos], '=', &keylen, 0);
-            if (!equals)
-            {
+            char* equals = scanchr(&buf[pos], '=', &keylen, 0);
+            if (!equals) {
                 fprintf(stderr, "Unexpected newline or EOF in key=value pair\n");
                 return -1;
             }
             int i = 0;
-            for (;;)
-            {
+            for (;;) {
                 if (!current_section[i].name)
                     break;
                 int temp_keylen = keylen, temp2;
                 if ((temp2 = strlen(current_section[i].name)) < temp_keylen)
                     temp_keylen = temp2;
-                if (!memcmp(&buf[start], current_section[i].name, temp_keylen))
-                {
-                    switch (current_section[i].value)
-                    {
-                    case CFG_MEMORY:
-                    {
+                if (!memcmp(&buf[start], current_section[i].name, temp_keylen)) {
+                    switch (current_section[i].value) {
+                    case CFG_MEMORY: {
                         uint32_t memsz;
-                        if (parse_u32(equals, &memsz) < 0)
-                        {
+                        if (parse_u32(equals, &memsz) < 0) {
                             fprintf(stderr, "Expected number for 'memory'\n");
                             return -1;
                         }
                         // Right now, pos should be at the character following the digit, to any suffixes
                         if (pos < length)
-                            switch (buf[pos])
-                            {
+                            switch (buf[pos]) {
                             case 'K':
                             case 'k':
                                 memsz <<= 10;
@@ -270,9 +255,8 @@ top:
                             pc.memory_size = memsz;
                         break;
                     }
-                    case CFG_BIOS:
-                    {
-                        char *path;
+                    case CFG_BIOS: {
+                        char* path;
                         int pathlen;
                         if (parse_string(equals, &pathlen) < 0)
                             return -1;
@@ -284,18 +268,15 @@ top:
                             retval = load_file(&pc.vgabios, path);
                         else
                             retval = load_file(&pc.bios, path);
-                        if (retval < 0)
-                        {
+                        if (retval < 0) {
                             fprintf(stderr, "Unable to load BIOS images\n");
                             return -1;
                         }
                         break;
                     }
-                    case CFG_PCI_APIC:
-                    {
+                    case CFG_PCI_APIC: {
                         uint32_t enabled;
-                        if (parse_u32(equals, &enabled) < 0)
-                        {
+                        if (parse_u32(equals, &enabled) < 0) {
                             fprintf(stderr, "Expected number for 'inserted'\n");
                             return -1;
                         }
@@ -305,11 +286,9 @@ top:
                             pc.apic_enabled = enabled;
                         break;
                     }
-                    case CFG_INSERTED:
-                    {
+                    case CFG_INSERTED: {
                         uint32_t inserted;
-                        if (parse_u32(equals, &inserted) < 0)
-                        {
+                        if (parse_u32(equals, &inserted) < 0) {
                             fprintf(stderr, "Expected number for 'inserted'\n");
                             return -1;
                         }
@@ -319,9 +298,8 @@ top:
                             pc.drives[id_index - 1].type = -1; // Set it to an invalid non-zero number
                         break;
                     }
-                    case CFG_FILE:
-                    {
-                        char *path;
+                    case CFG_FILE: {
+                        char* path;
                         int pathlen;
                         if (parse_string(equals, &pathlen) < 0)
                             return -1;
@@ -334,33 +312,28 @@ top:
                         path[pathlen] = 0;
                         int retval = drive_init(&pc.drives[id_index - 1], path);
                         pc.drives[id_index - 1].type = DRIVE_TYPE_DISK;
-                        if (retval < 0)
-                        {
+                        if (retval < 0) {
                             fprintf(stderr, "Unable to load hard drive image\n");
                             return -1;
                         }
                         break;
                     }
-                    case CFG_BOOTORDER:
-                    {
-                        char *dev;
+                    case CFG_BOOTORDER: {
+                        char* dev;
                         int devlen, j = 0, boot_dev = BOOT_NONE;
                         if (parse_string(equals, &devlen) < 0)
                             return -1;
                         dev = alloca(devlen + 1);
                         memcpy(dev, equals, devlen);
                         dev[devlen] = 0;
-                        for (;;)
-                        {
+                        for (;;) {
                             if (!boot_devices[j].name)
                                 break;
                             int temp_devlen = devlen, temp3;
                             if ((temp3 = strlen(boot_devices[j].name)) < devlen)
                                 temp_devlen = temp3;
-                            if (!memcmp(dev, boot_devices[j].name, temp_devlen))
-                            {
-                                switch (boot_devices[j].value)
-                                {
+                            if (!memcmp(dev, boot_devices[j].name, temp_devlen)) {
+                                switch (boot_devices[j].value) {
                                 case CFG_BOOTDISK:
                                     boot_dev = BOOT_DISK;
                                     goto done;
@@ -398,35 +371,33 @@ top:
     return 0;
 }
 
-struct option
-{
+struct option {
     const char *name, *alias;
     int flags, id;
-    const char *help;
+    const char* help;
 };
 
 #define HASARG 1
 
-enum
-{
+enum {
     OPTION_HELP,
     OPTION_CONFIG,
     OPTION_REALTIME
 };
 
 static const struct option options[] = {
-    {"h", "help", 0, OPTION_HELP, "Show available options"},
-    {"c", "config", HASARG, OPTION_CONFIG, "Use custom config file [arg]"},
-    {"r", "realtime", 0, OPTION_REALTIME, "Try to sync internal emulator clock with wall clock"},
-    {NULL, NULL, 0, 0, NULL}};
+    { "h", "help", 0, OPTION_HELP, "Show available options" },
+    { "c", "config", HASARG, OPTION_CONFIG, "Use custom config file [arg]" },
+    { "r", "realtime", 0, OPTION_REALTIME, "Try to sync internal emulator clock with wall clock" },
+    { NULL, NULL, 0, 0, NULL }
+};
 
-static void generic_help(const struct option *options)
+static void generic_help(const struct option* options)
 {
     int i = 0;
     printf("Halfix x86 PC Emulator\n");
-    for (;;)
-    {
-        const struct option *o = options + i++;
+    for (;;) {
+        const struct option* o = options + i++;
         if (!o->name)
             return;
 
@@ -445,43 +416,36 @@ static void generic_help(const struct option *options)
     }
 }
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     UNUSED(argc);
     UNUSED(argv);
 
-    char *configfile = "default.conf";
+    char* configfile = "default.conf";
     int filesz, realtime = 0;
-    FILE *f;
-    char *buf;
+    FILE* f;
+    char* buf;
 
     if (argc == 1)
         goto parse_config;
-    for (int i = 1; i < argc; i++)
-    {
-        char *arg = argv[i];
+    for (int i = 1; i < argc; i++) {
+        char* arg = argv[i];
         int j = 0;
-        for (;;)
-        {
-            const struct option *o = options + j++;
+        for (;;) {
+            const struct option* o = options + j++;
             int long_ver = arg[1] == '-'; // XXX what if string is only 1 byte long?
 
-            if (!strcmp(long_ver ? o->alias : o->name, arg + (long_ver + 1)))
-            {
-                char *data;
-                if (o->flags & HASARG)
-                {
-                    if (!(data = argv[i++]))
-                    {
+            if (!strcmp(long_ver ? o->alias : o->name, arg + (long_ver + 1))) {
+                char* data;
+                if (o->flags & HASARG) {
+                    if (!(data = argv[i++])) {
                         fprintf(stderr, "Expected argument to option %s\n", arg);
                         return 0;
                     }
-                }
-                else
+                } else
                     data = NULL;
 
-                switch (o->id)
-                {
+                switch (o->id) {
                 case OPTION_HELP:
                     generic_help(options);
                     return 0;
@@ -499,16 +463,14 @@ int main(int argc, char **argv)
 
 parse_config:
     f = fopen(configfile, "rb");
-    if (!f)
-    {
+    if (!f) {
         fprintf(stderr, "Cannot open configuration file %s\n", configfile);
         return -1;
     }
     fseek(f, 0, SEEK_END);
     buf = malloc((filesz = ftell(f)) + 1);
     fseek(f, 0, SEEK_SET);
-    if (fread(buf, filesz, 1, f) != 1)
-    {
+    if (fread(buf, filesz, 1, f) != 1) {
         perror("fread");
         fprintf(stderr, "Failed to read configuration file\n");
         return -1;
@@ -523,18 +485,15 @@ parse_config:
     if (result < 0)
         return -1;
 
-    if (pc.memory_size < (1 << 20))
-    {
+    if (pc.memory_size < (1 << 20)) {
         fprintf(stderr, "Memory size (0x%x) too small\n", pc.memory_size);
         return -1;
     }
-    if (pc.vga_memory_size < (256 << 10))
-    {
+    if (pc.vga_memory_size < (256 << 10)) {
         fprintf(stderr, "VGA memory size (0x%x) too small\n", pc.vga_memory_size);
         return -1;
     }
-    if (pc_init(&pc) == -1)
-    {
+    if (pc_init(&pc) == -1) {
         fprintf(stderr, "Unable to initialize PC\n");
         return -1;
     }
@@ -545,8 +504,7 @@ parse_config:
     }
 #else
     // Good for real-world stuff
-    while (1)
-    {
+    while (1) {
         int ms_to_sleep = pc_execute();
         // Update our screen/devices here
         vga_update();

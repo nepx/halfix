@@ -3,12 +3,10 @@
 // Complex control flow opcodes
 // Includes jmpf, callf, interrupts, retf, iret, and exceptions
 
-// Important note: SET_VIRT_EIP must precede any load to CS since cpu.phys_eip is modified
-
 #include "cpu/cpu.h"
 #include "cpu/instruction.h"
 #include "display.h"
-#include <alloca.h> // For use in call gate
+#include "platform.h"
 
 #define EXCEPTION_HANDLER return 1
 

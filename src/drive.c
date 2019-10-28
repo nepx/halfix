@@ -1,7 +1,7 @@
 #include "drive.h"
+#include "platform.h"
 #include "state.h"
 #include "util.h"
-#include <alloca.h>
 #include <stdlib.h>
 #include <string.h>
 #ifndef EMSCRIPTEN
@@ -21,8 +21,8 @@ static void* global_cb_arg1;
 #endif
 static int transfer_in_progress = 0;
 
-
-void drive_cancel_transfers(void){
+void drive_cancel_transfers(void)
+{
     transfer_in_progress = 0;
 }
 
@@ -107,17 +107,18 @@ static int drive_read_block_internal(struct drive_internal_info* this, struct bl
 
 #ifndef EMSCRIPTEN
 // Read file from cache, uncompress, and return allocated value
-static void* drive_read_file(struct drive_internal_info* this, char* fn){
+static void* drive_read_file(struct drive_internal_info* this, char* fn)
+{
     char temp[1024 + 8];
     int fd;
     unsigned int size;
-    void* readbuf, *data;
+    void *readbuf, *data;
 
     sprintf(temp, "%s.gz", fn);
-    fd = open(temp, O_RDONLY);
+    fd = open(temp, O_RDONLY | O_BINARY);
     if (fd < 0)
         DRIVE_FATAL("Could not open file %s\n", fn);
-    
+
     // Read the block into a chunk of temporary memory, and decompress
     data = malloc(this->block_size);
     size = lseek(fd, 0, SEEK_END);
@@ -126,7 +127,7 @@ static void* drive_read_file(struct drive_internal_info* this, char* fn){
     if (read(fd, readbuf, size) != size)
         DRIVE_FATAL("Could not read file %s\n", fn);
 
-    z_stream inflate_stream = {0};
+    z_stream inflate_stream = { 0 };
     inflate_stream.zalloc = Z_NULL;
     inflate_stream.zfree = Z_NULL;
     inflate_stream.opaque = Z_NULL;
@@ -135,13 +136,13 @@ static void* drive_read_file(struct drive_internal_info* this, char* fn){
     inflate_stream.avail_out = inflate_stream.total_out = this->block_size;
     inflate_stream.next_out = data;
     int err = inflateInit(&inflate_stream);
-    if(err == Z_OK){
+    if (err == Z_OK) {
         err = inflate(&inflate_stream, Z_FINISH);
-        if(err != Z_STREAM_END){
+        if (err != Z_STREAM_END) {
             inflateEnd(&inflate_stream);
             DRIVE_FATAL("Unable to inflate %s\n", temp);
         }
-    }else{
+    } else {
         inflateEnd(&inflate_stream);
         DRIVE_FATAL("Unable to inflate %s\n", temp);
     }
@@ -172,7 +173,7 @@ static int drive_internal_read_remote(struct drive_internal_info* this, struct b
     // Open the file, allocate memory, read file, and close file.
     blockinfo->data = drive_read_file(this, temp);
 
-    // If we want to run in sync mode, then copy the data
+// If we want to run in sync mode, then copy the data
 #ifndef SIMULATE_ASYNC_ACCESS
     memcpy(buffer, blockinfo->data + (pos % this->block_size), length);
 #else
@@ -209,14 +210,14 @@ static int drive_internal_read_check(struct drive_internal_info* this, void* buf
         }
         len = end - begin;
         //printf("BlockInformation: %p Data: %p cfp=%d\n", blockInformation, blockInformation->data, currentFilePosition / 512);
-        if (blockInformation->data){
+        if (blockInformation->data) {
             retval |= drive_read_block_internal(this, blockInformation, buffer, len, currentFilePosition);
             //fprintf(stderr, "Next: %d\n", retval);
-        }else {
+        } else {
             if (!no_xhr)
                 if (drive_internal_read_remote(this, blockInformation, buffer, currentFilePosition, len) < 0)
                     DRIVE_FATAL("Unable to load disk\n");
-#ifdef SIMULATE_ASYNC_ACCESS // If we aren't simulating async, then don't set retval 
+#ifdef SIMULATE_ASYNC_ACCESS // If we aren't simulating async, then don't set retval
             retval |= 1;
 #endif
         }
@@ -247,7 +248,7 @@ static int drive_internal_write_remote(struct drive_internal_info* this, struct 
     // Open the file, allocate memory, read file, and close file.
     blockinfo->data = drive_read_file(this, temp);
 
-    // If we want to run in sync mode, then copy the data
+// If we want to run in sync mode, then copy the data
 #ifndef SIMULATE_ASYNC_ACCESS
     memcpy(blockinfo->data + (pos % this->block_size), buffer, length);
 #else
@@ -260,11 +261,14 @@ static int drive_internal_write_remote(struct drive_internal_info* this, struct 
 }
 
 #ifdef SIMULATE_ASYNC_ACCESS
-static void drive_internal_read_cb(void* this_ptr, int status){
-    if(!transfer_in_progress) return;
+static void drive_internal_read_cb(void* this_ptr, int status)
+{
+    if (!transfer_in_progress)
+        return;
     struct drive_internal_info* this = this_ptr;
     // Make sure everything is loaded
-    if(drive_internal_read_check(this, this->argument_buffer, this->argument_length, this->argument_position, 1)) DRIVE_FATAL("We haven't loaded everything..?\n");
+    if (drive_internal_read_check(this, this->argument_buffer, this->argument_length, this->argument_position, 1))
+        DRIVE_FATAL("We haven't loaded everything..?\n");
     this->callback(this->ide_callback_arg1, status);
 }
 #endif
@@ -275,7 +279,7 @@ static int drive_internal_read(void* this_ptr, void* cb_ptr, void* buffer, uint3
     struct drive_internal_info* this = this_ptr;
     if (!drive_internal_read_check(this, buffer, length, position, 0))
         return DRIVE_RESULT_SYNC;
-    
+
     // Store information
     this->argument_buffer = buffer;
     this->argument_length = length;
@@ -303,7 +307,7 @@ static int drive_write_block_internal(struct drive_internal_info* this, struct b
     uint32_t blockoffs = position % this->block_size;
 #ifdef EMSCRIPTEN
     UNUSED(info);
-   return EM_ASM_INT({
+    return EM_ASM_INT({
         /* id, buffer, offset, length */
         return window["drives"][$0]["writeCache"]($1, $2, $3, $4);
     },
@@ -345,7 +349,7 @@ static int drive_internal_write_check(struct drive_internal_info* this, void* bu
             if (!no_xhr)
                 if (drive_internal_write_remote(this, blockInformation, buffer, currentFilePosition, len) < 0)
                     DRIVE_FATAL("Unable to load disk\n");
-#ifdef SIMULATE_ASYNC_ACCESS // If we aren't simulating async, then don't set retval 
+#ifdef SIMULATE_ASYNC_ACCESS // If we aren't simulating async, then don't set retval
             retval |= 1;
 #endif
         }
@@ -357,10 +361,13 @@ static int drive_internal_write_check(struct drive_internal_info* this, void* bu
 }
 
 #ifdef SIMULATE_ASYNC_ACCESS
-static void drive_internal_write_cb(void* this_ptr, int status){
-    if(!transfer_in_progress) return;
+static void drive_internal_write_cb(void* this_ptr, int status)
+{
+    if (!transfer_in_progress)
+        return;
     struct drive_internal_info* this = this_ptr;
-    if(drive_internal_write_check(this, this->argument_buffer, this->argument_length, this->argument_position, 1)) DRIVE_FATAL("We haven't loaded everything..?\n");
+    if (drive_internal_write_check(this, this->argument_buffer, this->argument_length, this->argument_position, 1))
+        DRIVE_FATAL("We haven't loaded everything..?\n");
     this->callback(this->ide_callback_arg1, status);
 }
 #endif
@@ -371,7 +378,7 @@ static int drive_internal_write(void* this_ptr, void* cb_ptr, void* buffer, uint
     struct drive_internal_info* this = this_ptr;
     if (!drive_internal_write_check(this, buffer, length, position, 0))
         return DRIVE_RESULT_SYNC;
-    
+
     // Store information
     this->argument_buffer = buffer;
     this->argument_length = length;
@@ -513,12 +520,13 @@ static
 #endif
 }
 
-void drive_check_complete(void) {
+void drive_check_complete(void)
+{
 #if !defined(EMSCRIPTEN) && defined(SIMULATE_ASYNC_ACCESS)
-if(transfer_in_progress){
-global_cb(global_cb_arg1, 0);
-    transfer_in_progress=0;
-}
+    if (transfer_in_progress) {
+        global_cb(global_cb_arg1, 0);
+        transfer_in_progress = 0;
+    }
 #endif
 }
 
@@ -540,7 +548,7 @@ int drive_init(struct drive_info* info, char* filename)
         return -1;
     join_path(buf, filelen, filename, "info.dat");
 
-    int fd = open(buf, O_RDONLY);
+    int fd = open(buf, O_RDONLY | O_BINARY);
     if (fd == -1)
         return -1;
     int size = lseek(fd, 0, SEEK_END);
@@ -673,7 +681,7 @@ static int drive_simple_read(void* this, void* cb_ptr, void* buffer, uint32_t si
 
 int drive_simple_init(struct drive_info* info, char* filename)
 {
-    int fd = open(filename, O_RDONLY);
+    int fd = open(filename, O_RDONLY | O_BINARY);
     if (fd < 0)
         return -1;
 

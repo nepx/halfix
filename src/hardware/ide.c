@@ -1,6 +1,6 @@
 #include "devices.h"
 #include "drive.h"
-#include <alloca.h>
+#include "platform.h"
 
 // A mostly-complete ATA implementation.
 // This version works around a bug in the Bochs BIOS. It does not check if BSY is set after a write command has been executed.
