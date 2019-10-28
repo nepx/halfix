@@ -339,8 +339,9 @@ void verify_segment_access(uint16_t sel, int write)
     struct seg_desc seg;
     if (sel_offset) {
         if (cpu_seg_load_descriptor(sel, &seg, -1, -1) == 0) {
-            int type = ACCESS_TYPE(seg.fields.access);
-            int dpl = ACCESS_DPL(seg.fields.access), rpl = SELECTOR_RPL(sel);
+            int access = DESC_ACCESS(&seg);
+            int type = ACCESS_TYPE(access);
+            int dpl = ACCESS_DPL(access), rpl = SELECTOR_RPL(sel);
             zf = 1;
             if (write) {
                 if (!(type == 0x12 || type == 0x13 || type == 0x16 || type == 0x17))

@@ -15,12 +15,6 @@
 // When some kind of memory exception occurs, return a non-zero value
 #define ACCESS_EXCEPTION_HANDLER return 1
 
-static const int cpl_to_TLB_read[4] = {
-    TLB_SYSTEM_READ,
-    TLB_SYSTEM_READ,
-    TLB_SYSTEM_READ,
-    TLB_USER_READ
-};
 static const int cpl_to_TLB_write[4] = {
     TLB_SYSTEM_WRITE,
     TLB_SYSTEM_WRITE,

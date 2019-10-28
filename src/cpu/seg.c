@@ -163,7 +163,8 @@ uint32_t cpu_seg_gate_target_segment(struct seg_desc* info)
 uint32_t cpu_seg_gate_target_offset(struct seg_desc* info)
 {
     uint32_t offset = info->raw[0] & 0xFFFF;
-    switch (ACCESS_TYPE(info->fields.access)) {
+    int access = DESC_ACCESS(info);
+    switch (ACCESS_TYPE(access)) {
     case CALL_GATE_386:
     case INTERRUPT_GATE_386:
     case TRAP_GATE_386:
