@@ -217,7 +217,8 @@ static inline void cmos_ram_write(uint8_t data)
         now->tm_mon = bcd(data);
         break;
     case 9:
-        now->tm_year = data + cmos.ram[0x32] * 100;
+        now->tm_year = bcd(data) + (bcd(cmos.ram[0x32]) - 19) * 100; // Count years since 1900
+		if(now->tm_year < 70) now->tm_year = 70;
         break;
     case 0x0A: // Status Register A
         cmos.ram[0x0A] = (data & 0x7F) | (cmos.ram[0x0A] & 0x80);
