@@ -37,6 +37,10 @@ struct pc_settings
     uint8_t boot_sequence[3];
 
     struct drive_info drives[4];
+
+    // Set to 1 if floppy should be enabled
+    int floppy_enabled;
+    struct drive_info floppy_drives[4];
 };
 
 enum
@@ -52,6 +56,7 @@ enum
     CPU_CLASS_486 = 0,
     CPU_CLASS_PENTIUM = 1,
     CPU_CLASS_PENTIUM_PRO = 2,
+    CPU_CLASS_HALFIX_DEFAULT = 3,
     CPU_CLASS_MAXIMUM
 };
 
