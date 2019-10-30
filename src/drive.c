@@ -70,12 +70,18 @@ struct drive_info_file {
     uint32_t block_size;
 };
 
+#ifdef _WIN32
+#define PATHSEP '\\'
+#else
+#define PATHSEP '/'
+#endif
+
 // Join two paths together
 static void join_path(char* dest, int alen, char* a, char* b)
 {
     strcpy(dest, a);
-    if (dest[alen - 1] != '/') {
-        dest[alen] = '/';
+    if (dest[alen - 1] != PATHSEP) {
+        dest[alen] = PATHSEP;
         alen++;
     }
     strcpy(dest + alen, b);
