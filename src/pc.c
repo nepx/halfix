@@ -216,6 +216,7 @@ int pc_init(struct pc_settings *pc)
     dma_init();
     cmos_init(pc->current_time);
     pc_init_cmos(pc); // must come before floppy initalization b/c reg 0x14
+    fdc_init(pc);
     pit_init();
     pic_init(pc);
     kbd_init();
@@ -277,16 +278,6 @@ int pc_init(struct pc_settings *pc)
     io_register_read(0x420, 2, bios_readb, NULL, NULL);
     io_register_read(0x4a0, 2, bios_readb, NULL, NULL);
     io_register_write(0xa78, 2, bios_writeb, NULL, NULL);
-
-    // Floppy Disk
-    io_register_write(0x3F0, 6, bios_writeb, NULL, NULL);
-    io_register_read(0x3F0, 6, bios_readb, NULL, NULL);
-    io_register_write(0x3F7, 1, bios_writeb, NULL, NULL);
-    io_register_read(0x3F7, 1, bios_readb, NULL, NULL);
-    io_register_write(0x370, 6, bios_writeb, NULL, NULL);
-    io_register_read(0x370, 6, bios_readb, NULL, NULL);
-    io_register_write(0x377, 1, bios_writeb, NULL, NULL);
-    io_register_read(0x377, 1, bios_readb, NULL, NULL);
 
     // OS/2
     io_register_write(0x22, 4, bios_writeb, NULL, NULL);
@@ -367,10 +358,16 @@ int pc_init(struct pc_settings *pc)
 }
 static uint32_t devices_get_next_raw(itick_t now)
 {
-    int cmos, pit, min;
-    cmos = cmos_next(now);
-    pit = pit_next(now);
-    min = cmos < pit ? cmos : pit;
+    uint32_t next[4], min = -1;
+    next[0] = cmos_next(now);
+    next[1] = pit_next(now);
+    next[2] = apic_next(now);
+    next[3] = floppy_next(now);
+    for (int i = 0; i < 4; i++)
+    {
+        if (next[0] < min)
+            min = next[0];
+    }
     return min;
 }
 

@@ -13,6 +13,7 @@ void pic_init(struct pc_settings* pc);
 void kbd_init(void);
 void vga_init(int);
 void ide_init(struct pc_settings* pc);
+void fdc_init(struct pc_settings* pc);
 
 // XXX:
 #define floppy_get_type(id) 0
@@ -31,13 +32,14 @@ void vga_update(void);
 void vga_restore_from_ptr(void* ptr);
 void* vga_get_ptr(void);
 
-// Timer functions
+// Timer functions, in lieu of "real" timer functions
 int cmos_clock(itick_t now);
 int pit_timer(itick_t now);
-void kbd_timer(itick_t now);
 
 int cmos_next(itick_t now);
 int pit_next(itick_t now);
+int apic_next(itick_t now);
+int floppy_next(itick_t now);
 
 // The mouse button has just suddenly been pressed
 #define MOUSE_STATUS_PRESSED 1

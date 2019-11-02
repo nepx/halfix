@@ -40,7 +40,13 @@ struct pc_settings
 
     // Set to 1 if floppy should be enabled
     int floppy_enabled;
-    struct drive_info floppy_drives[4];
+    
+    struct {
+        // If the image is write-protected (note: has nothing to do with the drive_info write-protected bit)
+        int write_protected;
+    } floppy_settings[2];
+
+    struct drive_info floppy_drives[2];
 };
 
 enum

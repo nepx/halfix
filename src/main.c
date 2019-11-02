@@ -46,9 +46,14 @@ enum {
     CFG_BIOS,
     CFG_VBE,
     CFG_PCI_APIC,
+    CFG_FLOPPY_ENABLED,
 
     CFG_FILE,
+    CFG_MEDIA_TYPE,
     CFG_INSERTED,
+
+    CFG_FD_FILE,
+    CFG_FD_WRITE_PROTECTED,
 
     CFG_BOOT,
     CFG_BOOTORDER,
@@ -66,11 +71,18 @@ static const struct cfg_option general_opts[] = {
     { "vbe", CFG_VBE },
     { "pci", CFG_PCI_APIC },
     { "apic", CFG_PCI_APIC },
+    { "floppy", CFG_FLOPPY_ENABLED },
     { NULL, CFG_NONE }
 };
 static const struct cfg_option drive_opts[] = {
     { "inserted", CFG_INSERTED },
+    { "type", CFG_MEDIA_TYPE },
     { "file", CFG_FILE },
+    { NULL, CFG_NONE }
+};
+static const struct cfg_option fd_opts[] = {
+    { "file", CFG_FD_FILE },
+    { "write_protected", CFG_FD_WRITE_PROTECTED },
     { NULL, CFG_NONE }
 };
 static const struct cfg_option boot_opts[] = {
@@ -90,11 +102,13 @@ static const struct cfg_option boot_devices[] = {
 static const struct cfg_option sections[] = {
     // Has the index into section_list array
     { "general", 0 },
-    { "hda", 1 },
-    { "hdb", 2 },
-    { "hdc", 3 },
-    { "hdd", 4 },
+    { "ata0-master", 1 },
+    { "ata0-slave", 2 },
+    { "ata1-master", 3 },
+    { "ata1-slave", 4 },
     { "boot", 5 },
+    { "fda", 6 },
+    { "fdb", 7 },
     { NULL, CFG_NONE }
 };
 static const struct cfg_option* section_list[] = {
@@ -103,7 +117,9 @@ static const struct cfg_option* section_list[] = {
     drive_opts,
     drive_opts,
     drive_opts,
-    boot_opts
+    boot_opts,
+    fd_opts,
+    fd_opts
 };
 
 // Returns 1 if generic whitespace, 2 if newline, 0 otherwise
@@ -286,6 +302,19 @@ top:
                             pc.apic_enabled = enabled;
                         break;
                     }
+                    case CFG_FLOPPY_ENABLED: {
+                        uint32_t enabled;
+                        if (parse_u32(equals, &enabled) < 0) {
+                            fprintf(stderr, "Expected number for 'inserted'\n");
+                            return -1;
+                        }
+                        if (enabled)
+                            printf("Warning: Floppy drive support is still in development. Some things may break\n");
+                        pc.floppy_enabled = enabled;
+                        break;
+                    }
+
+                    // Disk options
                     case CFG_INSERTED: {
                         uint32_t inserted;
                         if (parse_u32(equals, &inserted) < 0) {
@@ -354,6 +383,35 @@ top:
                         return -1;
                     done:
                         pc.boot_sequence[buf[start] - 'a'] = boot_dev;
+                        break;
+                    }
+
+                    case CFG_FD_FILE: {
+                        char* path;
+                        int pathlen;
+                        if (parse_string(equals, &pathlen) < 0)
+                            return -1;
+
+                        if (!pc.floppy_enabled)
+                            break;
+                        path = alloca(pathlen + 1);
+                        memcpy(path, equals, pathlen);
+                        path[pathlen] = 0;
+                        int retval = drive_init(&pc.floppy_drives[id_index - 6], path);
+                        pc.floppy_drives[id_index - 6].type = DRIVE_TYPE_DISK;
+                        if (retval < 0) {
+                            fprintf(stderr, "Unable to load floppy drive image\n");
+                            return -1;
+                        }
+                        break;
+                    }
+                    case CFG_FD_WRITE_PROTECTED: {
+                        uint32_t wp;
+                        if (parse_u32(equals, &wp) < 0) {
+                            fprintf(stderr, "Expected number for 'inserted'\n");
+                            return -1;
+                        }
+                        pc.floppy_settings[id_index - 6].write_protected = wp;
                         break;
                     }
                     } // switch()

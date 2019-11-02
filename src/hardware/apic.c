@@ -24,6 +24,8 @@
 #define APIC_RECV_INVALID_VECTOR 64
 #define APIC_ILLEGAL_REGISTER_ACCESS 128
 
+#define LVT_DISABLED (1 << 16)
+
 #define EDGE_TRIGGERED 0
 #define LEVEL_TRIGGERED 1
 
@@ -67,7 +69,7 @@ static struct apic_info {
     uint32_t error;
 
     uint32_t timer_divide, timer_initial_count;
-    itick_t timer_reload_time;
+    itick_t timer_reload_time, timer_next;
 
     uint32_t destination_format, logical_destination;
     int dest_format_physical;
@@ -290,6 +292,16 @@ static int apic_get_clock_divide(void)
     return ((((apic.timer_divide >> 1 & 4) | (apic.timer_divide & 3)) + 1) & 7);
 }
 
+static uint32_t apic_get_count(void)
+{
+    return apic.timer_initial_count - ((uint32_t)(cpu_get_cycles() - apic.timer_reload_time) >> apic_get_clock_divide()) % apic.timer_initial_count;
+}
+// In terms of CPU ticks, independent of ticks_per_second because APIC timer isn't tied to realtime
+static itick_t apic_get_period(void)
+{
+    return (itick_t)apic.timer_initial_count << apic_get_clock_divide();
+}
+
 static uint32_t apic_read(uint32_t addr)
 {
     addr -= apic.base;
@@ -326,7 +338,8 @@ static uint32_t apic_read(uint32_t addr)
     case 0x38:
         return apic.timer_initial_count;
     case 0x39:
-        return apic.timer_initial_count - ((uint32_t)(cpu_get_cycles() - apic.timer_reload_time) >> apic_get_clock_divide());
+        return apic_get_count();
+    //return apic.timer_initial_count - ((uint32_t)(cpu_get_cycles() - apic.timer_reload_time) >> apic_get_clock_divide());
     case 0x3E:
         return apic.timer_divide;
     default:
@@ -394,7 +407,7 @@ static void apic_write(uint32_t addr, uint32_t data)
         if (data & 0x100) {
             // Software disabled
             for (int i = 0; i < 7; i++)
-                apic.lvt[i] |= 1 << 16;
+                apic.lvt[i] |= LVT_DISABLED;
         }
         break;
     case 0x10 ... 0x17:
@@ -451,8 +464,9 @@ static void apic_write(uint32_t addr, uint32_t data)
         apic.icr[1] = data;
         break;
     case 0x38:
-        apic.timer_initial_count = 0;
+        apic.timer_initial_count = data;
         apic.timer_reload_time = cpu_get_cycles();
+        apic.timer_next = apic.timer_reload_time + apic_get_period();
         break;
     case 0x39:
         break;
@@ -496,9 +510,58 @@ static void apic_reset(void)
     apic.destination_format = -1;
     apic.dest_format_physical = 1;
 
+    for (int i = 0; i < LVT_END; i++)
+        apic.lvt[i] = LVT_DISABLED; // Disabled
+
     // Map one page of MMIO at the specified address.
     io_register_mmio_read(apic.base, 4096, apic_readb, NULL, apic_read);
     io_register_mmio_write(apic.base, 4096, apic_writeb, NULL, apic_write);
+}
+
+// Find out how many ticks until next interrupt
+int apic_next(itick_t now)
+{
+    // TODO: TSC Deadline mode
+    if (!apic.enabled)
+        return -1;
+    // "A write of 0 to the initial-count register effectively stops the local APIC timer, in both one-shot and periodic mode."
+    if (apic.timer_initial_count == 0)
+        return -1;
+
+    // We want to keep the APIC timer running in the background, but not sending any interrupts
+    int apic_timer_enabled = 1;
+    
+    // Information regarding lvt
+    int info = apic.lvt[LVT_INDEX_TIMER] >> 16;
+
+    if (apic.timer_next < now) {
+        // Raise interrupt
+        if(!(info & 1)) // LVT_DISABLED set to 0
+            apic_receive_bus_message(apic.lvt[LVT_INDEX_TIMER] & 0xFF, LVT_DELIVERY_FIXED, 0);
+        else apic_timer_enabled = 0;
+        
+        switch (info >> 1 & 3) {
+        case 2:
+            APIC_FATAL("TODO: TSC Deadline\n");
+            break;
+        case 1: // Periodic
+            apic.timer_next += apic_get_period();
+            break;
+        case 0: // One shot
+            apic.timer_next = -1; // Disable timer
+            return -1; // no more interrupts
+        case 3:
+            APIC_LOG("Invalid timer mode set, ignoring\n");
+            return -1;
+        }
+
+        // If no interrupts, then return
+        if(apic_timer_enabled) return -1;
+    }
+
+    itick_t next = apic.timer_next - now;
+    if(next > 0xFFFFFFFF) return -1; // Don't allow wrap-around of large integers
+    return (uint32_t)next;
 }
 
 void apic_init(struct pc_settings* pc)
