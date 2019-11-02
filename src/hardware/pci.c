@@ -532,7 +532,7 @@ static int pci_82371sb_ide_write(uint8_t* ptr, uint8_t addr, uint8_t data)
     }
     ptr[addr] = res;
     new_bar4 = *((uint32_t*)(ptr + 0x20));
-    if (old_bar4 != new_bar4)
+    if (old_bar4 != new_bar4 && addr == 0x23) // Only update PRDT on last byte write
         pci_82371sb_ide_remap(old_bar4);
 
     return retval;
