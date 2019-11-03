@@ -518,6 +518,7 @@ int cpu_load_csip_protected(uint16_t cs, struct seg_desc* info, uint32_t eip);
 int cpu_smc_page_has_code(uint32_t phys);
 int cpu_smc_has_code(uint32_t phys);
 void cpu_smc_invalidate(uint32_t lin, uint32_t phys);
+void cpu_smc_invalidate_page(uint32_t phys);
 void cpu_smc_set_code(uint32_t phys);
 
 // mmu.c

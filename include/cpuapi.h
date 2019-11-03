@@ -35,6 +35,10 @@ int cpu_init_mem(int size);
 int cpu_add_rom(int addr, int size, void *data);
 int cpu_set_cpuid(struct cpu_config *cfg);
 
+// Clear a page of code translations
+void cpu_invalidate_page(uint32_t addr);
+void cpu_write_memory(uint32_t addr, void* data, uint32_t length);
+
 // Necessary for proper timing
 int cpu_in_hlt(void);
 void cpu_add_cycles(itick_t);

@@ -48,6 +48,11 @@ int floppy_next(itick_t now);
 // The mouse button state has not changed
 #define MOUSE_STATUS_NOCHANGE 2
 
+// DMA support
+void* fdc_get_dma_buf(void);
+void fdc_handle_transfer_end(void);
+void dma_raise_dreq(int line);
+
 // PCI support
 
 // Callback for when a byte in PCI memory is modified. "addr" is the offset, and "ptr" points to the base of the 256-byte block

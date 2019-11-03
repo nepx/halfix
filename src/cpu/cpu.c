@@ -38,7 +38,6 @@ int cpu_init_mem(int size)
     return 0;
 }
 
-
 itick_t cpu_get_cycles(void)
 {
     return cpu.cycles + (cpu.cycle_offset - cpu.cycles_to_run);
@@ -61,6 +60,7 @@ int cpu_run(int cycles)
             // Check for validity
             if (cpu.eflags & EFLAGS_IF && !cpu.interrupts_blocked) {
                 int interrupt_id = pic_get_interrupt();
+                CPU_LOG("Interrupt %02x ack'ed\n", interrupt_id);
                 cpu_interrupt(interrupt_id, 0, INTERRUPT_TYPE_HARDWARE, VIRT_EIP());
 #ifdef INSTRUMENT
                 cpu_instrument_hardware_interrupt(interrupt_id);
@@ -202,6 +202,34 @@ void cpu_reset(void)
 int cpu_apic_connected(void)
 {
     return apic_is_enabled() && (cpu.apic_base & 0x100);
+}
+
+void cpu_invalidate_page(uint32_t addr)
+{
+    cpu_smc_invalidate_page(addr);
+}
+
+void cpu_write_memory(uint32_t addr, void* data, uint32_t length)
+{
+    if (length <= 4) {
+        if (addr & (length - 1))
+            CPU_FATAL("DMA: Unaligned memory write\n");
+        switch (length) {
+        case 1:
+            cpu.mem8[addr] = *(uint8_t*)data;
+            return;
+        case 2:
+            cpu.mem32[addr >> 1] = *(uint16_t*)data;
+            return;
+        case 4:
+            cpu.mem32[addr >> 2] = *(uint32_t*)data;
+            return;
+        }
+    }
+    memcpy(cpu.mem + addr, data, length);
+#ifdef INSTRUMENT
+    cpu_instrument_dma(addr, data, length);
+#endif
 }
 
 static void cpu_state(void)
