@@ -695,9 +695,9 @@ OPTYPE op_pop_e16(struct decoded_instruction* i)
 OPTYPE op_pop_e32(struct decoded_instruction* i)
 {
     uint32_t prev_esp = cpu.reg32[ESP], linaddr, flags = i->flags;
+    linaddr = cpu_get_linaddr(flags, i);
 
     pop32(&temp.d32);
-    linaddr = cpu_get_linaddr(flags, i);
     cpu_write32(linaddr, temp.d32, cpu.tlb_shift_write);
 
     NEXT(flags);
