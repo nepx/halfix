@@ -672,37 +672,37 @@ OPTYPE op_pop_r16(struct decoded_instruction* i)
 }
 OPTYPE op_pop_e16(struct decoded_instruction* i)
 {
-#undef EXCEPTION_HANDLER
-#define EXCEPTION_HANDLER          \
-    do {                           \
-        cpu.reg32[ESP] = prev_esp; \
-        EXCEP();                   \
-    } while (0)
     // Order of operations:
     //  - Compute pop source address
     //  - Read from address
     //  - Compute destination address using *post-pop* ESP
     //  - Write to address
     // Nasty hack ahead
-    uint32_t prev_esp = cpu.reg32[ESP], linaddr, flags = i->flags;
+    uint32_t prev_esp = cpu.reg32[ESP], linaddr, flags = i->flags, temp_esp;
 
     pop16(&temp.d16);
     linaddr = cpu_get_linaddr(flags, i);
+
+    // Just in case we fault here, have ESP set to the right value
+    temp_esp = cpu.reg32[ESP];
+    cpu.reg32[ESP] = prev_esp;
     cpu_write16(linaddr, temp.d16, cpu.tlb_shift_write);
+    cpu.reg32[ESP] = temp_esp;
 
     NEXT(flags);
 }
 OPTYPE op_pop_e32(struct decoded_instruction* i)
 {
-    uint32_t prev_esp = cpu.reg32[ESP], linaddr, flags = i->flags;
-
+    uint32_t prev_esp = cpu.reg32[ESP], linaddr, flags = i->flags, temp_esp;
     pop32(&temp.d32);
     linaddr = cpu_get_linaddr(flags, i);
+
+    temp_esp = cpu.reg32[ESP];
+    cpu.reg32[ESP] = prev_esp;
     cpu_write32(linaddr, temp.d32, cpu.tlb_shift_write);
+    cpu.reg32[ESP] = temp_esp;
 
     NEXT(flags);
-#undef EXCEPTION_HANDLER
-#define EXCEPTION_HANDLER EXCEP()
 }
 
 OPTYPE op_pop_r32(struct decoded_instruction* i)
