@@ -87,3 +87,27 @@ void cpu_smc_invalidate(uint32_t lin, uint32_t phys)
     if (quit)
         INTERNAL_CPU_LOOP_EXIT();
 }
+void cpu_smc_invalidate_page(uint32_t phys){
+    uint32_t pageid = phys >> 12,
+    page_info = cpu.smc_has_code[pageid], pagebase = phys & ~0xFFF, quit = 1;
+    for (int i = 0; i < 31; i++) {
+        uint32_t mask = 1 << i;
+        if (page_info & mask) {
+            uint32_t physbase = pagebase + (i << 7);
+            struct trace_info* info;
+            for (int j = 0; j < 128; j++) {
+                if ((info = cpu_trace_get_entry(physbase + j))) {
+                    // See if trace intersects given physical EIP and if so, exit
+                    if (!quit && phys >= info->phys && phys <= (info->phys + TRACE_LENGTH(info->flags)))
+                        quit = 1;
+                    info->phys = -1;
+                }
+            }
+        }
+    }
+
+    cpu.smc_has_code[pageid] = page_info;
+    // TODO: invalidate TLB
+    if (quit)
+        INTERNAL_CPU_LOOP_EXIT();
+}

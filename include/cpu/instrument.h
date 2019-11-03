@@ -43,4 +43,7 @@ void cpu_instrument_rdtsc(uint32_t eax, uint32_t edx);
 // Called before a FPU operation is called.
 void cpu_instrument_pre_fpu(void);
 
+// Called when a DMA operation modifies memory
+void cpu_instrument_dma(uint32_t addr, void* data, uint32_t length);
+
 #endif

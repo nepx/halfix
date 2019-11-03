@@ -3,12 +3,22 @@
 // https://docs.freebsd.org/doc/3.4-RELEASE/usr/share/doc/handbook/dma.html
 // http://www.brokenthorn.com/Resources/OSDev21.html
 
+//  == DMA API ==
+// All DMA-enabled devices must have two functions that this file can call to request an I/O buffer and signal that the transfer is done.
+// It isn't enough to simply raise DREQ! Sometimes, the channel might be masked, and the code may enable it later.
+// To make saving state simpler, each device is "hard-coded" to a DMA channel.
+//
+// The following functions must be implemented:
+//  - void* [device]_get_dma_buffer(void) : This is the buffer the DMA controller uses to read/write
+//  - void [device]_dma_transfer_complete(void) : This is called when transfer is complete
+// You must put handlers to these functions in dma_handle_[buffer|complete]
+
 // TODO: Timing?
 
-#include "devices.h"
-#include "state.h"
 #include "cpuapi.h"
+#include "devices.h"
 #include "io.h"
+#include "state.h"
 #include "util.h"
 #include <stdint.h>
 #include <stdlib.h>
@@ -29,6 +39,9 @@ enum { // See: Transfer Type
     DMA_MODE_MULTIPLE = 2,
     DMA_MODE_ALSO_INVALID = 3
 };
+
+#define DMA_MODE_AUTOINIT 0x10
+#define DMA_MODE_DOWN 0x20
 
 struct dma_controller {
     // <<< BEGIN STRUCT "struct" >>>
@@ -52,9 +65,12 @@ struct dma_controller {
 };
 static struct dma_controller dma;
 
-static void dma_state(void){
+static void dma_run_transfers(void);
+
+static void dma_state(void)
+{
     // <<< BEGIN AUTOGENERATE "state" >>>
-// Auto-generated on Wed Oct 09 2019 13:00:43 GMT-0700 (PDT)
+    // Auto-generated on Wed Oct 09 2019 13:00:43 GMT-0700 (PDT)
     struct bjson_object* obj = state_obj("dma", 11);
     state_field(obj, 32, "dma.addr_high", &dma.addr_high);
     state_field(obj, 16, "dma.start_addr", &dma.start_addr);
@@ -67,7 +83,7 @@ static void dma_state(void){
     state_field(obj, 2, "dma.request", &dma.request);
     state_field(obj, 2, "dma.mask", &dma.mask);
     state_field(obj, 2, "dma.flipflop", &dma.flipflop);
-// <<< END AUTOGENERATE "state" >>>
+    // <<< END AUTOGENERATE "state" >>>
 }
 
 // Write a flipflop state. Returns new value
@@ -97,6 +113,7 @@ static int page_register_offsets[] = {
 static uint32_t dma_io_readb(uint32_t port)
 {
     int offset = port >= 0xC0;
+    uint8_t temp;
     switch (port) {
     case 0x00:
     case 0xC0: // Read Channel 0/4 current address
@@ -118,7 +135,9 @@ static uint32_t dma_io_readb(uint32_t port)
         return dma_flipflop_read(dma.current_count[((port >> offset & 3) | (offset << 2)) & 7], dma.flipflop + offset, 1);
     case 0x08:
     case 0xD0: // Read Status Register
-        return dma.status[offset];
+        temp = dma.status[offset];
+        dma.status[offset] &= ~0x0F;
+        return temp;
     case 0x09:
     case 0xD2:
     case 0x0A:
@@ -143,7 +162,8 @@ static uint32_t dma_io_readb(uint32_t port)
         case 0 ... 7:
             return dma.addr_high[id] >> 16 & 255;
         default:
-            if(port != 0x80)DMA_LOG("Unknown DMA read pagelo: %02x\n", port);
+            if (port != 0x80)
+                DMA_LOG("Unknown DMA read pagelo: %02x\n", port);
             return -1;
         }
     }
@@ -158,8 +178,9 @@ static uint32_t dma_io_readb(uint32_t port)
         }
     }
     default:
-        DMA_LOG("Unknown DMA writeb: %04x\n",port);
-    }return-1;
+        DMA_LOG("Unknown DMA writeb: %04x\n", port);
+    }
+    return -1;
 }
 
 static void dma_io_writeb(uint32_t port, uint32_t data)
@@ -174,8 +195,8 @@ static void dma_io_writeb(uint32_t port, uint32_t data)
     case 0xC8: // Write Channel 2/6 starting address
     case 0x06:
     case 0xCC: // Write Channel 3/7 starting address
-        dma_flipflop_write(&dma.start_addr[((port >> offset & 3) | (offset << 2)) & 7], data, dma.flipflop + offset, 0);
-        dma_flipflop_write(&dma.current_addr[((port >> offset & 3) | (offset << 2)) & 7], data, dma.flipflop + offset, 1);
+        dma_flipflop_write(&dma.start_addr[((port >> (offset + 1) & 3) | (offset << 2)) & 7], data, dma.flipflop + offset, 0);
+        dma_flipflop_write(&dma.current_addr[((port >> (offset + 1) & 3) | (offset << 2)) & 7], data, dma.flipflop + offset, 1);
         break;
     case 0x01:
     case 0xC2: // Write Channel 0/4 starting count
@@ -185,8 +206,8 @@ static void dma_io_writeb(uint32_t port, uint32_t data)
     case 0xCA: // Write Channel 2/6 starting count
     case 0x07:
     case 0xCE: // Write Channel 3/7 starting count
-        dma_flipflop_write(&dma.start_count[((port >> offset & 3) | (offset << 2)) & 7], data, dma.flipflop + offset, 0);
-        dma_flipflop_write(&dma.current_count[((port >> offset & 3) | (offset << 2)) & 7], data, dma.flipflop + offset, 1);
+        dma_flipflop_write(&dma.start_count[((port >> (offset + 1) & 3) | (offset << 2)) & 7], data, dma.flipflop + offset, 0);
+        dma_flipflop_write(&dma.current_count[((port >> (offset + 1) & 3) | (offset << 2)) & 7], data, dma.flipflop + offset, 1);
         break;
     case 0x08:
     case 0xD0: // Write Command Register
@@ -200,6 +221,7 @@ static void dma_io_writeb(uint32_t port, uint32_t data)
             dma.status[offset] |= 1 << (channel + 4);
         else
             dma.status[offset] &= ~(1 << (channel + 4));
+        dma_run_transfers();
         break;
     }
     case 0x0A:
@@ -209,6 +231,7 @@ static void dma_io_writeb(uint32_t port, uint32_t data)
             dma.mask[offset] |= 1 << channel;
         else
             dma.mask[offset] &= ~(1 << channel);
+        dma_run_transfers();
         break;
     }
     case 0x0B:
@@ -229,14 +252,17 @@ static void dma_io_writeb(uint32_t port, uint32_t data)
         dma.command[offset] = 0;
         dma.status[offset] = 0;
         dma.mask[offset] = 15; // Enable all
+        dma_run_transfers();
         break;
     case 0x0E:
     case 0xDC: // Clear Mask Register
         dma.mask[offset] = 0;
+        dma_run_transfers();
         break;
     case 0x0F:
     case 0xDE: // Set Mask Register
         dma.mask[offset] = data;
+        dma_run_transfers();
         break;
     case 0x80 ... 0x8F: {
         int id = page_register_offsets[port & 15];
@@ -246,7 +272,8 @@ static void dma_io_writeb(uint32_t port, uint32_t data)
             dma.addr_high[id] |= data << 16;
             break;
         default:
-            if(port != 0x80)DMA_LOG("Unknown DMA write pagelo: %02x\n", port);
+            if (port != 0x80)
+                DMA_LOG("Unknown DMA write pagelo: %02x\n", port);
         }
         break;
     }
@@ -258,7 +285,8 @@ static void dma_io_writeb(uint32_t port, uint32_t data)
             dma.addr_high[id] |= data << 24;
             break;
         default:
-            if(port != 0x80)DMA_LOG("Unknown DMA write pagehi: %02x\n", port);
+            if (port != 0x80)
+                DMA_LOG("Unknown DMA write pagehi: %02x\n", port);
         }
         break;
     }
@@ -267,7 +295,7 @@ static void dma_io_writeb(uint32_t port, uint32_t data)
 
 static void dma_reset(void)
 {
-    for(int offset=0;offset<2;offset++){
+    for (int offset = 0; offset < 2; offset++) {
         dma.flipflop[offset] = 0;
         dma.command[offset] = 0;
         dma.status[offset] = 0;
@@ -275,8 +303,87 @@ static void dma_reset(void)
     }
 }
 
-void dma_init_transfer(void){
-    
+void dma_raise_dreq(int line)
+{
+    DMA_LOG("Raised DREQ%d\n", line);
+    dma.status[line >> 2] |= 16 << (line & 3);
+    // If channel is unmasked, then start transfer
+    dma_run_transfers();
+}
+
+static void* dma_get_transfer_ptr(int line)
+{
+    switch (line) {
+    case 2: // Floppy drive
+        return fdc_get_dma_buf();
+    default:
+        DMA_FATAL("dma_get_transfer_ptr: unknown channel %d\n", line);
+    }
+    return NULL;
+}
+static void dma_handle_complete(int line)
+{
+    switch (line) {
+    case 2: // Floppy drive
+        fdc_handle_transfer_end();
+        break;
+    default:
+        DMA_FATAL("dma_handle_complete: unknown channel %d\n", line);
+    }
+}
+
+static void dma_run_transfers(void)
+{
+    void* mem = cpu_get_ram_ptr();
+    for (int i = 0; i < 8; i++) {
+        if (dma.status[i >> 2] & (16 << (i & 3))) {
+            // DREQ set high, check if unmasked
+            if (!(dma.mask[i >> 2] & (1 << (i & 3)))) {
+                // Unmasked -- run transfer
+                void* x = dma_get_transfer_ptr(i);
+                // Precalc data from DMA:
+                int is_write = (dma.mode[i] & 0x0C) == 4, is16 = i >= 4, stride = is16 + 1, incdec = dma.mode[i] & DMA_MODE_DOWN ? -1 : 1;
+
+                uint32_t ccount = dma.current_count[i] + 1, addr = dma.current_addr[i], last_page = addr + 0x1000;
+                while (ccount != 0) {
+                    uint32_t temp_addr = dma.addr_high[i] | ((addr << is16) & 0xFFFF);
+
+                    // Invalidate all code on page
+                    if ((temp_addr ^ last_page) > 4096) {
+                        cpu_invalidate_page(temp_addr);
+                        last_page = temp_addr;
+                    }
+
+                    // Actually perform the read/write
+                    if (is_write) {
+                        // Peripheral is writing to memory
+                        cpu_write_memory(temp_addr, x, stride);
+                    } else {
+                        // Peripheral is reading from memory
+                        if (is16)
+                            *(uint16_t*)x = *(uint16_t*)(mem + temp_addr);
+                        else
+                            *(uint8_t*)x = *(uint8_t*)(mem + temp_addr);
+                    }
+                    x += stride;
+                    addr += incdec;
+                    ccount--;
+                }
+
+                // After it is done, lower DREQ line and set transfer finished
+                dma.status[i >> 2] ^= (16 << (i & 3));
+                dma.status[i >> 2] |= (1 << (i & 3));
+                if (dma.mode[i] & DMA_MODE_AUTOINIT) {
+                    dma.current_count[i] = dma.start_count[i];
+                    dma.current_addr[i] = dma.current_addr[i];
+                } else {
+                    dma.current_addr[i] = addr;
+                    dma.current_count[i] = 0;
+                }
+                dma_handle_complete(i);
+            }
+        }
+    }
 }
 
 void dma_init(void)
