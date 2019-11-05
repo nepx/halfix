@@ -3,16 +3,6 @@
 // https://docs.freebsd.org/doc/3.4-RELEASE/usr/share/doc/handbook/dma.html
 // http://www.brokenthorn.com/Resources/OSDev21.html
 
-//  == DMA API ==
-// All DMA-enabled devices must have two functions that this file can call to request an I/O buffer and signal that the transfer is done.
-// It isn't enough to simply raise DREQ! Sometimes, the channel might be masked, and the code may enable it later.
-// To make saving state simpler, each device is "hard-coded" to a DMA channel.
-//
-// The following functions must be implemented:
-//  - void* [device]_get_dma_buffer(void) : This is the buffer the DMA controller uses to read/write
-//  - void [device]_dma_transfer_complete(void) : This is called when transfer is complete
-// You must put handlers to these functions in dma_handle_[buffer|complete]
-
 // TODO: Timing?
 
 #include "cpuapi.h"
@@ -40,9 +30,6 @@ enum { // See: Transfer Type
     DMA_MODE_ALSO_INVALID = 3
 };
 
-#define DMA_MODE_AUTOINIT 0x10
-#define DMA_MODE_DOWN 0x20
-
 struct dma_controller {
     // <<< BEGIN STRUCT "struct" >>>
     // Per channel registers
@@ -65,8 +52,6 @@ struct dma_controller {
 };
 static struct dma_controller dma;
 
-static void dma_run_transfers(void);
-
 static void dma_state(void)
 {
     // <<< BEGIN AUTOGENERATE "state" >>>
@@ -85,6 +70,8 @@ static void dma_state(void)
     state_field(obj, 2, "dma.flipflop", &dma.flipflop);
     // <<< END AUTOGENERATE "state" >>>
 }
+
+static void dma_run_transfers(void);
 
 // Write a flipflop state. Returns new value
 static inline void dma_flipflop_write(uint16_t* orig, uint8_t data, uint8_t* flipflop, int modify)
@@ -113,7 +100,6 @@ static int page_register_offsets[] = {
 static uint32_t dma_io_readb(uint32_t port)
 {
     int offset = port >= 0xC0;
-    uint8_t temp;
     switch (port) {
     case 0x00:
     case 0xC0: // Read Channel 0/4 current address
@@ -135,9 +121,7 @@ static uint32_t dma_io_readb(uint32_t port)
         return dma_flipflop_read(dma.current_count[((port >> offset & 3) | (offset << 2)) & 7], dma.flipflop + offset, 1);
     case 0x08:
     case 0xD0: // Read Status Register
-        temp = dma.status[offset];
-        dma.status[offset] &= ~0x0F;
-        return temp;
+        return dma.status[offset];
     case 0x09:
     case 0xD2:
     case 0x0A:
@@ -240,6 +224,7 @@ static void dma_io_writeb(uint32_t port, uint32_t data)
         if ((data >> 2 & 3) == 3)
             DMA_LOG("Unsupported DMA transfer mode 3\n");
         dma.mode[channel | (offset << 4)] = data;
+        dma_run_transfers();
         break;
     }
     case 0x0C:
@@ -305,30 +290,29 @@ static void dma_reset(void)
 
 void dma_raise_dreq(int line)
 {
-    DMA_LOG("Raised DREQ%d\n", line);
     dma.status[line >> 2] |= 16 << (line & 3);
-    // If channel is unmasked, then start transfer
+
     dma_run_transfers();
 }
 
-static void* dma_get_transfer_ptr(int line)
+static void* dma_get_buf(int line)
 {
     switch (line) {
-    case 2: // Floppy drive
-        return fdc_get_dma_buf();
+    case 2:
+        return fdc_dma_buf();
     default:
-        DMA_FATAL("dma_get_transfer_ptr: unknown channel %d\n", line);
+        DMA_FATAL("Unknown line: %d\n", line);
     }
-    return NULL;
+    abort();
 }
-static void dma_handle_complete(int line)
+static void dma_done(int line)
 {
     switch (line) {
-    case 2: // Floppy drive
-        fdc_handle_transfer_end();
+    case 2:
+        fdc_dma_complete();
         break;
     default:
-        DMA_FATAL("dma_handle_complete: unknown channel %d\n", line);
+        DMA_FATAL("Unknown line: %d\n", line);
     }
 }
 
@@ -337,50 +321,43 @@ static void dma_run_transfers(void)
     void* mem = cpu_get_ram_ptr();
     for (int i = 0; i < 8; i++) {
         if (dma.status[i >> 2] & (16 << (i & 3))) {
-            // DREQ set high, check if unmasked
             if (!(dma.mask[i >> 2] & (1 << (i & 3)))) {
-                // Unmasked -- run transfer
-                void* x = dma_get_transfer_ptr(i);
-                // Precalc data from DMA:
-                int is_write = (dma.mode[i] & 0x0C) == 4, is16 = i >= 4, stride = is16 + 1, incdec = dma.mode[i] & DMA_MODE_DOWN ? -1 : 1;
-
-                uint32_t ccount = dma.current_count[i] + 1, addr = dma.current_addr[i], last_page = addr + 0x1000;
-                while (ccount != 0) {
-                    uint32_t temp_addr = dma.addr_high[i] | ((addr << is16) & 0xFFFF);
-
-                    // Invalidate all code on page
-                    if ((temp_addr ^ last_page) > 4096) {
-                        cpu_invalidate_page(temp_addr);
-                        last_page = temp_addr;
+                uint32_t ccount = dma.current_count[i] + 1,
+                         is_write = (dma.mode[i] & 0x0C) == 4,
+                         incdec = dma.mode[i] & 0x20 ? -1 : 1,
+                         addr = dma.current_addr[i],
+                         is16 = i >= 4,
+                         size = is16 + 1,
+                         page = ((addr << is16) & 0xFFFF) | dma.addr_high[i];
+                void* buf = dma_get_buf(i);
+                while (ccount) {
+                    uint32_t current_addr = ((addr << is16) & 0xFFFF) | dma.addr_high[i];
+                    if ((current_addr ^ page) > 4095) {
+                        page = current_addr;
+                        cpu_init_dma(current_addr);
                     }
-
-                    // Actually perform the read/write
-                    if (is_write) {
-                        // Peripheral is writing to memory
-                        cpu_write_memory(temp_addr, x, stride);
-                    } else {
-                        // Peripheral is reading from memory
+                    if (is_write) // Peripheral writing to memory
+                        cpu_write_mem(current_addr, buf, size);
+                    else {
                         if (is16)
-                            *(uint16_t*)x = *(uint16_t*)(mem + temp_addr);
+                            *(uint16_t*)buf = *(uint16_t*)(mem + current_addr);
                         else
-                            *(uint8_t*)x = *(uint8_t*)(mem + temp_addr);
+                            *(uint8_t*)buf = *(uint8_t*)(mem + current_addr);
                     }
-                    x += stride;
+                    buf += size;
                     addr += incdec;
                     ccount--;
                 }
-
-                // After it is done, lower DREQ line and set transfer finished
-                dma.status[i >> 2] ^= (16 << (i & 3));
-                dma.status[i >> 2] |= (1 << (i & 3));
-                if (dma.mode[i] & DMA_MODE_AUTOINIT) {
+                if (dma.mode[i] & 0x10) {
+                    dma.current_addr[i] = dma.start_addr[i];
                     dma.current_count[i] = dma.start_count[i];
-                    dma.current_addr[i] = dma.current_addr[i];
                 } else {
                     dma.current_addr[i] = addr;
-                    dma.current_count[i] = 0;
+                    dma.current_count[i] = ccount;
                 }
-                dma_handle_complete(i);
+                dma.status[i >> 2] ^= 16 << (i & 3);
+                dma.status[i >> 2] |= 1 << (i & 3);
+                dma_done(i);
             }
         }
     }
