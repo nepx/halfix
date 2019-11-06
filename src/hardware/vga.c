@@ -386,12 +386,12 @@ static
 
                 int width = vga.vbe_regs[1], // AKA xres
                     height = vga.vbe_regs[2]; // AKA yres
-                int bytes_per_pixel = (vga.vbe_regs[3] + 7) >> 3, total_bytes_used = bytes_per_pixel * width * height;
+                //int bytes_per_pixel = (vga.vbe_regs[3] + 7) >> 3, total_bytes_used = bytes_per_pixel * width * height;
 
                 if (diffxor & VBE_DISPI_LFB_ENABLED) {
                     // Clear VRAM, if needed
                     if (!(data & VBE_DISPI_NOCLEARMEM)) // should i use diffxor or data?
-                        memset(vga.vram, 0, total_bytes_used);
+                        memset(vga.vram, 0, vga.vram_size);
                 }
 
                 vga.total_height = height;
@@ -1422,4 +1422,8 @@ void vga_init(int memory_size)
 
     vga.vram_size = memory_size;
     vga_alloc_mem();
+}
+
+void* vga_get_raw_vram(void){
+    return vga.vram;
 }

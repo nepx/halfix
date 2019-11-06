@@ -32,7 +32,8 @@ var Module = {
     var image_data = null,
         ctx = Module["canvas"].getContext("2d");
     window["update_size"] = function (fbptr, x, y) {
-        if ((x & y) == 0) return; // Don't do anything if x or y is zero (VGA resizing sometimes gives weird sizes)
+        if (x == 0 || y == 0) return; // Don't do anything if x or y is zero (VGA resizing sometimes gives weird sizes)
+        console.log("Update size: ", x, y);
         Module["canvas"].width = x;
         Module["canvas"].height = y;
         image_data = new ImageData(new Uint8ClampedArray(Module["HEAPU8"].buffer, fbptr, (x * y) << 2), x, y);
@@ -184,7 +185,7 @@ var Module = {
             b = "/" + b;
         if (a.charAt(a.length - 1 | 0) === "/")
             a = a.substring(0, a.length - 1 | 0);
-        return normalize_path(a + b);
+        return a + b; //normalize_path(a + b);
     }
 
     // Emscripten heap views
@@ -207,7 +208,10 @@ var Module = {
         pci: getParameterByName("pcienabled") === "true",
         apic: getParameterByName("apicenabled") === "true",
         now: getParameterByName("now") ? parseFloat(getParameterByName("now")) : 1563602400,
-        mem: getParameterByName("mem") ? parseInt(getParameterByName("mem")) : 32
+        mem: getParameterByName("mem") ? parseInt(getParameterByName("mem")) : 32,
+        vgamem: getParameterByName("vgamem") ? parseInt(getParameterByName("vgamem")) : 32,
+        fd: [getParameterByName("fda"), getParameterByName("fdb")],
+        boot: getParameterByName("boot") || "hfc" // HDA, FDC, CDROM
     };
 
     function roundUp(v) {
@@ -220,7 +224,7 @@ var Module = {
         v++;
         return v;
     }
-    Module["TOTAL_MEMORY"] = roundUp(options.mem + 32 + 2) * 1024 * 1024 | 0;
+    Module["TOTAL_MEMORY"] = roundUp(options.mem + 32 + options.vgamem) * 1024 * 1024 | 0;
 
     // Returns a pointer to an Emscripten-compiled function
     function wrap(nm) {
@@ -299,6 +303,11 @@ var Module = {
 
         wrap("emscripten_set_time")(options.now);
         wrap("emscripten_set_memory_size")(options.mem * 1024 * 1024 | 0);
+        wrap("emscripten_set_vga_memory_size")(options.vgamem * 1024 * 1024 | 0);
+
+        var boot_order = wrap("emscripten_bootorder");
+        for (var i = 0; i < 3; i++)
+            boot_order(i, options.boot.charCodeAt(i));
 
         u8 = Module["HEAPU8"];
         u16 = Module["HEAPU16"];
@@ -308,9 +317,16 @@ var Module = {
         u8.set(options.bios, bios);
         u8.set(options.vgabios, vgabios);
 
+        console.log(options);
+
         for (var i = 0; i < 4; i = i + 1 | 0)
             if (options.hd[i])
                 options.hd[i] = new RemoteHardDiskImage(i, options.hd[i].path, options.hd[i].info);
+
+        // For our purposes here, a floppy drive is bascially a hard drive, but smaller
+        for (var i = 0; i < 2; i = i + 1 | 0)
+            if (options.fd[i])
+                options.fd[i] = new RemoteHardDiskImage(i, options.fd[i].path, options.fd[i].info, 1);
 
         // Start initializing disks
         wrap("emscripten_enable_pci")(options.pci);
@@ -319,7 +335,9 @@ var Module = {
 
         wrap("emscripten_initialize")();
         window["debug"] = wrap("emscripten_debug");
-        var run = wrap("emscripten_run"), cycles = wrap("emscripten_get_cycles"), cyclebase = 0;
+        var run = wrap("emscripten_run"),
+            cycles = wrap("emscripten_get_cycles"),
+            cyclebase = 0;
         var n = 0,
             now = new Date().getTime();
 
@@ -353,7 +371,7 @@ var Module = {
                 if (elapsed >= 1000) {
                     console.log("FPS: ", n);
                     var curcycles = cycles();
-                    $("speed").innerHTML = ((curcycles - cyclebase) / (elapsed ) / (1000)).toFixed(2);
+                    $("speed").innerHTML = ((curcycles - cyclebase) / (elapsed) / (1000)).toFixed(2);
                     cyclebase = curcycles;
                     now = temp;
                     n = 0;
@@ -365,6 +383,7 @@ var Module = {
                 $("error").innerHTML = "Exception thrown -- see JavaScript console";
                 $("messages").innerHTML = e.toString() + "<br />" + e.stack;
                 failed = true;
+                console.log(e);
                 throw e;
             }
         }
@@ -379,16 +398,20 @@ var Module = {
      * @param {number} diskid 
      * @param {string} path 
      * @param {Uint8Array} info 
+     * @param {number=} type 0 - Hard drive, 1 - Floppy drive, 2 - CD-ROM drive
      * @constructor
      */
-    function RemoteHardDiskImage(diskid, path, info) {
+    function RemoteHardDiskImage(diskid, path, info, type) {
         // Call initialization mechanism
         var pathaddr = alloc(path.length + 1 | 0),
             infoaddr = alloc(info.length);
         strcpy(pathaddr, path);
         memcpy(infoaddr, info);
         // void emscripten_init_disk(int disk, int has_media, char* path, void* info);
-        wrap("emscripten_init_disk")(diskid | 0, 1, pathaddr, infoaddr);
+        if (type === 1)
+            wrap("emscripten_init_floppy")(diskid | 0, 1, pathaddr, infoaddr);
+        else
+            wrap("emscripten_init_disk")(diskid | 0, 1, pathaddr, infoaddr);
         gc();
 
         /** @type {string} */
@@ -465,7 +488,7 @@ var Module = {
      */
     RemoteHardDiskImage.prototype["writeCache"] = function (id, buffer, offset, length) {
         id = id | 0;
-        if (!this.blocks[id]){
+        if (!this.blocks[id]) {
             printElt.value += "[JSError] writeCache(id=0x" + id.toString(16) + ", buffer=0x" + buffer.toString(16) + ", length=0x" + buffer.toString(16) + ")\n";
             return 1; // No block here with that data.
         }
@@ -536,6 +559,12 @@ var Module = {
                 disk_drive_ids.push(i);
             }
         }
+        for (var i = 0; i < 2; i++) {
+            if (options.fd[i]) {
+                disk_drives.push(join_path(options.fd[i], "info.dat"));
+                disk_drive_ids.push(i | 4);
+            }
+        }
 
         options.bios = data[0];
         options.vgabios = data[1];
@@ -547,11 +576,19 @@ var Module = {
         if (disk_drives.length)
             loadFiles(disk_drives, function (err, data) {
                 if (err) throw err;
-                for (var i = 0; i < data.length; i++)
-                    options.hd[i] = {
-                        info: data[i],
-                        path: disk_drives[i].replace("info.dat", "") // XXX
-                    };
+                for (var i = 0; i < data.length; i++) {
+                    var drive_id = disk_drive_ids[i];
+                    if (drive_id & 4)
+                        options.fd[drive_id & 1] = {
+                            info: data[drive_id & 1],
+                            path: disk_drives[drive_id & 1].replace("info.dat", "") // XXX
+                        };
+                    else
+                        options.hd[drive_id] = {
+                            info: data[drive_id],
+                            path: disk_drives[drive_id].replace("info.dat", "") // XXX
+                        };
+                }
                 ready();
             });
         else ready();
