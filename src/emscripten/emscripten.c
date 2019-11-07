@@ -127,13 +127,26 @@ void emscripten_set_vga_memory_size(int mem){
     pc.vga_memory_size = mem;
 }
 
+
+EMSCRIPTEN_KEEPALIVE
+void emscripten_bootorder(int seq, int id){
+    pc.boot_sequence[seq] = (id == 'h') ? BOOT_DISK : (id == 'c' ? BOOT_CDROM : (id == 'f' ? BOOT_FLOPPY : BOOT_NONE));
+}
+
+EMSCRIPTEN_KEEPALIVE
+void emscripten_init_floppy(int disk, int has_media, char* path, void* info)
+{
+    if (has_media) {
+        pc.floppy_enabled = 1;
+        pc.floppy_drives[disk].type = DRIVE_TYPE_DISK;
+        drive_internal_init(&pc.floppy_drives[0], path, info);
+    } else
+        pc.floppy_drives[disk].type = DRIVE_TYPE_NONE;
+}
+
 EMSCRIPTEN_KEEPALIVE
 int emscripten_initialize(void)
 {
-    pc.boot_sequence[0] = BOOT_DISK;
-    pc.boot_sequence[1] = BOOT_NONE;
-    pc.boot_sequence[2] = BOOT_NONE;
-
 #if 0
 pc.drives[0].type = DRIVE_TYPE_NONE;
     pc.drives[1].type = DRIVE_TYPE_NONE;
@@ -144,9 +157,9 @@ pc.drives[0].type = DRIVE_TYPE_NONE;
     pc.cpu_type = CPU_CLASS_486;
     if(pc.memory_size == 0)
         pc.memory_size = 32 * 1024 * 1024;
-    printf("PC memory size: %d mb\n", pc.memory_size / 1024 / 1024);
-    pc.vga_memory_size = 2 * 1024 * 1024;
-
+    if(pc.vga_memory_size == 0)
+        pc.vga_memory_size = 2 * 1024 * 1024;
+    printf("PC memory size: %d mb VGA memory: %d mb\n", pc.memory_size / 1024 / 1024, pc.vga_memory_size / 1024 / 1024);
     return pc_init(&pc);
 }
 

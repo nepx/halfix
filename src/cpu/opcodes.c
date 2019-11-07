@@ -264,7 +264,7 @@ OPTYPE op_jmp_rel16(struct decoded_instruction* i)
 }
 OPTYPE op_jmpf(struct decoded_instruction* i)
 {
-    jmpf(i->imm32, i->disp16, VIRT_EIP() + I_LENGTH2(i->flags));
+    if(jmpf(i->imm32, i->disp16, VIRT_EIP() + I_LENGTH2(i->flags))) EXCEP();
     STOP();
 }
 OPTYPE op_jmpf_e16(struct decoded_instruction* i)

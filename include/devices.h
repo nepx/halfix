@@ -41,17 +41,17 @@ int pit_next(itick_t now);
 int apic_next(itick_t now);
 int floppy_next(itick_t now);
 
+void dma_raise_dreq(int);
+// DMA handlers
+void* fdc_dma_buf(void);
+void fdc_dma_complete(void);
+
 // The mouse button has just suddenly been pressed
 #define MOUSE_STATUS_PRESSED 1
 // The mouse button has been released
 #define MOUSE_STATUS_RELEASED 0
 // The mouse button state has not changed
 #define MOUSE_STATUS_NOCHANGE 2
-
-// DMA support
-void* fdc_get_dma_buf(void);
-void fdc_handle_transfer_end(void);
-void dma_raise_dreq(int line);
 
 // PCI support
 

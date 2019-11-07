@@ -48,6 +48,10 @@ void cpuid(void)
         }
         break;
     }
+    case 0x80000008:
+        cpu.reg32[EAX] = 0x2028; // TODO: 0x2024 for 36-bit address space?
+        cpu.reg32[ECX] = cpu.reg32[EDX] = cpu.reg32[EBX] = 0;
+        break;
     default:
         CPU_DEBUG("Unknown CPUID level: 0x%08x\n", cpu.reg32[EAX]);
     }

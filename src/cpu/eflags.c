@@ -215,10 +215,8 @@ int cpu_get_cf(void)
         return (cpu.lr ^ ((cpu.lr ^ cpu.lop2) & (cpu.lop1 ^ cpu.lop2))) >> 31 & 1;
     case SHR8:
     case SAR8:
-        return cpu.lop1 >> ((cpu.lop2 & 7) - 1) & 1;
     case SHR16:
     case SAR16:
-        return cpu.lop1 >> ((cpu.lop2 & 15) - 1) & 1;
     case SHR32:
     case SAR32:
         return cpu.lop1 >> (cpu.lop2 - 1) & 1;

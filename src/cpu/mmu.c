@@ -1,6 +1,7 @@
 // Handles memory mapping
 #include "cpu/cpu.h"
 #include "cpu/instrument.h"
+#include "io.h"
 
 #define EXCEPTION_HANDLER return 1
 
@@ -53,6 +54,17 @@ static void cpu_set_tlb_entry(uint32_t lin, uint32_t phys, int user, int write)
     cpu.tlb_tags[entry] = system_read | system_write | user_read | user_write;
 }
 
+static uint32_t cpu_read_phys(uint32_t addr){
+    if(addr >= cpu.memory_size || (addr >= 0xA0000 && addr < 0xC0000))
+        return io_handle_mmio_read(addr, 2);
+    else return MEM32(addr);
+}
+static void cpu_write_phys(uint32_t addr, uint32_t data){
+    if(addr >= cpu.memory_size || (addr >= 0xA0000 && addr < 0xC0000))
+        io_handle_mmio_write(addr, data, 2);
+    else MEM32(addr) = data;
+}
+
 // Converts linear to physical address.
 int cpu_mmu_translate(uint32_t lin, int shift)
 {
@@ -74,11 +86,7 @@ int cpu_mmu_translate(uint32_t lin, int shift)
         uint32_t page_directory_entry_addr = cpu.cr[3] + (lin >> 20 & 0xFFC),
                  page_directory_entry = -1, page_table_entry_addr = -1, page_table_entry = -1;
 
-        if (page_directory_entry_addr >= cpu.memory_size) {
-            CPU_LOG("Invalid PDE address\n");
-            goto dump_debug;
-        }
-        page_directory_entry = MEM32(page_directory_entry_addr);
+        page_directory_entry = cpu_read_phys(page_directory_entry_addr);
         
         if (!(page_directory_entry & 1)) {
             // Not present
@@ -90,16 +98,12 @@ int cpu_mmu_translate(uint32_t lin, int shift)
         // Page directory entry seems to be OK, so now check page table entry
         page_table_entry_addr = ((lin >> 10 & 0xFFC) + (page_directory_entry & ~0xFFF));
         page_table_entry = -1;
-        if (page_table_entry_addr >= cpu.memory_size) {
-            CPU_FATAL("Invalid PTE address: %08x\n", page_table_entry_addr);
-            goto dump_debug;
-        }
 
         // If PSE, then return a single large page
         if (page_directory_entry & 0x80 && cpu.cr[4] & CR4_PSE) {
                 uint32_t new_page_dierctory_entry = page_directory_entry | 0x20 | (write << 6);
             if (new_page_dierctory_entry != page_directory_entry) {
-                MEM32(page_directory_entry_addr) = new_page_dierctory_entry;
+                cpu_write_phys(page_directory_entry_addr, new_page_dierctory_entry);
 #ifdef INSTRUMENT
                 cpu_instrument_paging_modified(page_directory_entry_addr);
 #endif
@@ -107,7 +111,7 @@ int cpu_mmu_translate(uint32_t lin, int shift)
             uint32_t phys = (page_directory_entry & 0xFFC00000) | (lin & 0x3FF000);
             cpu_set_tlb_entry(lin & ~0xFFF, phys, user, write);
         } else {
-            page_table_entry = MEM32(page_table_entry_addr);
+            page_table_entry = cpu_read_phys(page_table_entry_addr);
 
             // Check for existance
             if ((page_table_entry & 1) == 0) {
@@ -149,14 +153,14 @@ int cpu_mmu_translate(uint32_t lin, int shift)
 
             // Note: Accessed bits should only be set if there wasn't any page fault.
             if ((page_directory_entry & 0x20) == 0) {
-                MEM32(page_directory_entry_addr) = page_directory_entry | 0x20;
+                cpu_write_phys(page_directory_entry_addr, page_directory_entry | 0x20);
 #ifdef INSTRUMENT
                 cpu_instrument_paging_modified(page_directory_entry_addr);
 #endif
             }
             uint32_t new_page_table_entry = page_table_entry | (write << 6) | 0x20; // Set dirty bit and accessed bit, if needed
             if (new_page_table_entry != page_table_entry) {
-                MEM32(page_table_entry_addr) = new_page_table_entry;
+                cpu_write_phys(page_table_entry_addr, new_page_table_entry);
 #ifdef INSTRUMENT
                 cpu_instrument_paging_modified(page_table_entry_addr);
 #endif
@@ -179,13 +183,6 @@ int cpu_mmu_translate(uint32_t lin, int shift)
         //if(cpu.cpl == 3 && !user) __asm__("int3");
         EXCEPTION_PF(error_code);
         return -1; // Never reached
-    dump_debug:
-        printf(" ---- Page fault information dump ----\n");
-        printf("PDE Entry addr: %08x PDE Entry: %08x\n", page_directory_entry_addr, page_directory_entry);
-        printf("PTE Entry addr: %08x PTE Entry: %08x\n", page_table_entry_addr, page_table_entry);
-        printf("Address to translate: %08x\n", lin);
-        printf("CR3: %08x\n", cpu.cr[3]);
-        CPU_FATAL("Internal CPU emulation exception -- PDE/PTE address out of bounds\n");
     }
 }
 
