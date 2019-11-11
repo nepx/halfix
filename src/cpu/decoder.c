@@ -2129,6 +2129,12 @@ static int decode_0F09(struct decoded_instruction* i)
     i->handler = op_wbinvd;
     return 0;
 }
+static int decode_0F0B(struct decoded_instruction* i)
+{
+    i->flags = 0;
+    i->handler = op_ud_exception;
+    return 1;
+}
 static int decode_0F18(struct decoded_instruction* i)
 {
     uint8_t modrm = rb();
@@ -2944,7 +2950,7 @@ static const decode_handler_t table0F[256] = {
     /* 0F 08 */ decode_invalid0F,
     /* 0F 09 */ decode_0F09,
     /* 0F 0A */ decode_invalid0F,
-    /* 0F 0B */ decode_invalid0F,
+    /* 0F 0B */ decode_0F0B,
     /* 0F 0C */ decode_invalid0F,
     /* 0F 0D */ decode_invalid0F,
     /* 0F 0E */ decode_invalid0F,
