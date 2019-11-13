@@ -109,7 +109,6 @@ static void vga_alloc_mem(void)
 static void vga_state(void)
 {
     // <<< BEGIN AUTOGENERATE "state" >>>
-    // Auto-generated on Wed Oct 09 2019 13:00:43 GMT-0700 (PDT)
     struct bjson_object* obj = state_obj("vga", 41);
     state_field(obj, 256, "vga.crt", &vga.crt);
     state_field(obj, 1, "vga.crt_index", &vga.crt_index);
@@ -152,7 +151,7 @@ static void vga_state(void)
     state_field(obj, 40, "vga.vbe_regs", &vga.vbe_regs);
     state_field(obj, 4, "vga.vbe_bank", &vga.vbe_bank);
     state_field(obj, 4, "vga.vram_size", &vga.vram_size);
-    // <<< END AUTOGENERATE "state" >>>
+// <<< END AUTOGENERATE "state" >>>
     if (state_is_reading()) {
         vga_update_size();
         vga_alloc_mem();
@@ -177,7 +176,8 @@ enum {
     RENDER_4BPP = 6,
     // VBE render modes
     RENDER_32BPP = 8, // Windows XP uses this
-    RENDER_8BPP = 10 // Debian uses this one
+    RENDER_8BPP = 10, // Debian uses this one
+    RENDER_16BPP = 12
 };
 
 static void vga_update_mem_access(void)
@@ -225,6 +225,10 @@ static void vga_change_renderer(void)
         // Depends on BPP
         case 8:
             vga.renderer = RENDER_8BPP;
+            break;
+        case 16:
+            vga.renderer = RENDER_16BPP;
+            break;
         case 32:
             vga.renderer = RENDER_32BPP;
             break;
@@ -380,6 +384,11 @@ static
         case 4:
             diffxor = vga.vbe_enable ^ data;
             if (diffxor) {
+                if(!(diffxor & VBE_DISPI_ENABLED)){
+                    data &= ~VBE_DISPI_LFB_ENABLED;
+                    data |= vga.vbe_enable & VBE_DISPI_LFB_ENABLED;
+                }
+                VGA_LOG(" Set VBE enable=%04x bpp=%d diffxor=%04x current=%04x\n", data, vga.vbe_regs[3], diffxor, vga.vbe_enable);
                 vga.vbe_enable = data;
                 if (vga.vbe_regs[3] == 4)
                     VGA_FATAL("TODO: support VBE 4-bit modes\n");
@@ -910,6 +919,9 @@ void vga_update(void)
         enableMask = vga.attr[0x12] & 15;
         address_bit_mapping = vga.crt[0x17] & 1;
         break;
+    case RENDER_16BPP: // VBE 16-bit BPP mode
+        offset_between_lines = vga.total_width * 2;
+        break;
     case RENDER_32BPP: // VBE 32-bit BPP mode
         offset_between_lines = vga.total_width * 4;
         break;
@@ -1126,6 +1138,23 @@ void vga_update(void)
                         break;
                     for (unsigned int i = 0; i < vga.total_width; i++, vram_addr++)
                         vga.framebuffer[fboffset++] = vga.dac_palette[vga.vram[vram_addr]];
+
+                    vga.vbe_scanlines_modified[vga.current_scanline] = 0;
+                    break;
+                case RENDER_16BPP:
+                    if (!vga.vbe_scanlines_modified[vga.current_scanline])
+                        break;
+                    for (unsigned int i = 0; i < vga.total_width; i++, vram_addr+=2) {
+                        uint16_t word = *((uint16_t*)&vga.vram[vram_addr]);
+                        int red = word >> 11 << 3,
+                            green = (word >> 5 & 63) << 2, // Note: 6 bits for green
+                            blue = (word & 31) << 3;
+#ifndef EMSCRIPTEN
+                        vga.framebuffer[fboffset++] = red << 16 | green << 8 | blue << 0 | 0xFF000000;
+#else
+                        vga.framebuffer[fboffset++] = red << 0 | green << 8 | blue << 16 | 0xFF000000;
+#endif
+                    }
 
                     vga.vbe_scanlines_modified[vga.current_scanline] = 0;
                     break;
