@@ -9,6 +9,7 @@
 
 void cpuid(void)
 {
+    CPU_LOG("CPUID called with EAX=%08x\n", cpu.reg32[EAX]);
     switch (cpu.reg32[EAX]) {
     // TODO: Allow this instruction to be customized
     case 0:
@@ -54,6 +55,10 @@ void cpuid(void)
         break;
     default:
         CPU_DEBUG("Unknown CPUID level: 0x%08x\n", cpu.reg32[EAX]);
+    case 0x80860000 ... 0x80860007: // Transmeta
+        cpu.reg32[EAX] = 0;
+        cpu.reg32[ECX] = cpu.reg32[EDX] = cpu.reg32[EBX] = 0;
+        break;
     }
 }
 

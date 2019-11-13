@@ -96,8 +96,9 @@ int cpu_run(int cycles)
             break;
     }
 
-    // We are here for the following two reasons:
+    // We are here for the following three reasons:
     //  - HLT raised
+    //  - A device requested a fast return 
     //  - We have run "cycles" operations.
     // In the case of the former, cpu.hlt_counter will contain the number of cycles still in cpu.cycles_to_run
     int cycles_run = cpu_get_cycles() - begin;
@@ -123,6 +124,15 @@ void cpu_request_fast_return(int reason)
 {
     UNUSED(reason);
     INTERNAL_CPU_LOOP_EXIT();
+}
+void cpu_cancel_execution_cycle(int reason)
+{
+    // We want to exit out of the loop entirely
+    cpu.exit_reason = reason;
+    cpu.cycles += cpu_get_cycles() - cpu.cycles;
+    cpu.cycles_to_run = 1;
+    cpu.cycle_offset = 1;
+    cpu.refill_counter = 0;
 }
 
 void* cpu_get_ram_ptr(void)
@@ -207,7 +217,6 @@ int cpu_apic_connected(void)
 static void cpu_state(void)
 {
     // <<< BEGIN AUTOGENERATE "state" >>>
-    // Auto-generated on Wed Oct 09 2019 13:00:43 GMT-0700 (PDT)
     struct bjson_object* obj = state_obj("cpu", 36);
     state_field(obj, 64, "cpu.reg32", &cpu.reg32);
     state_field(obj, 4, "cpu.esp_mask", &cpu.esp_mask);
@@ -245,7 +254,7 @@ static void cpu_state(void)
     state_field(obj, 4, "cpu.intr_line_state", &cpu.intr_line_state);
     state_field(obj, 4, "cpu.interrupts_blocked", &cpu.interrupts_blocked);
     state_field(obj, 4, "cpu.exit_reason", &cpu.exit_reason);
-    // <<< END AUTOGENERATE "state" >>>
+// <<< END AUTOGENERATE "state" >>>
     state_file(cpu.memory_size, "ram", cpu.mem);
 
     if (state_is_reading()) {

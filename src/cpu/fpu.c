@@ -168,7 +168,6 @@ static void fpu_set_control_word(uint16_t control_word)
 static void fpu_state(void)
 {
     // <<< BEGIN AUTOGENERATE "state" >>>
-    // Auto-generated on Wed Oct 09 2019 13:00:43 GMT-0700 (PDT)
     struct bjson_object *obj = state_obj("fpu", 9 + 16);
     state_field(obj, 4, "fpu.ftop", &fpu.ftop);
     state_field(obj, 2, "fpu.control_word", &fpu.control_word);
@@ -537,8 +536,8 @@ static int fpu_fcomi(floatx80 op1, floatx80 op2, int unordered)
     int pf = bad;
     int zf = bad | (relation == float_relation_equal);
     cpu_set_cf(cf);
-    cpu_set_cf(pf);
-    cpu_set_cf(zf);
+    cpu_set_pf(pf);
+    cpu_set_zf(zf);
 
     return 0;
 }
@@ -936,10 +935,10 @@ int fpu_reg_op(struct decoded_instruction *i, uint32_t flags)
             if (fpu_check_stack_underflow(0) || fpu_check_stack_underflow(1))
                 FPU_ABORT();
             res = fpatan(fpu_get_st(0), fpu_get_st(1), &fpu.status);
-            if (!ftan(&res, &fpu.status))
+            if (!fpu_check_exceptions())
             {
-                fpu_set_st(0, res);
                 fpu_pop();
+                fpu_set_st(0, res);
             }
             break;
         case 4: // D9 F4: FXTRACT - Extract Exponent and mantissa of ST0
@@ -1052,7 +1051,6 @@ int fpu_reg_op(struct decoded_instruction *i, uint32_t flags)
             break;
         case 2: // FSQRT - Compute sqrt(ST0)
             dest = floatx80_sqrt(fpu_get_st(0), &fpu.status);
-            pop = 1;
             break;
         case 3:
         { // FSINCOS - Compute sin(ST0) and sin(ST1)
@@ -1194,8 +1192,10 @@ int fpu_reg_op(struct decoded_instruction *i, uint32_t flags)
             cpu_set_zf(1);
             cpu_set_pf(1);
             cpu_set_cf(1);
+            FPU_ABORT();
         }
-        if (fpu_fcomi(fpu_get_st(0), fpu_get_st(1), smaller_opcode & 1))
+        fpu_debug();
+        if (fpu_fcomi(fpu_get_st(0), fpu_get_st(opcode & 7), smaller_opcode & 1))
             FPU_ABORT();
         break;
     case OP(0xD9, 3): // FSTP (alias)
@@ -1277,11 +1277,32 @@ int fpu_reg_op(struct decoded_instruction *i, uint32_t flags)
             EXCEPTION_UD();
         cpu.reg16[AX] = fpu_get_status_word();
         break;
+
+    case OP(0xDF, 5): // FUCOMIP - Unordered compare and pop
+    case OP(0xDF, 6):
+    { // FCOMIP - Ordered compare and pop
+        if (fpu_fwait())
+            return 1;
+        fpu_update_pointers(opcode);
+
+        if (fpu_check_stack_underflow(0) || fpu_check_stack_underflow(opcode & 7))
+        {
+            cpu_set_zf(1);
+            cpu_set_pf(1);
+            cpu_set_cf(1);
+            FPU_ABORT();
+        }
+        if (fpu_fcomi(fpu_get_st(0), fpu_get_st(opcode & 7), smaller_opcode & 1))
+            FPU_ABORT();
+        fpu_pop();
+        break;
+    }
     case OP(0xDA, 4):
     case OP(0xDA, 6):
     case OP(0xDA, 7):
     case OP(0xDD, 6):
     case OP(0xDD, 7):
+    case OP(0xDF, 7):
     { // Invalid
         int major_opcode = opcode >> 8 | 0xD8;
         UNUSED(major_opcode); // In case log is disabled
@@ -1475,6 +1496,13 @@ int fpu_mem_op(struct decoded_instruction *i, uint32_t virtaddr, uint32_t seg)
         fpu_set_control_word(cw);
         break;
     }
+    case OP(0xD9, 6):
+    { // FSTENV
+        int is16 = I_OP2(i->flags);
+        if (fstenv(linaddr, is16))
+            FPU_ABORT();
+        break;
+    }
     case OP(0xD9, 7): // FSTCW - Store control word to memory
         cpu_write16(linaddr, fpu.control_word, cpu.tlb_shift_write);
         break;
@@ -1538,7 +1566,7 @@ int fpu_mem_op(struct decoded_instruction *i, uint32_t virtaddr, uint32_t seg)
         }
         break;
     }
-    case OP(0xDB, 4):
+    case OP(0xD9, 4):
     { // FLDENV - Load floating point environment from memory
         int is16 = I_OP2(i->flags);
         if (fldenv(linaddr, is16))
@@ -1577,6 +1605,7 @@ int fpu_mem_op(struct decoded_instruction *i, uint32_t virtaddr, uint32_t seg)
         //fpu_debug();
         fpu_update_pointers2(opcode, virtaddr, seg);
 
+        fpu_debug();
         if (fpu_check_stack_underflow(0))
             FPU_ABORT();
         temp64 = floatx80_to_float64(fpu_get_st(0), &fpu.status);
@@ -1712,6 +1741,7 @@ int fpu_mem_op(struct decoded_instruction *i, uint32_t virtaddr, uint32_t seg)
         break;
     }
     case OP(0xD9, 1):
+    case OP(0xDB, 4):
     case OP(0xDB, 6):
     case OP(0xDD, 5):
     {

@@ -142,20 +142,20 @@ void cpu_shift8(int op, uint8_t* dest, uint8_t src)
             op2 = src & 7;
             if (op2) {
                 res = (op1 << op2) | (op1 >> (8 - op2));
-                cpu_set_cf(res & 1);
-                cpu_set_of((res ^ (res >> 7)) & 1);
             } else
                 res = *dest;
+            cpu_set_cf(res & 1);
+            cpu_set_of((res ^ (res >> 7)) & 1);
             break;
         case 1: // ROR
             op1 = *dest;
             op2 = src & 7;
             if (op2) {
                 res = (op1 >> op2) | (op1 << (8 - op2));
-                cpu_set_cf(res >> 7 & 1);
-                cpu_set_of((res ^ (res << 1)) >> 7 & 1);
             } else
                 res = *dest;
+            cpu_set_cf(res >> 7 & 1);
+            cpu_set_of((res ^ (res << 1)) >> 7 & 1);
             break;
         case 2: // RCL
             op1 = *dest;
@@ -217,20 +217,20 @@ void cpu_shift16(int op, uint16_t* dest, uint16_t src)
             op2 = src & 15;
             if (op2) {
                 res = (op1 << op2) | (op1 >> (16 - op2));
-                cpu_set_cf(res & 1);
-                cpu_set_of((res ^ (res >> 15)) & 1);
             } else
                 res = *dest;
+            cpu_set_cf(res & 1);
+            cpu_set_of((res ^ (res >> 15)) & 1);
             break;
         case 1:
             op1 = *dest;
             op2 = src & 15;
             if (op2) {
                 res = (op1 >> op2) | (op1 << (16 - op2));
-                cpu_set_cf(res >> 15 & 1);
-                cpu_set_of((res ^ (res << 1)) >> 15 & 1);
             } else
                 res = *dest;
+            cpu_set_cf(res >> 15 & 1);
+            cpu_set_of((res ^ (res << 1)) >> 15 & 1);
             break;
         case 2:
             op1 = *dest;
@@ -290,20 +290,20 @@ void cpu_shift32(int op, uint32_t* dest, uint32_t src)
             op2 = src & 31;
             if (op2) {
                 res = (op1 << op2) | (op1 >> (32 - op2));
-                cpu_set_cf(res & 1);
-                cpu_set_of((res ^ (res >> 31)) & 1);
             } else
                 res = *dest;
+            cpu_set_cf(res & 1);
+            cpu_set_of((res ^ (res >> 31)) & 1);
             break;
         case 1:
             op1 = *dest;
             op2 = src & 31;
             if (op2) {
                 res = (op1 >> op2) | (op1 << (32 - op2));
-                cpu_set_cf(res >> 31 & 1);
-                cpu_set_of((res ^ (res << 1)) >> 31 & 1);
             } else
                 res = *dest;
+            cpu_set_cf(res >> 31 & 1);
+            cpu_set_of((res ^ (res << 1)) >> 31 & 1);
             break;
         case 2:
             op1 = *dest;
@@ -393,7 +393,7 @@ int cpu_muldiv8(int op, uint32_t src)
         if (src == 0)
             EXCEPTION_DE();
         temp = result = (int16_t)cpu.reg16[AX] / (int8_t)src;
-        if (temp > 0x7F || temp < -0x7F)
+        if (temp > 0x7F || temp < -0x80)
             EXCEPTION_DE();
         result_mod = (int16_t)cpu.reg16[AX] % (int8_t)src;
         cpu.reg8[AL] = result;
@@ -442,7 +442,7 @@ int cpu_muldiv16(int op, uint32_t src)
             EXCEPTION_DE();
         original = cpu.reg16[DX] << 16 | cpu.reg16[AX];
         temp = result = (int32_t)original / (int16_t)src;
-        if (temp > 0x7FFF || temp < -0x7FFF)
+        if (temp > 0x7FFF || temp < -0x8000)
             EXCEPTION_DE();
         result_mod = (int32_t)original % (int16_t)src;
         cpu.reg16[AX] = result;
@@ -493,7 +493,7 @@ int cpu_muldiv32(int op, uint32_t src)
         original = (uint64_t)cpu.reg32[EDX] << 32 | cpu.reg32[EAX];
         temp = result = (int64_t)original / (int32_t)src;
 
-        if (temp > 0x7FFFFFF || temp < -0x7FFFFFF)
+        if (temp > 0x7FFFFFFF || temp < -(int64_t)0x80000000)
             EXCEPTION_DE();
         result_mod = (int64_t)original % (int32_t)src;
         cpu.reg32[EAX] = result;
@@ -535,13 +535,13 @@ void cpu_neg32(uint32_t* dest)
 // Double shifts
 void cpu_shrd16(uint16_t* dest_ptr, uint16_t src, int count)
 {
+    count &= 0x1F;
     if (count) {
         uint16_t dest = *dest_ptr, result;
-        count &= 0x1F;
         if (count < 16)
             result = (dest >> count) | (src << (16 - count));
         else {
-            result = (dest >> count) | (src << (16 - count));
+            result = (src >> (count - 16)) | (dest << (32 - count));
             dest = src;
             count -= 16;
         }
@@ -557,9 +557,9 @@ void cpu_shrd16(uint16_t* dest_ptr, uint16_t src, int count)
 
 void cpu_shrd32(uint32_t* dest_ptr, uint32_t src, int count)
 {
+    count &= 0x1F;
     if (count) {
         uint32_t dest = *dest_ptr, result;
-        count &= 0x1F;
         result = (dest >> count) | (src << (32 - count));
         //dest = src;
         //src = count;
@@ -574,9 +574,9 @@ void cpu_shrd32(uint32_t* dest_ptr, uint32_t src, int count)
 
 void cpu_shld16(uint16_t* dest_ptr, uint16_t src, int count)
 {
+    count &= 0x1F;
     if (count) {
         uint16_t dest = *dest_ptr, result;
-        count &= 0x1F;
         if (count < 16)
             result = (dest << count) | (src >> (16 - count));
         else
@@ -595,9 +595,9 @@ void cpu_shld16(uint16_t* dest_ptr, uint16_t src, int count)
 }
 void cpu_shld32(uint32_t* dest_ptr, uint32_t src, int count)
 {
+    count &= 0x1F;
     if (count) {
         uint32_t dest = *dest_ptr, result;
-        count &= 0x1F;
         result = (dest << count) | (src >> (32 - count));
 
         src = count;

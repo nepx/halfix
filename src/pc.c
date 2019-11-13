@@ -365,8 +365,8 @@ static uint32_t devices_get_next_raw(itick_t now)
     next[3] = floppy_next(now);
     for (int i = 0; i < 4; i++)
     {
-        if (next[0] < min)
-            min = next[0];
+        if (next[i] < min)
+            min = next[i];
     }
     return min;
 }

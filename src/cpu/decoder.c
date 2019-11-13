@@ -1515,7 +1515,7 @@ static int decode_C6(struct decoded_instruction* i)
 static int decode_C7(struct decoded_instruction* i)
 {
     uint8_t modrm = rb();
-    i->flags = parse_modrm(i, modrm, 1);
+    i->flags = parse_modrm(i, modrm, 0);
     if (modrm >= 0xC0)
         i->handler = SIZEOP(op_mov_r16i16, op_mov_r32i32);
     else

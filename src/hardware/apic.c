@@ -66,7 +66,7 @@ static struct apic_info {
 
     uint32_t id; // APIC ID. Usually zero.
 
-    uint32_t error;
+    uint32_t error, cached_error;
 
     uint32_t timer_divide, timer_initial_count;
     itick_t timer_reload_time, timer_next;
@@ -87,8 +87,7 @@ static struct apic_info {
 static void apic_state(void)
 {
     // <<< BEGIN AUTOGENERATE "state" >>>
-    // Auto-generated on Wed Oct 09 2019 13:00:43 GMT-0700 (PDT)
-    struct bjson_object* obj = state_obj("apic", 20 + 0);
+    struct bjson_object* obj = state_obj("apic", 22 + 0);
     state_field(obj, 4, "apic.base", &apic.base);
     state_field(obj, 4, "apic.spurious_interrupt_vector", &apic.spurious_interrupt_vector);
     state_field(obj, 28, "apic.lvt", &apic.lvt);
@@ -98,9 +97,11 @@ static void apic_state(void)
     state_field(obj, 8, "apic.icr", &apic.icr);
     state_field(obj, 4, "apic.id", &apic.id);
     state_field(obj, 4, "apic.error", &apic.error);
+    state_field(obj, 4, "apic.cached_error", &apic.cached_error);
     state_field(obj, 4, "apic.timer_divide", &apic.timer_divide);
     state_field(obj, 4, "apic.timer_initial_count", &apic.timer_initial_count);
     state_field(obj, 8, "apic.timer_reload_time", &apic.timer_reload_time);
+    state_field(obj, 8, "apic.timer_next", &apic.timer_next);
     state_field(obj, 4, "apic.destination_format", &apic.destination_format);
     state_field(obj, 4, "apic.logical_destination", &apic.logical_destination);
     state_field(obj, 4, "apic.dest_format_physical", &apic.dest_format_physical);
@@ -109,7 +110,7 @@ static void apic_state(void)
     state_field(obj, 4, "apic.processor_priority", &apic.processor_priority);
     state_field(obj, 4, "apic.enabled", &apic.enabled);
     state_field(obj, 4, "apic.temp_data", &apic.temp_data);
-    // <<< END AUTOGENERATE "state" >>>
+// <<< END AUTOGENERATE "state" >>>
 }
 
 static inline void set_bit(uint32_t* ptr, int bitpos, int bit)
@@ -313,6 +314,8 @@ static uint32_t apic_read(uint32_t addr)
         return 0x14 | (5 << 16) | (0 << 24); // Version 14h, 6 LVT entries supported, EOI something something unsupported
     case 0x08:
         return apic.task_priority;
+    case 0x0B: // Note: no error when reading from EOI
+        return 0;
     case 0x0D:
         return apic.logical_destination;
     case 0x0E:
@@ -325,6 +328,10 @@ static uint32_t apic_read(uint32_t addr)
         return apic.tmr[addr & 7];
     case 0x20 ... 0x27:
         return apic.irr[addr & 7];
+    case 0x28: {
+        // XXX -- we are supposed to clear it when we write
+        return apic.cached_error;
+    }
     case 0x2F:
     case 0x32:
     case 0x33:
@@ -357,6 +364,10 @@ static void apic_write(uint32_t addr, uint32_t data)
         apic.error |= APIC_ILLEGAL_REGISTER_ACCESS;
         break;
 #endif
+
+    case 0x03:
+        apic.error |= APIC_ILLEGAL_REGISTER_ACCESS;
+        break;
     case 2:
         APIC_LOG("Setting APIC ID to %08x\n", data);
         apic.id = data;
@@ -419,6 +430,15 @@ static void apic_write(uint32_t addr, uint32_t data)
     case 0x20 ... 0x27:
         apic.irr[addr & 7] = data;
         break;
+    case 0x28: // error register
+        // From the manual:
+        //  Before attempt to read from the ESR, software should first write to it. 
+        //  (The value written does not affect the values read subsequently; only zero may be written in x2APIC mode.) 
+        //  This write clears any previously logged errors and updates the ESR with any errors detected since the last write to the ESR. 
+        //  This write also rearms the APIC error interrupt triggering mechanism.
+        apic.cached_error = apic.error;
+        apic.error = 0;
+        break;
     case 0x2F:
     case 0x32:
     case 0x33:
@@ -465,14 +485,16 @@ static void apic_write(uint32_t addr, uint32_t data)
         break;
     case 0x38:
         apic.timer_initial_count = data;
-        apic.timer_reload_time = cpu_get_cycles();
+        apic.timer_reload_time = get_now();
         apic.timer_next = apic.timer_reload_time + apic_get_period();
+        cpu_cancel_execution_cycle(EXIT_STATUS_NORMAL);
         break;
     case 0x39:
         break;
     case 0x3E:
         apic.timer_divide = data;
         APIC_LOG("Timer divide=%d\n", 1 << apic_get_clock_divide());
+        cpu_cancel_execution_cycle(EXIT_STATUS_NORMAL);
         break;
     default:
         APIC_FATAL("TODO: APIC write %08x data=%08x\n", addr, data);
@@ -534,10 +556,12 @@ int apic_next(itick_t now)
     // Information regarding lvt
     int info = apic.lvt[LVT_INDEX_TIMER] >> 16;
 
-    if (apic.timer_next < now) {
+    if (apic.timer_next <= now) {
         // Raise interrupt
-        if(!(info & 1)) // LVT_DISABLED set to 0
+        if(!(info & 1)) {// LVT_DISABLED set to 0
+            APIC_LOG("  timer period %ld cur=%ld next=%ld\n", apic_get_period(), now, apic.timer_next);
             apic_receive_bus_message(apic.lvt[LVT_INDEX_TIMER] & 0xFF, LVT_DELIVERY_FIXED, 0);
+        }
         else apic_timer_enabled = 0;
         
         switch (info >> 1 & 3) {
