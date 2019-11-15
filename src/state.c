@@ -435,6 +435,7 @@ void state_read_from_file(char* fn)
     void* buf = malloc(size);
     if (read(fd, buf, size) != size)
         STATE_FATAL("Cannot read from file %s\n", fn);
+    close(fd);
 
     struct rstream r;
     rstream_init(&r, buf);
