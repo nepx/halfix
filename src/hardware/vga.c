@@ -177,7 +177,8 @@ enum {
     // VBE render modes
     RENDER_32BPP = 8, // Windows XP uses this
     RENDER_8BPP = 10, // Debian uses this one
-    RENDER_16BPP = 12
+    RENDER_16BPP = 12,
+    RENDER_24BPP = 14
 };
 
 static void vga_update_mem_access(void)
@@ -228,6 +229,9 @@ static void vga_change_renderer(void)
             break;
         case 16:
             vga.renderer = RENDER_16BPP;
+            break;
+        case 24:
+            vga.renderer = RENDER_24BPP;
             break;
         case 32:
             vga.renderer = RENDER_32BPP;
@@ -922,6 +926,9 @@ void vga_update(void)
     case RENDER_16BPP: // VBE 16-bit BPP mode
         offset_between_lines = vga.total_width * 2;
         break;
+    case RENDER_24BPP: // VBE 24-bit BPP mode
+        offset_between_lines = vga.total_width * 3;
+        break;
     case RENDER_32BPP: // VBE 32-bit BPP mode
         offset_between_lines = vga.total_width * 4;
         break;
@@ -1156,6 +1163,21 @@ void vga_update(void)
 #endif
                     }
 
+                    vga.vbe_scanlines_modified[vga.current_scanline] = 0;
+                    break;
+                case RENDER_24BPP: 
+                    if (!vga.vbe_scanlines_modified[vga.current_scanline])
+                        break;
+                    for (unsigned int i = 0; i < vga.total_width; i++, vram_addr += 3) {
+                        uint8_t blue = vga.vram[vram_addr],
+                                green = vga.vram[vram_addr + 1],
+                                red = vga.vram[vram_addr + 2];
+#ifndef EMSCRIPTEN
+                        vga.framebuffer[fboffset++] = (blue) | (green << 8) | (red << 16) | 0xFF000000;
+#else
+                        vga.framebuffer[fboffset++] = (blue << 16) | (green << 8) | (red) | 0xFF000000;
+#endif
+                    }
                     vga.vbe_scanlines_modified[vga.current_scanline] = 0;
                     break;
                 }
