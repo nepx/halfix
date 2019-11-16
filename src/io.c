@@ -34,8 +34,8 @@ uint32_t io_default_readd(uint32_t port)
 {
     uint16_t res = io_readb(port);
     res |= io_readb(port + 1) << 8;
-    res |= io_readb(port + 2) << 8;
-    return res | io_readb(port + 3) << 8;
+    res |= io_readb(port + 2) << 16;
+    return res | io_readb(port + 3) << 24;
 }
 void io_default_writeb(uint32_t port, uint32_t data)
 {
@@ -124,7 +124,7 @@ uint8_t io_readb(uint32_t port)
     uint8_t data = read[port & 0xFFFF][0](port);
     //cpu_io_read(port, data, 1);
 #ifndef LOG_ALL_IO
-    if(port != 0x1F7 && port != 0x92 && port != 0x3c9 && (port & ~1) != 0x70 && port != 0x61)
+    if(port != 0x1F7 && port != 0x92 && port != 0x3c9 && (port & ~1) != 0x70 && port != 0x61 && port != 0x1F0)
 #endif 
     IO_LOG("readb: port=0x%04x res=0x%02x\n", port, data);
     return data;
@@ -136,7 +136,9 @@ uint16_t io_readw(uint32_t port)
 #endif
     uint16_t data = read[port & 0xFFFF][1](port);
     //cpu_io_read(port, data, 2);
+#ifndef LOG_ALL_IO
     if(port != 0x1F0)
+#endif
     IO_LOG("readw: port=0x%04x res=0x%04x\n", port, data);
     return data;
 }
@@ -279,7 +281,7 @@ void io_register_mmio_rom(uint32_t start, uint32_t length)
 void io_handle_mmio_write(uint32_t addr, uint32_t data, int size)
 {
     //if(addr == 0x004abc95) __asm__("int3");
-    for (int i = 0; i < MAX_MMIO; i++) {
+    for (int i = 0; i <= MAX_MMIO; i++) {
         if (addr >= mmio[i].begin && mmio[i].end >= addr) {
             //printf("'%c' %08x %08x %08x %d %d size: %d\n", data, mmio[i].begin, addr, mmio[i].end, addr >= mmio[i].begin, addr < mmio[i].end, size);
             mmio[i].w[size](addr, data);
@@ -290,7 +292,7 @@ void io_handle_mmio_write(uint32_t addr, uint32_t data, int size)
 }
 uint32_t io_handle_mmio_read(uint32_t addr, int size)
 {
-    for (int i = 0; i < MAX_MMIO; i++) {
+    for (int i = 0; i <= MAX_MMIO; i++) {
         if (addr >= mmio[i].begin && mmio[i].end >= addr) {
             uint32_t res = mmio[i].r[size](addr); 
             //printf("%08x\n", res);
@@ -303,7 +305,7 @@ uint32_t io_handle_mmio_read(uint32_t addr, int size)
 
 // Checks if address is mmapped for reading
 int io_addr_mmio_read(uint32_t addr){
-    for (int i = 0; i < MAX_MMIO; i++) {
+    for (int i = 0; i <= MAX_MMIO; i++) {
         if (addr >= mmio[i].begin && mmio[i].end >= addr) {
             return mmio[i].begin != 0;
         }
