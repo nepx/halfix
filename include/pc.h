@@ -29,7 +29,9 @@ struct pc_settings
         // Setting pci_enabled to zero will disable direct memory disk accesses. Otherwise, the system will function identically to that of one without PCI support.
         pci_enabled,
         // Setting apic_enabled to zero will disable both the I/O APIC and the local APIC. Otherwise, the system will function identically to that of one without an APIC.
-        apic_enabled;
+        apic_enabled,
+        // Setting acpi_enabled to zero will disable the ACPI interface and make the system function identically to a system that is not ACPI-compliant
+        acpi_enabled;
 
     // Current time according to the CMOS clock
     uint64_t current_time;

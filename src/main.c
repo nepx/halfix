@@ -51,6 +51,7 @@ enum {
     CFG_FILE,
     CFG_MEDIA_TYPE,
     CFG_INSERTED,
+    CFG_DRIVER,
 
     CFG_FD_FILE,
     CFG_FD_WRITE_PROTECTED,
@@ -60,7 +61,10 @@ enum {
     CFG_BOOTDISK,
     CFG_BOOTCD,
     CFG_BOOTFLOPPY,
-    CFG_BOOTNONE
+    CFG_BOOTNONE,
+
+    CFG_DRIVER_SYNC,
+    CFG_DRIVER_NORMAL
 };
 static const struct cfg_option general_opts[] = {
     { "memory", CFG_MEMORY },
@@ -71,6 +75,7 @@ static const struct cfg_option general_opts[] = {
     { "vbe", CFG_VBE },
     { "pci", CFG_PCI_APIC },
     { "apic", CFG_PCI_APIC },
+    { "acpi", CFG_PCI_APIC },
     { "floppy", CFG_FLOPPY_ENABLED },
     { NULL, CFG_NONE }
 };
@@ -78,6 +83,7 @@ static const struct cfg_option drive_opts[] = {
     { "inserted", CFG_INSERTED },
     { "type", CFG_MEDIA_TYPE },
     { "file", CFG_FILE },
+    { "driver", CFG_DRIVER },
     { NULL, CFG_NONE }
 };
 static const struct cfg_option fd_opts[] = {
@@ -96,6 +102,12 @@ static const struct cfg_option boot_devices[] = {
     { "cd", CFG_BOOTCD },
     { "fd", CFG_BOOTFLOPPY },
     { "none", CFG_BOOTNONE },
+    { NULL, CFG_NONE }
+};
+
+static const struct cfg_option driver_types[] = {
+    { "sync", CFG_DRIVER_SYNC },
+    { "normal", CFG_DRIVER_NORMAL },
     { NULL, CFG_NONE }
 };
 
@@ -298,8 +310,12 @@ top:
                         }
                         if (buf[start] == 'p') // pci
                             pc.pci_enabled = enabled;
-                        else
-                            pc.apic_enabled = enabled;
+                        else {
+                            if (buf[start + 1] == 'c') // acpi
+                                pc.acpi_enabled = 1;
+                            else
+                                pc.apic_enabled = enabled;
+                        }
                         break;
                     }
                     case CFG_FLOPPY_ENABLED: {
@@ -327,6 +343,41 @@ top:
                             pc.drives[id_index - 1].type = -1; // Set it to an invalid non-zero number
                         break;
                     }
+                    case CFG_DRIVER: {
+                        char* dev;
+                        int devlen, j = 0;
+                        if (parse_string(equals, &devlen) < 0)
+                            return -1;
+                        dev = alloca(devlen + 1);
+                        memcpy(dev, equals, devlen);
+                        dev[devlen] = 0;
+                        for (;;) {
+                            if (!driver_types[j].name)
+                                break;
+                            int temp_devlen = devlen, temp3;
+                            if ((temp3 = strlen(driver_types[j].name)) < devlen)
+                                temp_devlen = temp3;
+                            if (!memcmp(dev, driver_types[j].name, temp_devlen)) {
+                                // nasty hack
+                                pc.drives[id_index - 1].cylinders_per_head = driver_types[j].value == CFG_DRIVER_SYNC;
+                                goto done_driver;
+                            }
+                            j++;
+                        }
+                        fprintf(stderr, "Invalid boot device\n");
+                        return -1;
+                    done_driver:
+                        break;
+                    }
+                    case CFG_MEDIA_TYPE: {
+                        int dummy;
+                        // Ignore if nothing is inserted
+                        if (pc.drives[id_index - 1].type != DRIVE_TYPE_NONE) {
+                            pc.drives[id_index - 1].type = equals[0] == 'c' ? DRIVE_TYPE_CDROM : DRIVE_TYPE_DISK;
+                        }
+                        parse_string(equals, &dummy); // Skip to next line
+                        break;
+                    }
                     case CFG_FILE: {
                         char* path;
                         int pathlen;
@@ -339,8 +390,17 @@ top:
                         path = alloca(pathlen + 1);
                         memcpy(path, equals, pathlen);
                         path[pathlen] = 0;
-                        int retval = drive_init(&pc.drives[id_index - 1], path);
-                        pc.drives[id_index - 1].type = DRIVE_TYPE_DISK;
+                        int retval;
+                        if (pc.drives[id_index - 1].cylinders_per_head)
+                            retval = drive_simple_init(&pc.drives[id_index - 1], path);
+                        else
+                            retval = drive_init(&pc.drives[id_index - 1], path);
+
+                        // Default to hard disk
+                        if (pc.drives[id_index - 1].type == -1) {
+                            printf("Media type for drive ata%d-%s not specified, defaulting to 'hd'\n", (id_index - 1) >> 1, (id_index - 1) & 1 ? "slave" : "master");
+                            pc.drives[id_index - 1].type = DRIVE_TYPE_DISK;
+                        }
                         if (retval < 0) {
                             fprintf(stderr, "Unable to load hard drive image\n");
                             return -1;

@@ -32,7 +32,7 @@ uint32_t io_default_readw(uint32_t port)
 }
 uint32_t io_default_readd(uint32_t port)
 {
-    uint16_t res = io_readb(port);
+    uint32_t res = io_readb(port);
     res |= io_readb(port + 1) << 8;
     res |= io_readb(port + 2) << 16;
     return res | io_readb(port + 3) << 24;

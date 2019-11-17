@@ -228,6 +228,7 @@ int pc_init(struct pc_settings *pc)
     pci_init(pc);
     apic_init(pc);
     ioapic_init(pc);
+    acpi_init(pc);
 
     //cpu_set_a20(0); // causes code to be prefetched from 0xFFEFxxxx at boot
     cpu_set_a20(1);
@@ -362,7 +363,7 @@ static uint32_t devices_get_next_raw(itick_t now)
     next[0] = cmos_next(now);
     next[1] = pit_next(now);
     next[2] = apic_next(now);
-    next[3] = floppy_next(now);
+    next[3] = acpi_next(now);
     for (int i = 0; i < 4; i++)
     {
         if (next[i] < min)
@@ -392,7 +393,7 @@ void pc_hlt_if_0(void)
     return;
 }
 
-#define SYNC_POINTS_PER_SECOND 8
+#define SYNC_POINTS_PER_SECOND 32
 static int sync = 0;
 #ifndef DISABLE_CONSTANT_SAVING
 #endif

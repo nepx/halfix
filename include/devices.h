@@ -14,6 +14,7 @@ void kbd_init(void);
 void vga_init(int);
 void ide_init(struct pc_settings* pc);
 void fdc_init(struct pc_settings* pc);
+void acpi_init(struct pc_settings* pc);
 
 // XXX:
 #define floppy_get_type(id) 0
@@ -40,6 +41,7 @@ int cmos_next(itick_t now);
 int pit_next(itick_t now);
 int apic_next(itick_t now);
 int floppy_next(itick_t now);
+int acpi_next(itick_t now);
 
 void dma_raise_dreq(int);
 // DMA handlers
@@ -64,6 +66,10 @@ void* pci_create_device(uint32_t bus, uint32_t device, uint32_t function, pci_co
 // PCI IDE support
 void ide_write_prdt(uint32_t addr, uint32_t data);
 uint32_t ide_read_prdt(uint32_t addr);
+
+// PCI functions
+void* pci_create_device(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb);
+void pci_copy_default_configuration(void* confptr, void* area, int size);
 
 // (I/O)APIC support
 void ioapic_init(struct pc_settings* pc);
