@@ -8,7 +8,6 @@
 #define MAX_CYCLES_TO_RUN 65536
 
 // <<< BEGIN AUTOGENERATE "ops" >>>
-// Auto-generated on Sun Oct 06 2019 21:52:58 GMT-0700 (PDT)
 int movsb16(int flags)
 {
     int count = cpu.reg16[CX], add = cpu.eflags & EFLAGS_DF ? -1 : 1, src, ds_base = cpu.seg_base[I_SEG_BASE(flags)];
@@ -131,7 +130,6 @@ int movsd32(int flags)
         cpu.reg32[EDI] += add;
         return 0;
     }
-    //if(cpu.phys_eip == 0x135b61) __asm__("int3");
     for (int i = 0; i < count; i++) {
         cpu_read32(ds_base + cpu.reg32[ESI], src, cpu.tlb_shift_read);
         cpu_write32(cpu.seg_base[ES] + cpu.reg32[EDI], src, cpu.tlb_shift_write);
@@ -1053,6 +1051,114 @@ int cmpsd32(int flags)
         return cpu.reg32[ECX] != 0;
     }
     CPU_FATAL("unreachable");
+}
+int lodsb16(int flags)
+{
+    int count = cpu.reg16[CX], add = cpu.eflags & EFLAGS_DF ? -1 : 1, seg_base = cpu.seg_base[I_SEG_BASE(flags)];
+    if ((unsigned int)count > MAX_CYCLES_TO_RUN)
+    count = MAX_CYCLES_TO_RUN;
+    if(!repz_or_repnz(flags)){
+        cpu_read8(seg_base + cpu.reg16[SI], cpu.reg8[AL], cpu.tlb_shift_read);
+        cpu.reg16[SI] += add;
+        return 0;
+    }
+    for (int i = 0; i < count; i++) {
+        cpu_read8(seg_base + cpu.reg16[SI], cpu.reg8[AL], cpu.tlb_shift_read);
+        cpu.reg16[SI] += add;
+        cpu.reg16[CX]--;
+        //cpu.cycles_to_run--;
+    }
+    return cpu.reg16[CX] != 0;
+}
+int lodsb32(int flags)
+{
+    int count = cpu.reg32[ECX], add = cpu.eflags & EFLAGS_DF ? -1 : 1, seg_base = cpu.seg_base[I_SEG_BASE(flags)];
+    if ((unsigned int)count > MAX_CYCLES_TO_RUN)
+    count = MAX_CYCLES_TO_RUN;
+    if(!repz_or_repnz(flags)){
+        cpu_read8(seg_base + cpu.reg32[ESI], cpu.reg8[AL], cpu.tlb_shift_read);
+        cpu.reg32[ESI] += add;
+        return 0;
+    }
+    for (int i = 0; i < count; i++) {
+        cpu_read8(seg_base + cpu.reg32[ESI], cpu.reg8[AL], cpu.tlb_shift_read);
+        cpu.reg32[ESI] += add;
+        cpu.reg32[ECX]--;
+        //cpu.cycles_to_run--;
+    }
+    return cpu.reg32[ECX] != 0;
+}
+int lodsw16(int flags)
+{
+    int count = cpu.reg16[CX], add = cpu.eflags & EFLAGS_DF ? -2 : 2, seg_base = cpu.seg_base[I_SEG_BASE(flags)];
+    if ((unsigned int)count > MAX_CYCLES_TO_RUN)
+    count = MAX_CYCLES_TO_RUN;
+    if(!repz_or_repnz(flags)){
+        cpu_read16(seg_base + cpu.reg16[SI], cpu.reg16[AX], cpu.tlb_shift_read);
+        cpu.reg16[SI] += add;
+        return 0;
+    }
+    for (int i = 0; i < count; i++) {
+        cpu_read16(seg_base + cpu.reg16[SI], cpu.reg16[AX], cpu.tlb_shift_read);
+        cpu.reg16[SI] += add;
+        cpu.reg16[CX]--;
+        //cpu.cycles_to_run--;
+    }
+    return cpu.reg16[CX] != 0;
+}
+int lodsw32(int flags)
+{
+    int count = cpu.reg32[ECX], add = cpu.eflags & EFLAGS_DF ? -2 : 2, seg_base = cpu.seg_base[I_SEG_BASE(flags)];
+    if ((unsigned int)count > MAX_CYCLES_TO_RUN)
+    count = MAX_CYCLES_TO_RUN;
+    if(!repz_or_repnz(flags)){
+        cpu_read16(seg_base + cpu.reg32[ESI], cpu.reg16[AX], cpu.tlb_shift_read);
+        cpu.reg32[ESI] += add;
+        return 0;
+    }
+    for (int i = 0; i < count; i++) {
+        cpu_read16(seg_base + cpu.reg32[ESI], cpu.reg16[AX], cpu.tlb_shift_read);
+        cpu.reg32[ESI] += add;
+        cpu.reg32[ECX]--;
+        //cpu.cycles_to_run--;
+    }
+    return cpu.reg32[ECX] != 0;
+}
+int lodsd16(int flags)
+{
+    int count = cpu.reg16[CX], add = cpu.eflags & EFLAGS_DF ? -4 : 4, seg_base = cpu.seg_base[I_SEG_BASE(flags)];
+    if ((unsigned int)count > MAX_CYCLES_TO_RUN)
+    count = MAX_CYCLES_TO_RUN;
+    if(!repz_or_repnz(flags)){
+        cpu_read32(seg_base + cpu.reg16[SI], cpu.reg32[EAX], cpu.tlb_shift_read);
+        cpu.reg16[SI] += add;
+        return 0;
+    }
+    for (int i = 0; i < count; i++) {
+        cpu_read32(seg_base + cpu.reg16[SI], cpu.reg32[EAX], cpu.tlb_shift_read);
+        cpu.reg16[SI] += add;
+        cpu.reg16[CX]--;
+        //cpu.cycles_to_run--;
+    }
+    return cpu.reg16[CX] != 0;
+}
+int lodsd32(int flags)
+{
+    int count = cpu.reg32[ECX], add = cpu.eflags & EFLAGS_DF ? -4 : 4, seg_base = cpu.seg_base[I_SEG_BASE(flags)];
+    if ((unsigned int)count > MAX_CYCLES_TO_RUN)
+    count = MAX_CYCLES_TO_RUN;
+    if(!repz_or_repnz(flags)){
+        cpu_read32(seg_base + cpu.reg32[ESI], cpu.reg32[EAX], cpu.tlb_shift_read);
+        cpu.reg32[ESI] += add;
+        return 0;
+    }
+    for (int i = 0; i < count; i++) {
+        cpu_read32(seg_base + cpu.reg32[ESI], cpu.reg32[EAX], cpu.tlb_shift_read);
+        cpu.reg32[ESI] += add;
+        cpu.reg32[ECX]--;
+        //cpu.cycles_to_run--;
+    }
+    return cpu.reg32[ECX] != 0;
 }
 
 // <<< END AUTOGENERATE "ops" >>>

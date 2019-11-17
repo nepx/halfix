@@ -80,8 +80,8 @@ int cpu_popad(void);
 
 // misc.c
 void cpuid(void);
-void rdmsr(uint32_t index, uint32_t* high, uint32_t* low);
-void wrmsr(uint32_t index, uint32_t high, uint32_t low);
+int rdmsr(uint32_t index, uint32_t* high, uint32_t* low);
+int wrmsr(uint32_t index, uint32_t high, uint32_t low);
 int pushf(void);
 int pushfd(void);
 int popf(void);
@@ -95,7 +95,6 @@ void arpl(uint16_t* ptr, uint16_t reg);
 
 // string.c
 // <<< BEGIN AUTOGENERATE "string" >>>
-// Auto-generated on Sun Oct 06 2019 21:52:58 GMT-0700 (PDT)
 int movsb16(int flags);
 int movsb32(int flags);
 int movsw16(int flags);
@@ -132,6 +131,12 @@ int cmpsw16(int flags);
 int cmpsw32(int flags);
 int cmpsd16(int flags);
 int cmpsd32(int flags);
+int lodsb16(int flags);
+int lodsb32(int flags);
+int lodsw16(int flags);
+int lodsw32(int flags);
+int lodsd16(int flags);
+int lodsd32(int flags);
 
 // <<< END AUTOGENERATE "string" >>>
 

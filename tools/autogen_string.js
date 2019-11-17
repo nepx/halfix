@@ -333,6 +333,46 @@ int cmps$4$3(int flags)
 }
             */
         }, szspc, add, regspec, asize, size_endings[osize]);
+    },
+    "lods": function (osize, asize) {
+        var add = "-" + osize + " : " + osize,
+            szspc = osize << 3;
+        var regspec = asize === 16 ? "16[" : "32[E";
+        var al;
+        switch (osize) {
+            case 1:
+                al = "cpu.reg8[AL]";
+                break;
+            case 2:
+                al = "cpu.reg16[AX]";
+                break;
+            case 4:
+                al = "cpu.reg32[EAX]";
+                break;
+        }
+        funcs.push("lods" + size_endings[osize]+ asize);
+        return m(function () {
+            /*
+int lods$5$3(int flags)
+{
+    int count = cpu.reg$2CX], add = cpu.eflags & EFLAGS_DF ? $1, seg_base = cpu.seg_base[I_SEG_BASE(flags)];
+    if ((unsigned int)count > MAX_CYCLES_TO_RUN)
+        count = MAX_CYCLES_TO_RUN;
+    if(!repz_or_repnz(flags)){
+        cpu_read$0(seg_base + cpu.reg$2SI], $4, cpu.tlb_shift_read);
+        cpu.reg$2SI] += add;
+        return 0;
+    }
+    for (int i = 0; i < count; i++) {
+        cpu_read$0(seg_base + cpu.reg$2SI], $4, cpu.tlb_shift_read);
+        cpu.reg$2SI] += add;
+        cpu.reg$2CX]--;
+        //cpu.cycles_to_run--;
+    }
+    return cpu.reg$2CX] != 0;
+}
+            */
+        }, szspc, add, regspec, asize, al, size_endings[osize]);
     }
 };
 

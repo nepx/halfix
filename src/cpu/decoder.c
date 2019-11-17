@@ -463,7 +463,10 @@ static int decode_invalid(struct decoded_instruction* i)
     for (int i = 0; i < 16; i++)
         printf("%02x ", rawp[i]);
     printf("\n");
-    CPU_FATAL("Unknown opcode: %02x\n", rawp[0]);
+    CPU_LOG("Unknown opcode: %02x\n", rawp[0]);
+    i->handler = op_ud_exception;
+    i->flags = 0;
+    return 1;
 }
 static int decode_invalid0F(struct decoded_instruction* i)
 {
@@ -475,7 +478,10 @@ static int decode_invalid0F(struct decoded_instruction* i)
     for (int i = 0; i < 16; i++)
         printf("%02x ", rawp[i]);
     printf("\n");
-    CPU_FATAL("Unknown opcode: 0F %02x\n", rawp[0]);
+    CPU_LOG("Unknown opcode: 0F %02x\n", rawp[0]);
+    i->handler = op_ud_exception;
+    i->flags = 0;
+    return 1;
 }
 
 static const decode_handler_t table0F[256];
@@ -1188,9 +1194,8 @@ static int decode_8F(struct decoded_instruction* i)
 {
     uint8_t modrm = rb();
     if (modrm >= 0xC0) {
-        i->flags = 0;
-        i->handler = op_ud_exception;
-        return 1;
+        i->flags = parse_modrm(i, modrm, 0);
+        i->handler = SIZEOP(op_pop_r16, op_pop_r32);
     } else {
         i->flags = parse_modrm(i, modrm, 0);
         i->handler = SIZEOP(op_pop_e16, op_pop_e32);
@@ -1394,20 +1399,31 @@ static int decode_AB(struct decoded_instruction* i)
 }
 static int decode_AC(struct decoded_instruction* i)
 {
-    i->flags = 0; // LODS does not respond to prefixes
-    i->handler = state_hash & STATE_ADDR16 ? op_lodsb16 : op_lodsb32;
+    if (!(state_hash & 4))
+        i->flags = 0;
     I_SET_SEG_BASE(i->flags, seg_prefix[0]);
+    i->handler = state_hash & STATE_ADDR16 ? op_lodsb16 : op_lodsb32;
     return 0;
 }
 static int decode_AD(struct decoded_instruction* i)
 {
-    i->flags = 0; // Reset flags if no prefix
-    static const insn_handler_t atbl[4] = {
-        op_lodsd32, op_lodsw32, // STATE_CODE16 set, STATE_ADDR16 not set
-        op_lodsd16, op_lodsw16 // STATE_CODE16 set, STATE_ADDR16 set
-    };
-    i->handler = atbl[state_hash & 3];
+    if (!(state_hash & 4))
+        i->flags = 0;
     I_SET_SEG_BASE(i->flags, seg_prefix[0]);
+    switch (state_hash & 3) {
+    case 0: // 32 bit address, 32-bit data
+        i->handler = op_lodsd32;
+        break;
+    case STATE_CODE16: // 32 bit address, 16-bit data
+        i->handler = op_lodsw32;
+        break;
+    case STATE_ADDR16: // 16 bit address, 32-bit data
+        i->handler = op_lodsd16;
+        break;
+    case STATE_ADDR16 | STATE_CODE16: // 16 bit address, 16-bit data
+        i->handler = op_lodsw16;
+        break;
+    }
     return 0;
 }
 static int decode_AE(struct decoded_instruction* i)
@@ -1568,7 +1584,6 @@ static int decode_CD(struct decoded_instruction* i)
 static int decode_CE(struct decoded_instruction* i)
 {
     i->flags = 0;
-    i->imm8 = rb();
     i->handler = op_into;
     return 1;
 }

@@ -458,7 +458,6 @@ OPTYPE op_fpu_reg(struct decoded_instruction* i);
 OPTYPE op_fwait(struct decoded_instruction* i);
 
 // <<< BEGIN AUTOGENERATE "string" >>>
-// Auto-generated on Sun Oct 06 2019 21:52:58 GMT-0700 (PDT)
 OPTYPE op_movsb16(struct decoded_instruction* i);
 OPTYPE op_movsb32(struct decoded_instruction* i);
 OPTYPE op_movsw16(struct decoded_instruction* i);
@@ -495,6 +494,12 @@ OPTYPE op_cmpsw16(struct decoded_instruction* i);
 OPTYPE op_cmpsw32(struct decoded_instruction* i);
 OPTYPE op_cmpsd16(struct decoded_instruction* i);
 OPTYPE op_cmpsd32(struct decoded_instruction* i);
+OPTYPE op_lodsb16(struct decoded_instruction* i);
+OPTYPE op_lodsb32(struct decoded_instruction* i);
+OPTYPE op_lodsw16(struct decoded_instruction* i);
+OPTYPE op_lodsw32(struct decoded_instruction* i);
+OPTYPE op_lodsd16(struct decoded_instruction* i);
+OPTYPE op_lodsd32(struct decoded_instruction* i);
 
 // <<< END AUTOGENERATE "string" >>>
 

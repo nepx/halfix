@@ -24,7 +24,7 @@ function slice_section(file, section_name, replacement) {
     console.log(data.slice(end.index));
     */
     var newdata = data.slice(0, begin.index + section_length) +
-        "\n// Auto-generated on " + new Date() + "\n" +
+        "\n" +
         replacement + "\n" + data.slice(end.index);
     fs.writeFileSync(file, newdata);
     //fs.writeFileSync(file + "-backup", data);
