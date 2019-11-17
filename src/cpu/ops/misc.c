@@ -49,6 +49,18 @@ void cpuid(void)
         }
         break;
     }
+    case 0x80000005: // TLB/cache information
+        cpu.reg32[EAX] = 0x01ff01ff;
+        cpu.reg32[ECX] = 0x40020140;
+        cpu.reg32[EBX] = 0x01ff01ff;
+        cpu.reg32[EDX] = 0x40020140;
+        break;
+    case 0x80000006: // TLB/cache information
+        cpu.reg32[EAX] = 0;
+        cpu.reg32[ECX] = 0x02008140;
+        cpu.reg32[EBX] = 0x42004200;
+        cpu.reg32[EDX] = 0;
+        break;
     case 0x80000008:
         cpu.reg32[EAX] = 0x2028; // TODO: 0x2024 for 36-bit address space?
         cpu.reg32[ECX] = cpu.reg32[EDX] = cpu.reg32[EBX] = 0;
@@ -62,15 +74,27 @@ void cpuid(void)
     }
 }
 
-void rdmsr(uint32_t index, uint32_t* high, uint32_t* low)
+int rdmsr(uint32_t index, uint32_t* high, uint32_t* low)
 {
     uint64_t value;
     switch (index) {
+    case 0x1B:
+        if(!cpu_apic_connected()) EXCEPTION_GP(0);
+        value = cpu.apic_base;
+        break;
     case 0x8B: // ??
     case 0x179: // MCG_CAP
+    case 0x17A: // MCG_STATUS
+    case 0x17B: // MCG_CTL
+    case 0x186: // EVNTSEL0
+    case 0x187: // EVNTSEL1
     case 0x400: // MC0_CTL
+    case 0x19A: // ?? Windows Vista reads from this one
+    case 0x19B: // ??
+    case 0x19C: // ??
+    case 0x1A0: // ??
     case 0x17: // ??
-        CPU_LOG("Unknown MSR: 0x%x\n", index);
+        CPU_LOG("Unknown MSR: 0x%x\n", index); 
         value = 0;
         break;
     case 0x10:
@@ -86,14 +110,22 @@ void rdmsr(uint32_t index, uint32_t* high, uint32_t* low)
 #ifdef INSTRUMENT
     cpu_instrument_access_msr(index, *high, *low, 0);
 #endif
+    return 0;
 }
 
-void wrmsr(uint32_t index, uint32_t high, uint32_t low)
+int wrmsr(uint32_t index, uint32_t high, uint32_t low)
 {
     uint64_t msr_value = ((uint64_t)high) << 32 | (uint64_t)low;
     switch (index) {
     case 0x8B: // ??
     case 0x17: // ??
+    case 0x179: // MCG_CAP
+    case 0x17A: // MCG_STATUS
+    case 0x17B: // MCG_CTL
+    case 0x186: // EVNTSEL0
+    case 0x187: // EVNTSEL1
+    case 0x19A: // Windows Vista MSR
+    case 0x19B: // ??
         CPU_LOG("Unknown MSR: 0x%x\n", index);
         break;
     case 0x10:
@@ -106,6 +138,7 @@ void wrmsr(uint32_t index, uint32_t high, uint32_t low)
 #ifdef INSTRUMENT
     cpu_instrument_access_msr(index, high, low, 1);
 #endif
+    return 0;
 }
 
 int pushf(void)
