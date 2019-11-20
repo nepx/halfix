@@ -11,6 +11,7 @@
 #include "pc.h"
 #include "util.h"
 #include <stdint.h>
+#include <string.h>
 
 #define FLOPPY_LOG(x, ...) LOG("FLOPPY", x, ##__VA_ARGS__)
 #define FLOPPY_FATAL(x, ...) \
@@ -76,6 +77,11 @@ struct fdc {
     // For read/write
     int multi_mode;
 
+    // For format
+    int format_bytes_to_read,
+        format_byte,
+        format_dma_pos;
+
     // Command bytes sent to controller
     uint8_t command_buffer[16];
     uint8_t command_buffer_size; // Number of bytes that controller wants
@@ -106,6 +112,7 @@ struct fdc {
     // Can be read/written, but not used
     uint8_t precomp, config;
     uint8_t locked;
+    uint8_t perpendicular_mode; 
 
     uint8_t dmabuf[16 << 10];
     // <<< END STRUCT "struct" >>>
@@ -114,7 +121,44 @@ struct fdc {
 static void fdc_state(void)
 {
     // <<< BEGIN AUTOGENERATE "state" >>>
-    // <<< END AUTOGENERATE "state" >>>
+    struct bjson_object* obj = state_obj("fdc", 36);
+    state_field(obj, 2, "fdc.status", &fdc.status);
+    state_field(obj, 1, "fdc.dor", &fdc.dor);
+    state_field(obj, 4, "fdc.tape_drive", &fdc.tape_drive);
+    state_field(obj, 1, "fdc.msr", &fdc.msr);
+    state_field(obj, 1, "fdc.data_rate", &fdc.data_rate);
+    state_field(obj, 1, "fdc.fifo", &fdc.fifo);
+    state_field(obj, 4, "fdc.dir", &fdc.dir);
+    state_field(obj, 1, "fdc.ccr", &fdc.ccr);
+    state_field(obj, 4, "fdc.st", &fdc.st);
+    state_field(obj, 4, "fdc.selected_drive", &fdc.selected_drive);
+    state_field(obj, 4, "fdc.multi_mode", &fdc.multi_mode);
+    state_field(obj, 4, "fdc.format_bytes_to_read", &fdc.format_bytes_to_read);
+    state_field(obj, 4, "fdc.format_byte", &fdc.format_byte);
+    state_field(obj, 4, "fdc.format_dma_pos", &fdc.format_dma_pos);
+    state_field(obj, 16, "fdc.command_buffer", &fdc.command_buffer);
+    state_field(obj, 1, "fdc.command_buffer_size", &fdc.command_buffer_size);
+    state_field(obj, 1, "fdc.command_buffer_pos", &fdc.command_buffer_pos);
+    state_field(obj, 16, "fdc.response_buffer", &fdc.response_buffer);
+    state_field(obj, 1, "fdc.response_buffer_size", &fdc.response_buffer_size);
+    state_field(obj, 1, "fdc.response_pos", &fdc.response_pos);
+    state_field(obj, 8, "fdc.seek_cylinder", &fdc.seek_cylinder);
+    state_field(obj, 8, "fdc.seek_head", &fdc.seek_head);
+    state_field(obj, 8, "fdc.seek_sector", &fdc.seek_sector);
+    state_field(obj, 8, "fdc.seek_internal_lba", &fdc.seek_internal_lba);
+    state_field(obj, 4, "fdc.interrupt_countdown", &fdc.interrupt_countdown);
+    state_field(obj, 16, "fdc.drive_inserted", &fdc.drive_inserted);
+    state_field(obj, 16, "fdc.drive_size", &fdc.drive_size);
+    state_field(obj, 16, "fdc.drive_heads", &fdc.drive_heads);
+    state_field(obj, 16, "fdc.drive_cylinders", &fdc.drive_cylinders);
+    state_field(obj, 16, "fdc.drive_spt", &fdc.drive_spt);
+    state_field(obj, 16, "fdc.drive_write_protected", &fdc.drive_write_protected);
+    state_field(obj, 4, "fdc.write_length", &fdc.write_length);
+    state_field(obj, 1, "fdc.precomp", &fdc.precomp);
+    state_field(obj, 1, "fdc.config", &fdc.config);
+    state_field(obj, 1, "fdc.locked", &fdc.locked);
+    state_field(obj, 1, "fdc.perpendicular_mode", &fdc.perpendicular_mode);
+// <<< END AUTOGENERATE "state" >>>
 }
 
 // Seek to position in drive
@@ -238,9 +282,17 @@ static int fdc_get_st0(void)
 }
 static void fdc_abort_command(void)
 {
+    // For read/write sector/track commands
     fdc_set_st0(SR0_ABNTERM);
     fdc.st[1] = 4;
     fdc.st[2] = 0;
+}
+static void fdc_abort_command2(void)
+{
+    // For format commands
+    fdc_set_st0(SR0_ABNTERM);
+    fdc.st[1] = 0x27;
+    fdc.st[2] = 0x31;
 }
 static void fdc_read_cb(void* a, int b)
 {
@@ -346,6 +398,26 @@ static void fdc_write(uint32_t port, uint32_t data)
             if (fdc.command_buffer_size == 0) {
                 // Starting a new command
                 switch (data) {
+                case 0x0D:
+                case 0x4D: // Format track
+                    fdc.command_buffer_size = 6;
+                    break;
+                case 0x0E: // Dump registers
+                    // TODO: Include more registers
+                    FLOPPY_LOG("Command: Dump registers\n");
+                    reset_out_fifo(10);
+                    fdc.response_buffer[0] = fdc.seek_cylinder[0];
+                    fdc.response_buffer[1] = fdc.seek_cylinder[1];
+                    fdc.response_buffer[2] = 0;
+                    fdc.response_buffer[3] = 0;
+                    fdc.response_buffer[4] = 0;
+                    fdc.response_buffer[5] = fdc.msr & MSR_NDMA ? 1 : 0;
+                    fdc.response_buffer[6] = 0;
+                    fdc.response_buffer[7] = fdc.locked << 7 | fdc.perpendicular_mode;
+                    fdc.response_buffer[8] = fdc.config;
+                    fdc.response_buffer[9] = fdc.precomp;
+                    reset_cmd_fifo();
+                    break;
                 case 0x10: // Get version
                     FLOPPY_LOG("Command: Get version (0x90)\n");
                     reset_out_fifo(1);
@@ -353,6 +425,9 @@ static void fdc_write(uint32_t port, uint32_t data)
 
                     // Clean command FIFO
                     reset_cmd_fifo();
+                    break;
+                case 0x12: // Perpendicular mode
+                    fdc.command_buffer_size = 2;
                     break;
                 case 0x13: // Configure
                     fdc.command_buffer_size = 4;
@@ -371,6 +446,7 @@ static void fdc_write(uint32_t port, uint32_t data)
                     reset_cmd_fifo();
                     break;
                 // Read
+                case 0x02: // Read complete track
                 case 0x06:
                 case 0x26:
                 case 0x46:
@@ -413,6 +489,64 @@ static void fdc_write(uint32_t port, uint32_t data)
             }
         } else {
             switch (fdc.command_buffer[0]) {
+            case 0x0D:
+            case 0x4D: { // Format track
+                int drvid = drvid = fdc.command_buffer[1] & 3,
+                    head = fdc.command_buffer[1] >> 2 & 1,
+                    sector_size = 128 << fdc.command_buffer[2],
+                    sectors = fdc.command_buffer[3],
+                    // Gap3 is unused
+                    fill = fdc.command_buffer[5];
+
+                // Set right output register
+                fdc.dor &= 0xFC;
+                fdc.dor |= drvid;
+                fdc.selected_drive = drvid;
+
+                if ((uint32_t)sectors != fdc.drive_spt[drvid]) {
+                    FLOPPY_LOG("Sector size != Sectors per track\n");
+                    fdc_abort_command2();
+                    goto abort_command2;
+                }
+                if (fdc.drive_inserted[drvid] == 0) {
+                    FLOPPY_LOG("Drive not inserted\n");
+                    fdc_abort_command2();
+                    goto abort_command2;
+                }
+                if (fdc.drive_write_protected[drvid]) {
+                    FLOPPY_LOG("Trying to format write-protected drive\n");
+                    fdc_abort_command2();
+                    goto abort_command2;
+                }
+                if (sector_size != 512) {
+                    FLOPPY_LOG("Sector size != 512\n");
+                    fdc_abort_command2();
+                    goto abort_command2;
+                }
+
+                fdc.format_bytes_to_read = sectors << 2;
+                fdc.format_byte = fill;
+                // Request information from DMA
+                dma_raise_dreq(2);
+                return; // The story continues in fdc_dma_complete
+            abort_command2:
+                reset_out_fifo(7);
+                reset_cmd_fifo();
+                fdc.response_buffer[0] = fdc_get_st0();
+                fdc.response_buffer[1] = fdc.st[1];
+                fdc.response_buffer[2] = fdc.st[2];
+                fdc.response_buffer[3] = fdc.seek_cylinder[drvid];
+                fdc.response_buffer[4] = head;
+                fdc.response_buffer[5] = fdc.seek_sector[drvid];
+                fdc.response_buffer[6] = fdc.command_buffer[4];
+                fdc_raise_irq();
+                break;
+            }
+            case 0x12: // Perpendicular Mode (no idea what this does)
+                FLOPPY_LOG("Command: Set perpendicular mode\n");
+                fdc.perpendicular_mode = fdc.command_buffer[1] & 0x7F;
+                fdc_idle();
+                break;
             case 0x13: // Configure
                 FLOPPY_LOG("Command: Configure\n");
                 // fdc.command_buffer[1] == 0
@@ -421,6 +555,10 @@ static void fdc_write(uint32_t port, uint32_t data)
                 fdc_idle();
                 break;
             // Read/Write
+            case 0x02:
+            case 0x22:
+            case 0x42:
+            case 0x62:
             case 0x06:
             case 0x26:
             case 0x46:
@@ -459,8 +597,15 @@ static void fdc_write(uint32_t port, uint32_t data)
                     length = fdc.command_buffer[8];
                 UNUSED(gap3);
 
+                // For read-track commands, the sector specification is ignored and the entire track is used
+                if (fdc.command_buffer[0] == 2) {
+                    sector = 1;
+                    max_sector = fdc.drive_spt[drvid];
+                }
+
                 fdc.dor &= 0xFC;
                 fdc.dor |= drvid;
+                fdc.selected_drive = drvid;
 
                 // Check for head coherency
                 if (head != fdc.command_buffer[3]) {
@@ -489,6 +634,10 @@ static void fdc_write(uint32_t port, uint32_t data)
 
                 if (fdc.command_buffer[0] & 1) {
                     // Write
+                    if (fdc.drive_write_protected[drvid]) {
+                        fdc_abort_command();
+                        goto abort_command;
+                    }
                     fdc.write_length = bytes_to_read;
                     dma_raise_dreq(2);
                     // The story continues in fdc_dma_complete
@@ -539,6 +688,54 @@ static void fdc_write(uint32_t port, uint32_t data)
     }
 }
 
+static void fdc_handle_format(void* a, int b)
+{
+    uint8_t sector[512];
+    UNUSED(a);
+    if(b != 0) FLOPPY_FATAL("Unable to format sector\n");
+    for (;;) {
+        if (fdc.format_dma_pos >= fdc.format_bytes_to_read) {
+            fdc_set_st0(0x20);
+                reset_out_fifo(7);
+                reset_cmd_fifo();
+                fdc.response_buffer[0] = fdc_get_st0();
+                fdc.response_buffer[1] = fdc.st[1];
+                fdc.response_buffer[2] = fdc.st[2];
+                fdc.response_buffer[3] = fdc.seek_cylinder[fdc.selected_drive];
+                fdc.response_buffer[4] = fdc.seek_head[fdc.selected_drive];
+                fdc.response_buffer[5] = fdc.seek_cylinder[fdc.selected_drive];
+                fdc.response_buffer[6] = fdc.command_buffer[4];
+                fdc_raise_irq();
+                break;
+            return;
+        }
+        int track = 0, head = 0, sector_number = 0;
+        track = fdc.dmabuf[fdc.format_dma_pos + 0];
+        head = fdc.dmabuf[fdc.format_dma_pos + 1];
+        sector_number = fdc.dmabuf[fdc.format_dma_pos + 2];
+        if (fdc.dmabuf[fdc.format_dma_pos + 3] != 2)
+            FLOPPY_FATAL("Unknown floppy size in format\n");
+        fdc.format_dma_pos += 4;
+        
+        // Fill sector
+        memset(sector, fdc.format_byte, 512);
+
+        // Seek to right location
+        if(fdc_seek(fdc.selected_drive, track, head, sector_number) == -1)
+            FLOPPY_FATAL("Invalid seek CHS: %d/%d/%d\n", track, head, sector_number);
+        
+        int res = drive_write(fdc.drives[fdc.selected_drive], NULL, sector, 512, fdc.seek_internal_lba[fdc.selected_drive] << 9, fdc_handle_format);
+        if(res == DRIVE_RESULT_ASYNC){
+            fdc.msr = MSR_CB;
+            return;
+        }else if(res == DRIVE_RESULT_SYNC){
+            continue;
+        }else{
+            FLOPPY_FATAL("Unable to format sector\n");
+        }
+    }
+}
+
 int floppy_next(itick_t now)
 {
     UNUSED(now);
@@ -552,6 +749,10 @@ void* fdc_dma_buf(void)
 void fdc_dma_complete(void)
 {
     switch (fdc.command_buffer[0]) {
+    case 0x0D:
+    case 0x4D: { // Format track
+    fdc_handle_format(NULL, 0);
+    }
     case 0x05:
     case 0x25:
     case 0x45:
@@ -574,6 +775,10 @@ void fdc_dma_complete(void)
         }
         break;
     }
+    case 0x02: // Read whole track
+    case 0x22:
+    case 0x42:
+    case 0x62:
     case 0x06:
     case 0x26:
     case 0x46:
@@ -615,7 +820,8 @@ void fdc_dma_complete(void)
     }
 }
 
-void fdc_replace_drive(int idx, struct drive_info* drive){
+void fdc_replace_drive(int idx, struct drive_info* drive)
+{
     fdc.drives[idx] = drive;
     fdc.dir[idx] |= 0x80;
 }
