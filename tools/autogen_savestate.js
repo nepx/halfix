@@ -36,7 +36,9 @@ var file_struct_names = {
     "fpu.c": "fpu",
     "ioapic.c": "ioapic",
     "apic.c": "apic",
-    "pci.c": "pci"
+    "pci.c": "pci",
+    "fdc.c": "fdc",
+    "acpi.c": "acpi"
 };
 
 function parseDirective(n) {
