@@ -121,7 +121,6 @@ static void kbd_queue_state(struct bjson_object* obj, struct kbd_queue* y, int z
 static void kbd_state(void)
 {
     // <<< BEGIN AUTOGENERATE "state" >>>
-    // Auto-generated on Wed Oct 09 2019 13:00:43 GMT-0700 (PDT)
     struct bjson_object* obj = state_obj("kbd", 15 + 6);
     state_field(obj, 128, "kbd.ram", &kbd.ram);
     state_field(obj, 1, "kbd.data", &kbd.data);
@@ -138,7 +137,7 @@ static void kbd_state(void)
     state_field(obj, 1, "kbd.keyboard_command", &kbd.keyboard_command);
     state_field(obj, 1, "kbd.mouse_command", &kbd.mouse_command);
     state_field(obj, 1, "kbd.mouse_button_state", &kbd.mouse_button_state);
-    // <<< END AUTOGENERATE "state" >>>
+// <<< END AUTOGENERATE "state" >>>
     kbd_queue_state(obj, &kbd.queues[0], 0);
     kbd_queue_state(obj, &kbd.queues[1], 1);
     kbd_mouse_down(0, 0, 0); // Release all the mouse buttons
@@ -380,6 +379,11 @@ static void kbd_write(uint32_t port, uint32_t data)
                 break;
             case 0xF4 ... 0xF5: // Enable (F4)/Disable (F5) scanning
                 kbd.keyboard_disable_scanning = data & 1;
+                kbd_add(KBD_QUEUE, 0xFA);
+                break;
+            case 0xF6: // Reset keyboard and enable scanning
+                kbd_reset();
+                kbd.keyboard_disable_scanning = 0;
                 kbd_add(KBD_QUEUE, 0xFA);
                 break;
             case 0xFF: // Reset and self-test
