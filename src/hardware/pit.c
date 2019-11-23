@@ -43,6 +43,8 @@ struct pit_channel {
     itick_t last_load_time, last_irq_time;
     uint32_t period;
 
+    uint32_t pit_last_count;
+
     int timer_flipflop;
 
     int timer_running;
@@ -58,8 +60,7 @@ static struct pit pit;
 static void pit_state(void)
 {
     // <<< BEGIN AUTOGENERATE "state" >>>
-// Auto-generated on Wed Oct 09 2019 13:00:43 GMT-0700 (PDT)
-    struct bjson_object* obj = state_obj("pit", (16 + 2) * 3);
+    struct bjson_object* obj = state_obj("pit", (18 + 2) * 3);
     state_field(obj, 4, "pit.chan[0].count", &pit.chan[0].count);
     state_field(obj, 4, "pit.chan[1].count", &pit.chan[1].count);
     state_field(obj, 4, "pit.chan[2].count", &pit.chan[2].count);
@@ -105,6 +106,12 @@ static void pit_state(void)
     state_field(obj, 4, "pit.chan[0].period", &pit.chan[0].period);
     state_field(obj, 4, "pit.chan[1].period", &pit.chan[1].period);
     state_field(obj, 4, "pit.chan[2].period", &pit.chan[2].period);
+    state_field(obj, 4, "pit.chan[0].pit_last_count", &pit.chan[0].pit_last_count);
+    state_field(obj, 4, "pit.chan[1].pit_last_count", &pit.chan[1].pit_last_count);
+    state_field(obj, 4, "pit.chan[2].pit_last_count", &pit.chan[2].pit_last_count);
+    state_field(obj, 4, "pit.chan[0].timer_flipflop", &pit.chan[0].timer_flipflop);
+    state_field(obj, 4, "pit.chan[1].timer_flipflop", &pit.chan[1].timer_flipflop);
+    state_field(obj, 4, "pit.chan[2].timer_flipflop", &pit.chan[2].timer_flipflop);
     state_field(obj, 4, "pit.chan[0].timer_running", &pit.chan[0].timer_running);
     state_field(obj, 4, "pit.chan[1].timer_running", &pit.chan[1].timer_running);
     state_field(obj, 4, "pit.chan[2].timer_running", &pit.chan[2].timer_running);
@@ -180,11 +187,11 @@ static int pit_get_count(struct pit_channel* pit)
     itick_t elapsed = get_now() - pit->last_load_time;
     uint32_t diff_in_ticks = (uint32_t)((double)elapsed * (double)PIT_CLOCK_SPEED / (double)ticks_per_second);
     uint32_t current = pit->count - diff_in_ticks;
-    if (current & 0x80000000) {
-        if (pit->count == 0)
-            return 0; // Avoid divide by zero errors for uninitialized timers.
-        current = (current % pit->count); // + pit->count;
-    }
+    if (pit->count == 0)
+        return 0; // Avoid divide by zero errors for uninitialized timers.
+    //if (current & 0x80000000) {
+    current = (current % pit->count); // + pit->count;
+    //}
     return current;
 }
 
@@ -194,11 +201,13 @@ static void pit_set_count(struct pit_channel* this, int v)
     this->count = (!v) << 16 | v; // 0x10000 if v is 0
     this->period = pit_counter_to_itick(this->count);
     this->timer_running = 1;
+    this->pit_last_count = pit_get_count(this); // should this be 0?
 }
 static void pit_channel_latch_counter(struct pit_channel* this)
 {
     if (!(this->whats_latched & COUNTER_LATCHED)) {
         uint16_t ct = pit_get_count(this);
+        PIT_LOG("Latch count: %ld\n", get_now());
         int mode = this->rw_mode;
         this->whats_latched = (mode << 2) | COUNTER_LATCHED;
         switch (mode) {
@@ -364,38 +373,40 @@ static void timer_cb(void)
     }
 }
 
-int pit_timer(itick_t now)
-{
-    // Only channel 0 does anything useful, so check if it's time to activate it.
-    if (pit.chan[0].timer_running && (pit.chan[0].last_irq_time + pit.chan[0].period) <= now) {
-        pit.chan[0].last_irq_time = now;
-        //pit.chan[0].last_irq_time = pit.chan[0].last_irq_time + pit.chan[0].period; // Make it more accurate
-        timer_cb();
-        if (pit.chan[0].mode != 2 && pit.chan[0].mode != 3)
-            pit.chan[0].timer_running = 0;
-        return 1;
-    }
-    return 0;
-}
-
 // Get the number of ticks, in the future, that the PIT needs to wait.
 int pit_next(itick_t now)
 {
+    UNUSED(now);
+    uint32_t count = pit_get_count(&pit.chan[0]), raise_irq = 0;
+    if (count > pit.chan[0].pit_last_count) {
+        // Count has gone from 0 --> 0xFFFF
+        raise_irq = 1;
+    }
     if (pit.chan[0].timer_running) {
-        pit_timer(now);
-        itick_t should_run = pit.chan[0].last_irq_time + pit.chan[0].period;
-        return should_run - now;
+
+        int refill_count = pit.chan[0].count;
+        if (raise_irq) {
+            timer_cb();
+            if (pit.chan[0].mode != 2 && pit.chan[0].mode != 3) {
+                pit.chan[0].timer_running = 0;
+                return -1;
+            }
+        }
+        pit.chan[0].pit_last_count = count;
+        return pit_counter_to_itick(refill_count - count);
     }
     return -1;
 }
 
-static uint32_t pit_speaker_readb(uint32_t port){
+static uint32_t pit_speaker_readb(uint32_t port)
+{
     UNUSED(port);
     // XXX: Use channel 2 for timing, not channel 0
     pit.chan[2].timer_flipflop ^= 1;
     return pit.chan[2].timer_flipflop << 4 | (pit_get_out(&pit.chan[0]) << 5);
 }
-static void pit_speaker_writeb(uint32_t port, uint32_t data){
+static void pit_speaker_writeb(uint32_t port, uint32_t data)
+{
     UNUSED(port | data);
     PIT_LOG("%sabled the pc speaker\n", data & 1 ? "En" : "Dis");
 }
