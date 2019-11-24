@@ -4,6 +4,17 @@
 #include "state.h"
 #include <stdint.h>
 
+#ifndef EMSCRIPTEN
+#define ALLOW_64BIT_OFFSETS
+#endif
+
+#ifdef ALLOW_64BIT_OFFSETS
+typedef uint64_t drv_offset_t;
+#else
+typedef uint32_t drv_offset_t;
+#endif
+
+
 #define DRIVE_LOG(x, ...) LOG("DRIVE", x, ##__VA_ARGS__)
 #define DRIVE_FATAL(x, ...)                \
     do {                                   \
@@ -17,8 +28,9 @@
 typedef void (*drive_cb)(void*, int);
 
 // function definitions
-typedef int (*drive_read_func)(void* this, void* cb_ptr, void* buffer, uint32_t size, uint32_t offset, drive_cb cb);
-typedef int (*drive_write_func)(void* this, void* cb_ptr, void* buffer, uint32_t size, uint32_t offset, drive_cb cb);
+typedef int (*drive_read_func)(void* this, void* cb_ptr, void* buffer, uint32_t size, drv_offset_t offset, drive_cb cb);
+typedef int (*drive_write_func)(void* this, void* cb_ptr, void* buffer, uint32_t size, drv_offset_t offset, drive_cb cb);
+typedef int (*drive_prefetch_func)(void* this, void* cb_ptr, uint32_t size, drv_offset_t offset, drive_cb cb);
 
 struct drive_info {
     // Mostly a collection of functions
@@ -34,6 +46,7 @@ struct drive_info {
 
     drive_read_func read;
     drive_write_func write;
+    drive_prefetch_func prefetch;
 
     void (*state)(void* this, char* path);
 };
@@ -50,8 +63,9 @@ int drive_sync_init(struct drive_info* info, char* path);
 int drive_async_init(struct drive_info* info, char* path);
 int drive_simple_init(struct drive_info* info, char* path);
 
-int drive_read(struct drive_info*, void*, void*, uint32_t, uint32_t, drive_cb);
-int drive_write(struct drive_info*, void*, void*, uint32_t, uint32_t, drive_cb);
+int drive_read(struct drive_info*, void*, void*, uint32_t, drv_offset_t, drive_cb);
+int drive_write(struct drive_info*, void*, void*, uint32_t, drv_offset_t, drive_cb);
+int drive_prefetch(struct drive_info*, void*, uint32_t, drv_offset_t, drive_cb);
 
 // Cancel transfers in progress
 void drive_cancel_transfers(void);
