@@ -1,6 +1,7 @@
 #include "devices.h"
 #include "drive.h"
 #include "platform.h"
+#include <string.h>
 
 // A mostly-complete ATA implementation.
 // This version works around a bug in the Bochs BIOS. It does not check if BSY is set after a write command has been executed.
@@ -27,6 +28,36 @@
 #define ATA_ERROR_ABRT 0x04 // Command aborted
 #define ATA_ERROR_TK0NF 0x02 // Track 0 not found
 #define ATA_ERROR_AMNF 0x01 // No address mark
+
+// https://www.bswd.com/sff8020i.pdf
+#define ATAPI_INTERRUPT_REASON_REL 0x04 // Always 0
+#define ATAPI_INTERRUPT_REASON_IO 0x02 // 1 if transferring data out
+#define ATAPI_INTERRUPT_REASON_CoD 0x01 // 1 if command bytes, 0 if data bytes
+
+#define ATAPI_SENSE_NONE 0x00
+#define ATAPI_SENSE_NOT_READY 0x02
+#define ATAPI_SENSE_MEDIUM_ERROR 0x03
+#define ATAPI_SENSE_HARDWARE_ERROR 0x04
+#define ATAPI_SENSE_ILLEGAL_REQUEST 0x05
+#define ATAPI_SENSE_UNIT_ATTENTION 0x06
+#define ATAPI_SENSE_ABORTED 0x0B
+
+// Upper 8 bits represent ASC, lower 8 bits rperesent ASCQ
+#define ATAPI_ASC_CAUSE_NOT_REPORTABLE 0x0400
+#define ATAPI_ASC_GETTING_READY 0x0401
+#define ATAPI_ASC_MANUAL_INTERVENTION 0x0403
+#define ATAPI_ASC_BSY 0x0407 // Operation in progress
+#define ATAPI_ASC_OFFLINE 0x0412
+#define ATAPI_ASC_MAINTENANCE 0x0481
+#define ATAPI_ASC_OUT_OF_RANGE 0x2000 // Also illegal opcode
+#define ATAPI_ASC_CLEANING_CARTRIDGE 0x3003
+#define ATAPI_ASC_NOT_PRESENT 0x3A02 // Also set if mailslot is open
+#define ATAPI_ASC_INVALID_FIELD 0x2400
+#define ATAPI_ASC_INVALID_OFFSET 0x2100
+
+#define ATAPI_ERROR_ABRT 0x04 // Command aborted
+#define ATAPI_ERROR_EOM 0x02 // Command specific
+#define ATAPI_ERROR_ILI 0x01 // Command specific
 
 #define MAX_MULTIPLE_SECTORS 16 // According to QEMU and Bochs
 
@@ -100,6 +131,37 @@ static struct ide_controller {
     // Total number of sectors on disk
     uint32_t total_sectors[2];
 
+    // === The following registers are for PCI IDE ===
+
+    uint8_t dma_command,
+        dma_status;
+    uint32_t prdt_address;
+
+    int dma_enabled;
+
+    // Multiword DMA, Ultimate DMA support (only used for IDENTIFY commands)
+    uint16_t mdma, udma;
+
+    // === The following registers are for ATAPI ===
+    uint8_t sense_key;
+    uint16_t asc;
+
+    uint32_t atapi_lba;
+    uint32_t atapi_sectors_to_read, atapi_sector_size;
+    uint32_t
+        // Total number of bytes to send per ATAPI read
+        atapi_bytes_to_transfer,
+        // Total number of bytes to send before we raise an IRQ
+        atapi_cylinder_count,
+        // Total number of bytes we've sent in this frame
+        atapi_frame_bytes_to_transfer,
+        atapi_frame_bytes_transferred;
+    uint8_t atapi_command;
+
+    uint8_t atapi_can_eject_cdrom;
+
+    uint8_t atapi_dma_enabled;
+
     // <<< END STRUCT "struct" >>>
 
     struct drive_info* info[2];
@@ -109,8 +171,7 @@ static void ide_state(void)
 {
 
     // <<< BEGIN AUTOGENERATE "state" >>>
-    // Auto-generated on Wed Oct 09 2019 13:00:43 GMT-0700 (PDT)
-    struct bjson_object* obj = state_obj("ide[NUMBER]", (27) * 2);
+    struct bjson_object* obj = state_obj("ide[NUMBER]", (45) * 2);
     state_field(obj, 4, "ide[0].selected", &ide[0].selected);
     state_field(obj, 4, "ide[1].selected", &ide[1].selected);
     state_field(obj, 4, "ide[0].lba", &ide[0].lba);
@@ -165,7 +226,43 @@ static void ide_state(void)
     state_field(obj, 8, "ide[1].total_sectors_chs", &ide[1].total_sectors_chs);
     state_field(obj, 8, "ide[0].total_sectors", &ide[0].total_sectors);
     state_field(obj, 8, "ide[1].total_sectors", &ide[1].total_sectors);
-    // <<< END AUTOGENERATE "state" >>>
+    state_field(obj, 1, "ide[0].dma_command", &ide[0].dma_command);
+    state_field(obj, 1, "ide[1].dma_command", &ide[1].dma_command);
+    state_field(obj, 1, "ide[0].dma_status", &ide[0].dma_status);
+    state_field(obj, 1, "ide[1].dma_status", &ide[1].dma_status);
+    state_field(obj, 4, "ide[0].prdt_address", &ide[0].prdt_address);
+    state_field(obj, 4, "ide[1].prdt_address", &ide[1].prdt_address);
+    state_field(obj, 4, "ide[0].dma_enabled", &ide[0].dma_enabled);
+    state_field(obj, 4, "ide[1].dma_enabled", &ide[1].dma_enabled);
+    state_field(obj, 2, "ide[0].mdma", &ide[0].mdma);
+    state_field(obj, 2, "ide[1].mdma", &ide[1].mdma);
+    state_field(obj, 2, "ide[0].udma", &ide[0].udma);
+    state_field(obj, 2, "ide[1].udma", &ide[1].udma);
+    state_field(obj, 1, "ide[0].sense_key", &ide[0].sense_key);
+    state_field(obj, 1, "ide[1].sense_key", &ide[1].sense_key);
+    state_field(obj, 2, "ide[0].asc", &ide[0].asc);
+    state_field(obj, 2, "ide[1].asc", &ide[1].asc);
+    state_field(obj, 4, "ide[0].atapi_lba", &ide[0].atapi_lba);
+    state_field(obj, 4, "ide[1].atapi_lba", &ide[1].atapi_lba);
+    state_field(obj, 4, "ide[0].atapi_sectors_to_read", &ide[0].atapi_sectors_to_read);
+    state_field(obj, 4, "ide[1].atapi_sectors_to_read", &ide[1].atapi_sectors_to_read);
+    state_field(obj, 4, "ide[0].atapi_sector_size", &ide[0].atapi_sector_size);
+    state_field(obj, 4, "ide[1].atapi_sector_size", &ide[1].atapi_sector_size);
+    state_field(obj, 4, "ide[0].atapi_bytes_to_transfer", &ide[0].atapi_bytes_to_transfer);
+    state_field(obj, 4, "ide[1].atapi_bytes_to_transfer", &ide[1].atapi_bytes_to_transfer);
+    state_field(obj, 4, "ide[0].atapi_cylinder_count", &ide[0].atapi_cylinder_count);
+    state_field(obj, 4, "ide[1].atapi_cylinder_count", &ide[1].atapi_cylinder_count);
+    state_field(obj, 4, "ide[0].atapi_frame_bytes_to_transfer", &ide[0].atapi_frame_bytes_to_transfer);
+    state_field(obj, 4, "ide[1].atapi_frame_bytes_to_transfer", &ide[1].atapi_frame_bytes_to_transfer);
+    state_field(obj, 4, "ide[0].atapi_frame_bytes_transferred", &ide[0].atapi_frame_bytes_transferred);
+    state_field(obj, 4, "ide[1].atapi_frame_bytes_transferred", &ide[1].atapi_frame_bytes_transferred);
+    state_field(obj, 1, "ide[0].atapi_command", &ide[0].atapi_command);
+    state_field(obj, 1, "ide[1].atapi_command", &ide[1].atapi_command);
+    state_field(obj, 1, "ide[0].atapi_can_eject_cdrom", &ide[0].atapi_can_eject_cdrom);
+    state_field(obj, 1, "ide[1].atapi_can_eject_cdrom", &ide[1].atapi_can_eject_cdrom);
+    state_field(obj, 1, "ide[0].atapi_dma_enabled", &ide[0].atapi_dma_enabled);
+    state_field(obj, 1, "ide[1].atapi_dma_enabled", &ide[1].atapi_dma_enabled);
+// <<< END AUTOGENERATE "state" >>>
 
     char filename[1000];
     for (int i = 0; i < 2; i++) {
@@ -210,6 +307,7 @@ static inline void ide_lower_irq(struct ide_controller* ctrl)
 }
 static inline void ide_raise_irq(struct ide_controller* ctrl)
 {
+    ctrl->dma_status |= 0x04;
     ctrl->irq_status = 1;
     ide_update_irq(ctrl);
 }
@@ -254,9 +352,9 @@ static uint64_t ide_get_sector_offset(struct ide_controller* ctrl, int lba48)
     uint64_t res;
     switch ((lba48 << 1 | ctrl->lba) & 3) {
     case 0: { // CHS
-        int cyl = (ctrl->cylinder_low & 0xFF) | ((ctrl->cylinder_high << 8) & 0xFFFF);
+        uint64_t cyl = (ctrl->cylinder_low & 0xFF) | ((ctrl->cylinder_high << 8) & 0xFFFF);
         res = cyl * TRANSLATED(ctrl, heads) * TRANSLATED(ctrl, sectors_per_track);
-        int heads = ctrl->drive_and_head & 0x0F;
+        uint64_t heads = ctrl->drive_and_head & 0x0F;
         res += heads * TRANSLATED(ctrl, sectors_per_track);
         res += (ctrl->sector_number & 0xFF) - 1;
         break;
@@ -323,6 +421,552 @@ static void ide_check_canary(struct ide_controller* ctrl)
     }
 }
 
+// PIO buffer utilities. Useful for commands like IDENTIFY
+static void ide_pio_store_byte(struct ide_controller* ctrl, int offset, uint8_t value)
+{
+    ctrl->pio_buffer[offset] = value;
+}
+static void ide_pio_store_word(struct ide_controller* ctrl, int offset, uint16_t value)
+{
+    ctrl->pio_buffer16[offset >> 1] = value;
+}
+static void ide_pio_store_word_be(struct ide_controller* ctrl, int offset, uint16_t value)
+{
+    ctrl->pio_buffer[offset] = value >> 8;
+    ctrl->pio_buffer[offset + 1] = value;
+}
+static void ide_pio_store_dword_be(struct ide_controller* ctrl, int offset, uint32_t value)
+{
+    ctrl->pio_buffer[offset] = value >> 24;
+    ctrl->pio_buffer[offset + 1] = value >> 16;
+    ctrl->pio_buffer[offset + 2] = value >> 8;
+    ctrl->pio_buffer[offset + 3] = value;
+}
+static void ide_pio_clear(struct ide_controller* ctrl, int offset, int length)
+{
+    for (int i = offset; i < (offset + length); i++)
+        ctrl->pio_buffer[i] = 0;
+}
+
+// Store a string in the IDE PIO buffer.
+//  Right justified strings (justify_left=0): "          HELLO WORLD"
+//  Left justified strings (justify_left=1):  "HELLO WORLD          "
+//  Swapped strings: "HELLO " --> "EHLL O"
+static void ide_pio_store_string(struct ide_controller* ctrl, char* string, int pos, int length, int swap, int justify_left)
+{
+    char* buffer = alloca(length + 1); // Account for null-terminator
+    // Justify the string.
+    if (justify_left) {
+        sprintf(buffer, "%-*s", length, string);
+    } else {
+        sprintf(buffer, "%*s", length, string);
+    }
+    for (int i = 0; i < length; i++) {
+        ide_pio_store_byte(ctrl, pos + (i ^ swap), buffer[i]);
+    }
+}
+
+// Simple utility functions to read data in big endian format
+static inline uint16_t read16be(void* x)
+{
+    uint8_t* buf = x;
+    return buf[0] << 8 | buf[1];
+}
+static inline uint32_t read32be(void* x)
+{
+    uint8_t* buf = x;
+    return buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3];
+}
+
+// These functions mess around with the interrupt status register.
+// This function indicates  that there is a transfer pending
+static void ide_atapi_init_transfer(struct ide_controller* ctrl)
+{
+    ctrl->sector_count = (ctrl->sector_count & 0xF8) | ATAPI_INTERRUPT_REASON_IO;
+    ctrl->status |= ATA_STATUS_DRQ;
+}
+
+// This function indicates that it's ready to send command bytes
+static void ide_atapi_init_command(struct ide_controller* ctrl)
+{
+    ctrl->sector_count = (ctrl->sector_count & 0xF8) | ATAPI_INTERRUPT_REASON_CoD;
+    ctrl->status |= ATA_STATUS_DRQ;
+}
+
+// This function indicatesCPU that there is no transfer pending
+static void ide_atapi_no_transfer(struct ide_controller* ctrl)
+{
+    ctrl->sector_count = (ctrl->sector_count & 0xF8) | ATAPI_INTERRUPT_REASON_IO | ATAPI_INTERRUPT_REASON_CoD;
+    ctrl->status &= ~ATA_STATUS_DRQ;
+}
+
+// Abort an IDE command and mess around with the sense keys and "additional sense codes"
+static void ide_atapi_abort(struct ide_controller* ctrl, int sense_key, int asc)
+{
+    ctrl->error = sense_key << 4;
+    ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_ERR;
+    ide_atapi_no_transfer(ctrl);
+    ctrl->sense_key = sense_key;
+    ctrl->asc = asc;
+}
+static void ide_atapi_start_transfer(struct ide_controller* ctrl, int size)
+{
+    ctrl->pio_position = 0;
+    // Set byte count high/low
+    ctrl->cylinder_low = size;
+    ctrl->cylinder_high = size >> 8;
+    ctrl->pio_length = size;
+    ide_atapi_init_transfer(ctrl);
+    ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_DSC | ATA_STATUS_DRQ;
+
+    if (ctrl->atapi_dma_enabled)
+        IDE_FATAL("todo: dma trans\n");
+    ide_raise_irq(ctrl);
+}
+static void ide_atapi_stop_command(struct ide_controller* ctrl)
+{
+    ctrl->pio_position = 0;
+    ctrl->pio_length = 0;
+    ide_atapi_no_transfer(ctrl);
+    ctrl->status = ATA_STATUS_DRDY;
+}
+
+static void ide_atapi_read_complete(void* thisptr, int x)
+{
+    struct ide_controller* ctrl = thisptr;
+    if (x == -1) {
+        ide_atapi_abort(ctrl, ATAPI_SENSE_ILLEGAL_REQUEST, 0); // ?
+        IDE_FATAL("ATAPI Read error todo\n");
+    }
+    ctrl->status &= ~ATA_STATUS_BSY;
+    ide_atapi_init_transfer(ctrl);
+    ctrl->status |= ATA_STATUS_DSC | ATA_STATUS_DRDY;
+
+    ctrl->atapi_sectors_to_read--;
+    ctrl->atapi_lba++;
+
+    ctrl->cylinder_low = ctrl->atapi_bytes_to_transfer & 0xFF;
+    ctrl->cylinder_high = ctrl->atapi_bytes_to_transfer >> 8 & 0xFF;
+    //ctrl->pio_length = ctrl->atapi_sector_size;
+    IDE_LOG("ATAPI: finished reading left=%d\n", ctrl->atapi_sectors_to_read);
+
+    ide_raise_irq(ctrl);
+}
+
+// Read 1 sector of CD-ROM
+// The number of bytes in ctrl->cylinder_[low|high] is how many sectors we transfer before we refill.
+// The number of sectors in ctrl->sectors_to_read is how many sectors we have to read from the disk, in total.
+
+static void ide_atapi_read(struct ide_controller* ctrl)
+{
+    IDE_LOG("   atapi read sector=%d\n", ctrl->atapi_lba);
+    int res = drive_read(SELECTED(ctrl, info), ctrl, ctrl->pio_buffer, ctrl->atapi_sector_size, ctrl->atapi_lba * ctrl->atapi_sector_size, ide_atapi_read_complete);
+
+    // We have already prefetched this data
+    if (res != DRIVE_RESULT_SYNC) {
+        IDE_FATAL("Error trying to fetch already-fetched ATAPI data\n");
+    }
+
+    ide_atapi_init_transfer(ctrl);
+    ctrl->status |= ATA_STATUS_DSC | ATA_STATUS_DRDY;
+
+    ctrl->atapi_sectors_to_read--;
+    ctrl->atapi_lba++;
+
+    // Determine bytes to transfer
+    uint32_t total_bytes = ctrl->atapi_cylinder_count;
+    if (total_bytes > ctrl->atapi_bytes_to_transfer)
+        total_bytes = ctrl->atapi_bytes_to_transfer;
+    ctrl->atapi_frame_bytes_to_transfer = total_bytes;
+    ctrl->atapi_frame_bytes_transferred = 0;
+
+    ctrl->cylinder_low = total_bytes & 0xFF;
+    ctrl->cylinder_high = total_bytes >> 8 & 0xFF;
+    ctrl->pio_position = 0;
+    ctrl->pio_length = total_bytes > ctrl->atapi_sector_size ? ctrl->atapi_sector_size : total_bytes;
+    //ctrl->pio_length = ctrl->atapi_sector_size;
+    IDE_LOG("ATAPI: finished reading\n");
+
+    ide_raise_irq(ctrl);
+}
+
+static void ide_atapi_read_cb(void* thisptr, int stat)
+{
+    struct ide_controller* ctrl = thisptr;
+    if (stat == -1) {
+        IDE_FATAL("ATAPI: failed to read sector\n");
+    }
+    ctrl->status &= ~ATA_STATUS_BSY;
+    ide_atapi_read(ctrl);
+}
+
+// Run an ATAPI command
+static void ide_atapi_run_command(struct ide_controller* ctrl)
+{
+    // Copy all 12 bytes to a safe place
+    uint8_t command[12];
+    for (int i = 0; i < 12; i++)
+        command[i] = ctrl->pio_buffer[i];
+
+    ctrl->atapi_command = command[0];
+
+    int dont_xor = -1;
+
+    switch (command[0]) {
+    case 0x00: // Test if ready
+        IDE_LOG("Command: ATAPI: Test if ready\n");
+        if (SELECTED(ctrl, media_inserted)) {
+            ide_atapi_stop_command(ctrl);
+        } else {
+            ide_atapi_abort(ctrl, ATAPI_SENSE_NOT_READY, ATAPI_ASC_NOT_PRESENT);
+        }
+        ide_raise_irq(ctrl);
+        break;
+    case 0x03: // Request Sense
+        IDE_LOG("Command: ATAPI Request Sense\n");
+        ide_pio_clear(ctrl, 0, 18);
+        ide_pio_store_byte(ctrl, 0, 0xF0);
+        ide_pio_store_byte(ctrl, 2, ctrl->sense_key);
+        ide_pio_store_byte(ctrl, 7, 10);
+        ide_pio_store_byte(ctrl, 12, ctrl->asc >> 8); // ASC
+        ide_pio_store_byte(ctrl, 13, ctrl->asc); // ASCQ
+        if (ctrl->sense_key == 6)
+            ctrl->sense_key = 0;
+        ide_atapi_start_transfer(ctrl, command[4] > 18 ? 18 : command[4]);
+        break;
+    case 0x12: // Inquiry
+        IDE_LOG("Command: ATAPI: Inquiry\n");
+        ide_pio_store_byte(ctrl, 0, 0x05); // CD-ROM drive
+        ide_pio_store_byte(ctrl, 1, 0x80); // Removable
+        ide_pio_store_byte(ctrl, 2, 0x00); // Version
+        ide_pio_store_byte(ctrl, 3, 0x21); // Version
+        ide_pio_store_byte(ctrl, 4, 0x1F); // Extra data length
+        ide_pio_store_byte(ctrl, 5, 0x00); // ?
+        ide_pio_store_byte(ctrl, 6, 0x00); // ?
+        ide_pio_store_byte(ctrl, 7, 0x00); // ?
+        ide_pio_store_string(ctrl, "Halfix", 8, 8, 0, 1);
+        ide_pio_store_string(ctrl, "Halfix CD-ROM", 16, 16, 0, 1);
+        ide_pio_store_string(ctrl, "1.0", 24, 4, 0, 1);
+        ide_atapi_start_transfer(ctrl, command[4] > 36 ? 36 : command[4]);
+        break;
+    case 0x1E: // Lock CD-ROM doors
+        IDE_LOG("Command: ATAPI: %sock Doors\n", ~command[4] & 1 ? "Unl" : "L");
+        if (SELECTED(ctrl, media_inserted)) {
+            ctrl->atapi_can_eject_cdrom = ~command[4] & 1;
+            ide_atapi_stop_command(ctrl); // everything is done
+        } else {
+            ide_atapi_abort(ctrl, ATAPI_SENSE_NOT_READY, ATAPI_ASC_NOT_PRESENT);
+        }
+        ide_raise_irq(ctrl);
+        break;
+    case 0x25: // Get media capacity
+        IDE_LOG("Command: ATAPI: Get Capacity\n");
+        if (SELECTED(ctrl, media_inserted)) {
+            ide_pio_store_dword_be(ctrl, 0, SELECTED(ctrl, total_sectors) - 1);
+            ide_pio_store_dword_be(ctrl, 4, 2048);
+            ide_atapi_start_transfer(ctrl, 8);
+        } else {
+            ide_atapi_abort(ctrl, ATAPI_SENSE_NOT_READY, ATAPI_ASC_NOT_PRESENT);
+            ide_raise_irq(ctrl);
+        }
+        break;
+    case 0x43: {
+        IDE_LOG("Command: ATAPI: Read table of contents\n");
+        // Read table of contents. Based on values observed from Bochs and QEMU
+        // https://www.bswd.com/sff8020i.pdf starting page 183
+        int length = read16be(command + 7), nlength,
+            format = command[9] >> 6,
+            track_start = command[6],
+            bufpos, sectors;
+        ide_pio_clear(ctrl, 0, length);
+        switch (format) {
+        case 0: // Read TOC data format
+            ide_pio_store_byte(ctrl, 2, 1);
+            ide_pio_store_byte(ctrl, 3, 1);
+            bufpos = 4;
+            if (track_start < 2) {
+                ide_pio_store_byte(ctrl, bufpos++, 0);
+                ide_pio_store_byte(ctrl, bufpos++, 0x14);
+                ide_pio_store_byte(ctrl, bufpos++, 0x01);
+                ide_pio_store_byte(ctrl, bufpos++, 0);
+
+                ide_pio_store_byte(ctrl, bufpos++, 0);
+                ide_pio_store_byte(ctrl, bufpos++, 0);
+                ide_pio_store_byte(ctrl, bufpos++, command[1] & 2);
+                ide_pio_store_byte(ctrl, bufpos++, 0);
+            }
+            ide_pio_store_byte(ctrl, bufpos++, 0);
+            ide_pio_store_byte(ctrl, bufpos++, 0x16);
+            ide_pio_store_byte(ctrl, bufpos++, 0xAA);
+            ide_pio_store_byte(ctrl, bufpos++, 0);
+
+            sectors = SELECTED(ctrl, total_sectors);
+
+            if (command[1] & 2) {
+                ide_pio_store_byte(ctrl, bufpos++, 0);
+                ide_pio_store_byte(ctrl, bufpos++, ((sectors + 150) / 75) / 60);
+                ide_pio_store_byte(ctrl, bufpos++, ((sectors + 150) / 75) % 60);
+                ide_pio_store_byte(ctrl, bufpos++, ((sectors + 150) % 75));
+            } else {
+                ide_pio_store_dword_be(ctrl, bufpos, sectors);
+                bufpos += 4;
+            }
+            ide_pio_store_word_be(ctrl, 0, bufpos - 2);
+            nlength = bufpos;
+            break;
+        case 1: // Multi-session
+            nlength = 12;
+            ide_pio_store_word_be(ctrl, 0, 0x0A); // TOC data length
+            ide_pio_store_byte(ctrl, 2, 1); // First session
+            ide_pio_store_byte(ctrl, 3, 1); // Last session
+            break;
+        case 2: // Raw TOC data
+            ide_pio_store_byte(ctrl, 2, 1);
+            ide_pio_store_byte(ctrl, 3, 1);
+            bufpos = 4;
+            for (int i = 0; i < 4; i++) {
+                ide_pio_store_byte(ctrl, bufpos++, 0x01);
+                ide_pio_store_byte(ctrl, bufpos++, 0x14);
+                ide_pio_store_byte(ctrl, bufpos++, 0);
+                if (i == 3)
+                    ide_pio_store_byte(ctrl, bufpos++, 0xA3);
+                else
+                    ide_pio_store_byte(ctrl, bufpos++, i);
+                ide_pio_store_byte(ctrl, bufpos++, 0);
+                ide_pio_store_byte(ctrl, bufpos++, 0);
+                ide_pio_store_byte(ctrl, bufpos++, 0);
+                if (i & 2) {
+                    sectors = SELECTED(ctrl, total_sectors);
+                    if (command[1] & 2) {
+                        ide_pio_store_byte(ctrl, bufpos++, 0);
+                        ide_pio_store_byte(ctrl, bufpos++, ((sectors + 150) / 75) / 60);
+                        ide_pio_store_byte(ctrl, bufpos++, ((sectors + 150) / 75) % 60);
+                        ide_pio_store_byte(ctrl, bufpos++, ((sectors + 150) % 75));
+                    } else {
+                        ide_pio_store_dword_be(ctrl, bufpos, sectors);
+                        bufpos += 4;
+                    }
+                } else {
+                    ide_pio_store_byte(ctrl, bufpos++, 0);
+                    ide_pio_store_byte(ctrl, bufpos++, 1);
+                    ide_pio_store_byte(ctrl, bufpos++, 0);
+                    ide_pio_store_byte(ctrl, bufpos++, 0);
+                }
+            }
+            ide_pio_store_word_be(ctrl, 0, bufpos - 2);
+            nlength = bufpos;
+            break;
+        case 3:
+            IDE_FATAL("Unknown toc command 3\n");
+        }
+        IDE_LOG("nlength=%d length=%d\n", nlength, length);
+        //ide_atapi_start_transfer(ctrl, nlength < length ? nlength : length);
+        UNUSED(length);
+        ide_atapi_start_transfer(ctrl, nlength);
+        ide_raise_irq(ctrl);
+        break;
+    }
+    case 0x1A:
+    case 0x5A: { // Mode sense
+        int length, nlength;
+        if (command[0] & 0x40)
+            length = read16be(command + 6);
+        else
+            length = command[4];
+        IDE_LOG("ATAPI: Mode Sense [len=%d x=%d]\n", length, command[2]);
+        switch (command[2]) {
+        // Current values
+        case 1: // Error recovery
+            ide_pio_clear(ctrl, 0, nlength = 16);
+            ide_pio_store_word_be(ctrl, 0, 22);
+            ide_pio_store_byte(ctrl, 2, 0x70);
+            ide_pio_store_byte(ctrl, 8, 0x01);
+            ide_pio_store_byte(ctrl, 9, 0x06);
+            ide_pio_store_byte(ctrl, 11, 0x05); // Retry five times
+            break;
+        case 0x2A: // Capabilities
+        case (2 << 6) | 0x2A:
+            ide_pio_clear(ctrl, 0, nlength = 28);
+            ide_pio_store_word_be(ctrl, 0, 34);
+            ide_pio_store_byte(ctrl, 2, 0x70);
+            ide_pio_store_byte(ctrl, 8, 0x2A);
+            ide_pio_store_byte(ctrl, 9, 0x12);
+            ide_pio_store_byte(ctrl, 12, 0x70);
+            ide_pio_store_byte(ctrl, 13, 0x60);
+            ide_pio_store_byte(ctrl, 14, 41 | 0); // TODO: Locked bit (bit 2)
+            ide_pio_store_word_be(ctrl, 16, 706);
+            ide_pio_store_word_be(ctrl, 18, 2);
+            ide_pio_store_word_be(ctrl, 20, 512);
+            ide_pio_store_word_be(ctrl, 22, 706);
+            break;
+        default:
+            IDE_LOG("ATAPI: Unknown Mode Sense: %02x\n", command[2]);
+            ide_atapi_abort(ctrl, ATAPI_SENSE_ILLEGAL_REQUEST, ATAPI_ASC_INVALID_FIELD);
+            ide_raise_irq(ctrl);
+            return;
+        }
+
+        ide_atapi_start_transfer(ctrl, nlength < length ? nlength : length);
+        break;
+    }
+    case 0x28: // Read sectors
+    case 0xA8: { // Read sectors
+        uint32_t sectors, lba, total_sectors, bytecount;
+        if (command[0] & 0x80)
+            sectors = read32be(command + 6);
+        else
+            sectors = read16be(command + 7);
+
+        lba = read32be(command + 2);
+        IDE_LOG("ATAPI: Read %d sector starting %d ending %d\n", sectors, lba, lba + sectors);
+        if (SELECTED(ctrl, media_inserted)) {
+            total_sectors = SELECTED(ctrl, total_sectors);
+            int tmp;
+            if ((lba + sectors) >= total_sectors) {
+                tmp = total_sectors - lba + 1;
+                if (tmp < 0) {
+                    // LBA is out of range
+                    ide_atapi_abort(ctrl, ATAPI_SENSE_NOT_READY, ATAPI_ASC_OUT_OF_RANGE);
+                    ide_raise_irq(ctrl);
+                    break;
+                } else if (tmp == 0) {
+                    // LBA is in range
+                    ide_atapi_stop_command(ctrl);
+                    ide_raise_irq(ctrl);
+                    break;
+                } else
+                    sectors = tmp;
+            }
+
+            if (sectors == 0) {
+                ide_atapi_stop_command(ctrl);
+                break;
+            }
+
+            ctrl->atapi_lba = lba;
+            ctrl->atapi_sectors_to_read = sectors;
+            ctrl->atapi_sector_size = 2048;
+
+            // Total number of bytes to transfer
+            ctrl->atapi_cylinder_count = (ctrl->cylinder_high << 8 & 0xFF00) | (ctrl->cylinder_low & 0xFF);
+            ctrl->atapi_bytes_to_transfer = bytecount = ctrl->atapi_sector_size * ctrl->atapi_sectors_to_read;
+
+            // Reset cylinder low/high values
+            ctrl->cylinder_low = 0;
+            ctrl->cylinder_high = 0;
+
+            // Bytecount must be even
+            if (ctrl->atapi_cylinder_count & 1)
+                ctrl->atapi_cylinder_count--;
+
+            //if(command[4] == 5 && command[5] == 0x1D && command[8] == 0x3A) __asm__("int3");
+
+            // Prefetch all the data beforehand
+            IDE_LOG("Prefetch: %d start=%08x end=%08x\n", ctrl->atapi_cylinder_count, ctrl->atapi_lba * ctrl->atapi_sector_size, ctrl->atapi_lba * ctrl->atapi_sector_size + ctrl->atapi_bytes_to_transfer);
+            int res = drive_prefetch(SELECTED(ctrl, info), ctrl, ctrl->atapi_cylinder_count, ctrl->atapi_lba * ctrl->atapi_sector_size, ide_atapi_read_cb);
+            if (res == DRIVE_RESULT_ASYNC) {
+                ctrl->status |= ATA_STATUS_BSY | ATA_STATUS_DRDY | ATA_STATUS_DSC;
+            } else if (res == DRIVE_RESULT_SYNC) {
+                ide_atapi_read_cb(ctrl, 0);
+            } else {
+                ide_atapi_abort(ctrl, ATAPI_SENSE_NOT_READY, ATAPI_ASC_NOT_PRESENT);
+                ide_raise_irq(ctrl);
+            }
+            dont_xor = 0;
+        } else {
+            ide_atapi_abort(ctrl, ATAPI_SENSE_NOT_READY, ATAPI_ASC_NOT_PRESENT);
+            ide_raise_irq(ctrl);
+        }
+        break;
+    }
+    case 0x2B: // Seek
+        IDE_LOG("ATAPI: Seek\n");
+        if (SELECTED(ctrl, media_inserted)) {
+            uint32_t lba = read32be(command + 2);
+            if (lba >= SELECTED(ctrl, total_sectors)) {
+                ide_atapi_abort(ctrl, ATAPI_SENSE_ILLEGAL_REQUEST, ATAPI_ASC_INVALID_OFFSET);
+                ide_raise_irq(ctrl);
+                break;
+            }
+            ide_atapi_stop_command(ctrl);
+            ide_raise_irq(ctrl);
+        } else {
+            ide_atapi_abort(ctrl, ATAPI_SENSE_NOT_READY, ATAPI_ASC_NOT_PRESENT);
+            ide_raise_irq(ctrl);
+        }
+        break;
+    case 0x42: // Read sub-channel
+        IDE_LOG("ATAPI: Read Sub-Channel (stubbed)\n");
+        if (SELECTED(ctrl, media_inserted)) {
+            int length = command[8] < 8 ? command[8] : 8;
+            ide_pio_clear(ctrl, 0, length);
+            ide_atapi_start_transfer(ctrl, length);
+        } else {
+            ide_atapi_abort(ctrl, ATAPI_SENSE_NOT_READY, ATAPI_ASC_NOT_PRESENT);
+            ide_raise_irq(ctrl);
+        }
+        break;
+    case 0xBD: { // Mechanism status
+        IDE_LOG("ATAPI: Mechanism status\n");
+        int x = read16be(command + 8);
+        ide_pio_clear(ctrl, 0, 8);
+        ide_pio_store_byte(ctrl, 5, 1);
+        ide_atapi_start_transfer(ctrl, x > 8 ? 8 : x);
+        break;
+    }
+    case 0xBE: // Read CD (todo)
+        IDE_LOG("ATAPI: Read CD (unimplemented)\n");
+        if (SELECTED(ctrl, media_inserted)) {
+            uint32_t length = read32be(command + 5) & 0x00FFFFFF,
+                     lba = read32be(command + 2);
+            if (length == 0) {
+                ide_atapi_stop_command(ctrl);
+                break;
+            }
+            UNUSED(lba);
+            IDE_FATAL("TODO: ATAPI Read CD command\n");
+        } else {
+            ide_atapi_abort(ctrl, ATAPI_SENSE_NOT_READY, ATAPI_ASC_NOT_PRESENT);
+            ide_raise_irq(ctrl);
+        }
+        break;
+    case 0x46:
+    case 0x8D:
+    case 0x55:
+    case 0xa6:
+    case 0x4b:
+    case 0x45:
+    case 0x47:
+    case 0xbc:
+    case 0xb9:
+    case 0x44:
+    case 0xba:
+    case 0xbb:
+    case 0x4e:
+    case 0x4a:
+        IDE_LOG("ATAPI: Unknown command '%02x'\n", command[0]);
+        ide_atapi_abort(ctrl, 5, ATAPI_ASC_OUT_OF_RANGE);
+        ide_raise_irq(ctrl);
+        break;
+    default:
+        DRIVE_FATAL("Unknown ATAPI command: %02x\n", command[0]);
+    }
+
+    if (!dont_xor)
+        return;
+
+    int bit = ATAPI_INTERRUPT_REASON_IO & dont_xor;
+    if (!(ctrl->status & ATA_STATUS_BSY)) {
+        ide_raise_irq(ctrl);
+        if (ctrl->pio_length == 0) {
+            bit |= ATAPI_INTERRUPT_REASON_CoD & dont_xor;
+            ctrl->status &= ~ATA_STATUS_DRQ;
+        }
+    }
+    ctrl->sector_count &= 0xF8;
+    ctrl->sector_count |= bit;
+}
+
 // We need these functions to restart the command
 static void ide_read_sectors(struct ide_controller* ctrl, int lba48, int chunk_count);
 static void drive_write_callback(void* this, int res);
@@ -331,12 +975,93 @@ static void drive_write_callback(void* this, int res);
 static void ide_pio_read_callback(struct ide_controller* ctrl)
 {
     // Reset position to zero so that we don't keep writing out of bounds
+    unsigned int old_pio = ctrl->pio_position;
     ctrl->pio_position = 0;
 
     ctrl->status &= ~ATA_STATUS_DRQ;
 
     switch (ctrl->command_issued) {
+    case 0xA0: { // ATAPI command
+        switch (ctrl->atapi_command) {
+        case 0x28:
+        case 0xA8: {
+            if (ctrl->pio_length != old_pio) {
+                IDE_FATAL("Expected: %x Got: %x\n", ctrl->pio_length, old_pio);
+            }
+            ctrl->atapi_frame_bytes_transferred += ctrl->pio_length;
+            if (ctrl->atapi_frame_bytes_transferred >= ctrl->atapi_frame_bytes_to_transfer) {
+                // We are done with this series of reads
+                ctrl->atapi_bytes_to_transfer -= ctrl->atapi_frame_bytes_transferred;
+                IDE_LOG("Finished current frame : str=%d btt=%d %02x\n", ctrl->atapi_sectors_to_read, ctrl->atapi_bytes_to_transfer, ctrl->status);
+                if (ctrl->atapi_bytes_to_transfer == 0) {
+                    ctrl->cylinder_low = ctrl->atapi_frame_bytes_to_transfer & 0xFF;
+                    ctrl->cylinder_high = ctrl->atapi_frame_bytes_to_transfer >> 8 & 0xFF;
+                    ctrl->status = ATA_STATUS_DRDY;
+                    ctrl->atapi_frame_bytes_transferred = 1;
+                    ide_atapi_stop_command(ctrl);
+                    ide_raise_irq(ctrl);
+                } else {
+                    // Check if there is still more to be read
+                    ide_raise_irq(ctrl);
+                    int continue_frame = 0;
+                    if ((continue_frame = ctrl->atapi_frame_bytes_transferred % ctrl->atapi_sector_size)) {
+                        // No, we stopped in the middle of a frame. This could happen if the cylinder count is not a multiple of sector size.
+                        ctrl->atapi_lba--; // Go back one sector and read the one we just finished.
+                        ctrl->atapi_sectors_to_read++;
+                    }
+                    // There is still more to be read.
+                    ide_atapi_read(ctrl);
+                    // Copy the rest of the data to the beginning
+                    memmove(ctrl->pio_buffer, ctrl->pio_buffer + continue_frame, ctrl->atapi_sector_size - continue_frame);
+                    ctrl->pio_position = 0;
+                    ctrl->pio_length = ctrl->atapi_sector_size - continue_frame;
+                    ctrl->atapi_frame_bytes_transferred = 0;
+
+                    IDE_LOG("Continue frame: %08x/%08x\n", ctrl->pio_position, ctrl->pio_length);
+                }
+            } else {
+                IDE_LOG("Reading sector %d - %d left - frame %d/%d [res: %d], sectsize=%d\n", ctrl->atapi_lba, ctrl->atapi_sectors_to_read, ctrl->atapi_frame_bytes_transferred, ctrl->atapi_frame_bytes_to_transfer, -(ctrl->atapi_frame_bytes_transferred - ctrl->atapi_frame_bytes_to_transfer), ctrl->atapi_sector_size);
+                // Reload, but don't reset anything.
+                int res = drive_read(SELECTED(ctrl, info), ctrl, ctrl->pio_buffer, ctrl->atapi_sector_size, ctrl->atapi_lba * ctrl->atapi_sector_size, ide_atapi_read_complete);
+
+                // We have already prefetched this data
+                if (res != DRIVE_RESULT_SYNC) {
+                    IDE_FATAL("Error trying to fetch already-fetched ATAPI data\n");
+                }
+
+                unsigned int bytes_left = ctrl->atapi_frame_bytes_to_transfer - ctrl->atapi_frame_bytes_transferred;
+                ctrl->pio_length = bytes_left > ctrl->atapi_sector_size ? ctrl->atapi_sector_size : bytes_left;
+                IDE_LOG("pio length: %d\n", ctrl->pio_length);
+                ide_atapi_init_transfer(ctrl);
+                ctrl->atapi_lba++;
+                ctrl->atapi_sectors_to_read--;
+            }
+            break;
+        }
+
+            ctrl->atapi_bytes_to_transfer -= ctrl->pio_length;
+            if (ctrl->atapi_cylinder_count > ctrl->atapi_bytes_to_transfer)
+                ctrl->atapi_cylinder_count = ctrl->atapi_bytes_to_transfer;
+            if (ctrl->atapi_sectors_to_read == 0) {
+                IDE_LOG("  finished atapi read: cylval: %08x\n", ctrl->atapi_bytes_to_transfer);
+                ctrl->cylinder_low = ctrl->atapi_cylinder_count & 0xFF;
+                ctrl->cylinder_high = ctrl->atapi_cylinder_count >> 8 & 0xFF;
+                ctrl->sector_count &= 0xF8;
+                ctrl->sector_count |= 3;
+                break;
+            }
+            ide_atapi_read(ctrl);
+            IDE_LOG("  bytes to trasnfer after %08x [cylcount=%08x]\n", ctrl->atapi_bytes_to_transfer, ctrl->cylinder_low | ctrl->cylinder_high << 8);
+            break;
+        default:
+            ide_raise_irq(ctrl);
+            ctrl->sector_count |= ATAPI_INTERRUPT_REASON_CoD;
+            ctrl->error = 0;
+        }
+        break;
+    }
     case 0xEC: // Identify
+    case 0xA1: // ATAPI Identify
         break;
     case 0x29: // Read multiple, using LBA48
     case 0xC4: // Read multiple
@@ -355,7 +1080,7 @@ static void ide_pio_read_callback(struct ide_controller* ctrl)
         else {
             // Otherwise, we're done
             ctrl->error = 0;
-            ctrl->status = ATA_STATUS_DRDY;
+            ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_DSC;
         }
         break;
     default:
@@ -368,6 +1093,9 @@ static void ide_pio_write_callback(struct ide_controller* ctrl)
 {
     ctrl->pio_position = 0;
     switch (ctrl->command_issued) {
+    case 0xA0: // ATAPI Packet
+        ide_atapi_run_command(ctrl);
+        break;
     case 0x39: // Write multiple, using LBA48
     case 0xC5: // Write multiple
     case 0x30: // Write, with retry
@@ -381,7 +1109,7 @@ static void ide_pio_write_callback(struct ide_controller* ctrl)
         printf("Writing %d sectors at %d\n", ctrl->sectors_read, (uint32_t)sector_offset);
 #endif
 
-        int res = drive_write(SELECTED(ctrl, info), ctrl, ctrl->pio_buffer, ctrl->sectors_read * 512, sector_offset * 512, drive_write_callback);
+        int res = drive_write(SELECTED(ctrl, info), ctrl, ctrl->pio_buffer, ctrl->sectors_read * 512, sector_offset * (uint64_t)512, drive_write_callback);
         if (res == DRIVE_RESULT_SYNC)
             drive_write_callback(ctrl, 0);
         else if (res == DRIVE_RESULT_ASYNC) {
@@ -396,6 +1124,10 @@ static void ide_pio_write_callback(struct ide_controller* ctrl)
     }
 }
 
+
+#ifdef PIO_LOG
+static FILE* test;
+#endif
 // Read a byte from the PIO buffer
 static uint32_t ide_pio_readb(uint32_t port)
 {
@@ -403,6 +1135,9 @@ static uint32_t ide_pio_readb(uint32_t port)
     uint8_t result = ctrl->pio_buffer[ctrl->pio_position++];
     if (ctrl->pio_position >= ctrl->pio_length)
         ide_pio_read_callback(ctrl);
+#ifdef PIO_LOG
+    fprintf(test, "m 01f0 = %02x\n", result);
+#endif
     return result;
 }
 // Read a word from the PIO buffer
@@ -410,7 +1145,7 @@ static uint32_t ide_pio_readw(uint32_t port)
 {
     struct ide_controller* ctrl = &ide[~port >> 7 & 1];
     // Penalize unaligned PIO accesses
-    if (ctrl->pio_position & 1) {
+    if ((ctrl->pio_position | ctrl->pio_length) & 1) {
         uint32_t res = ide_pio_readb(port);
         res |= ide_pio_readb(port) << 8;
         return res;
@@ -420,6 +1155,9 @@ static uint32_t ide_pio_readw(uint32_t port)
     ctrl->pio_position += 2;
     if (ctrl->pio_position >= ctrl->pio_length)
         ide_pio_read_callback(ctrl);
+#ifdef PIO_LOG
+    fprintf(test, "m 01f0 = %04x\n", result);
+#endif
     return result;
 }
 // Read a dword from the PIO buffer
@@ -427,7 +1165,7 @@ static uint32_t ide_pio_readd(uint32_t port)
 {
     struct ide_controller* ctrl = &ide[~port >> 7 & 1];
     // Penalize unaligned PIO accesses
-    if (ctrl->pio_position & 3) {
+    if ((ctrl->pio_position | ctrl->pio_length) & 3) {
         uint32_t res = ide_pio_readb(port);
         res |= ide_pio_readb(port) << 8;
         res |= ide_pio_readb(port) << 16;
@@ -439,6 +1177,9 @@ static uint32_t ide_pio_readd(uint32_t port)
     ctrl->pio_position += 4;
     if (ctrl->pio_position >= ctrl->pio_length)
         ide_pio_read_callback(ctrl);
+#ifdef PIO_LOG
+    fprintf(test, "m 01f0 = %08x\n", result);
+#endif
     return result;
 }
 
@@ -449,12 +1190,18 @@ static void ide_pio_writeb(uint32_t port, uint32_t data)
     ctrl->pio_buffer[ctrl->pio_position++] = data;
     if (ctrl->pio_position >= ctrl->pio_length)
         ide_pio_write_callback(ctrl);
+#ifdef PIO_LOG
+    fprintf(test, "o 01f0 = %02x\n", data);
+#endif
 }
 // Write a word to the PIO buffer
 static void ide_pio_writew(uint32_t port, uint32_t data)
 {
     struct ide_controller* ctrl = &ide[~port >> 7 & 1];
-    if (ctrl->pio_position & 1) {
+#ifdef PIO_LOG
+    fprintf(test, "o 01f0 = %04x\n", data);
+#endif
+    if ((ctrl->pio_position | ctrl->pio_length) & 1) {
         ide_pio_writeb(port, data & 0xFF);
         ide_pio_writeb(port, data >> 8 & 0xFF);
         return;
@@ -468,7 +1215,10 @@ static void ide_pio_writew(uint32_t port, uint32_t data)
 static void ide_pio_writed(uint32_t port, uint32_t data)
 {
     struct ide_controller* ctrl = &ide[~port >> 7 & 1];
-    if (ctrl->pio_position & 3) {
+#ifdef PIO_LOG
+    fprintf(test, "o 01f0 = %08x\n", data);
+#endif
+    if ((ctrl->pio_position | ctrl->pio_length) & 3) {
         ide_pio_writeb(port, data & 0xFF);
         ide_pio_writeb(port, data >> 8 & 0xFF);
         ide_pio_writeb(port, data >> 16 & 0xFF);
@@ -479,33 +1229,6 @@ static void ide_pio_writed(uint32_t port, uint32_t data)
     ctrl->pio_position += 4;
     if (ctrl->pio_position >= ctrl->pio_length)
         ide_pio_write_callback(ctrl);
-}
-
-// PIO buffer utilities. Useful for commands like IDENTIFY
-static void ide_pio_store_byte(struct ide_controller* ctrl, int offset, uint8_t value)
-{
-    ctrl->pio_buffer[offset] = value;
-}
-static void ide_pio_store_word(struct ide_controller* ctrl, int offset, uint16_t value)
-{
-    ctrl->pio_buffer16[offset >> 1] = value;
-}
-// Store a string in the IDE PIO buffer.
-//  Right justified strings (justify_left=0): "          HELLO WORLD"
-//  Left justified strings (justify_left=1):  "HELLO WORLD          "
-//  Swapped strings: "HELLO " --> "EHLL O"
-static void ide_pio_store_string(struct ide_controller* ctrl, char* string, int pos, int length, int swap, int justify_left)
-{
-    char* buffer = alloca(length + 1); // Account for null-terminator
-    // Justify the string.
-    if (justify_left) {
-        sprintf(buffer, "%-*s", length, string);
-    } else {
-        sprintf(buffer, "%*s", length, string);
-    }
-    for (int i = 0; i < length; i++) {
-        ide_pio_store_byte(ctrl, pos + (i ^ swap), buffer[i]);
-    }
 }
 
 // Sets IDE signature. This is useful when trying to identify what kind of device exists at the end of the bus.
@@ -549,7 +1272,7 @@ static uint32_t ide_read(uint32_t port)
     case 0x1F6:
         return ctrl->drive_and_head;
     case 0x1F7:
-        if (selected_drive_has_media(ctrl)) {
+        if (selected_drive_has_media(ctrl) || ctrl->device_control & 4) {
             ide_lower_irq(ctrl);
             //IDE_LOG("Status: %02x\n", ctrl->status);
             return ctrl->status;
@@ -634,7 +1357,13 @@ static void ide_read_sectors(struct ide_controller* ctrl, int lba48, int chunk_c
         sectors_to_read = sector_count;
     ctrl->sectors_read = sectors_to_read;
 
-    int res = drive_read(SELECTED(ctrl, info), ctrl, ctrl->pio_buffer, sectors_to_read * 512, sector_offset * 512, ide_read_sectors_callback);
+#ifdef EMSCRIPTEN
+    IDE_LOG("Reading %d sectors at %llx\n", sector_count, sector_offset);
+#else
+    IDE_LOG("Reading %d sectors at %lx\n", sector_count, sector_offset);
+#endif
+    if(sector_offset > 0xFFFFFFFF) IDE_LOG("Big sector!!\n");
+    int res = drive_read(SELECTED(ctrl, info), ctrl, ctrl->pio_buffer, sectors_to_read * 512, sector_offset * (uint64_t)512, ide_read_sectors_callback);
 
     if (res < 0)
         ide_abort_command(ctrl);
@@ -701,70 +1430,101 @@ static void ide_identify(struct ide_controller* ctrl)
     // Note: This Example --> hTsiE axpmel
     int cdrom = SELECTED(ctrl, type) == DRIVE_TYPE_CDROM;
 
+    if (cdrom) {
+        ide_pio_clear(ctrl, 0, 512);
+        ide_pio_store_word(ctrl, 0, 0x85C0);
+        // Serial number
+        ide_pio_store_string(ctrl, "HFXCD 000000", 10 << 1, 20, 1, 1);
+        ide_pio_store_string(ctrl, "0.0.1", 23 << 1, 8, 1, 1);
+        ide_pio_store_string(ctrl, "Halfix CD-ROM drive", 27 << 1, 40, 1, 1);
+        ide_pio_store_word(ctrl, 48 << 1, 1);
+        int v = 512;
+        if (ctrl->dma_enabled)
+            v |= 128;
+        ide_pio_store_word(ctrl, 48 << 1, v);
+        ide_pio_store_word(ctrl, 53 << 1, 3);
+
+        v = 0;
+        if (ctrl->dma_enabled)
+            v |= 7 | ctrl->mdma;
+        ide_pio_store_word(ctrl, 63 << 1, v);
+        ide_pio_store_word(ctrl, 64 << 1, 1);
+        ide_pio_store_word(ctrl, 65 << 1, 0xB4);
+        ide_pio_store_word(ctrl, 66 << 1, 0xB4);
+        ide_pio_store_word(ctrl, 67 << 1, 0x12C);
+        ide_pio_store_word(ctrl, 68 << 1, 0xB4);
+        ide_pio_store_word(ctrl, 71 << 1, 30);
+        ide_pio_store_word(ctrl, 72 << 1, 30);
+        ide_pio_store_word(ctrl, 80 << 1, 0x1E);
+    } else {
+
 #define NOT_TRANSLATED(obj, field) obj->field[obj->selected << 1]
-    // General configuration
-    ide_pio_store_byte(ctrl, (0 << 1) | 0, 0x40);
-    ide_pio_store_byte(ctrl, (0 << 1) | 1, -cdrom & 0x85);
-    ide_pio_store_word(ctrl, 1 << 1, NOT_TRANSLATED(ctrl, cylinders));
-    ide_pio_store_word(ctrl, 2 << 1, 0);
-    ide_pio_store_word(ctrl, 3 << 1, NOT_TRANSLATED(ctrl, heads));
-    ide_pio_store_word(ctrl, 4 << 1, NOT_TRANSLATED(ctrl, sectors_per_track) * 512);
-    ide_pio_store_word(ctrl, 5 << 1, 512);
-    ide_pio_store_word(ctrl, 6 << 1, NOT_TRANSLATED(ctrl, sectors_per_track));
-    ide_pio_store_word(ctrl, 7 << 1, 0);
-    ide_pio_store_word(ctrl, 8 << 1, 0);
-    ide_pio_store_word(ctrl, 9 << 1, 0);
-    ide_pio_store_string(ctrl, "HFXHD 000000", 10 << 1, 20, 1, 0);
-    ide_pio_store_word(ctrl, 20 << 1, 3);
-    ide_pio_store_word(ctrl, 21 << 1, 16 * 512 / 512);
-    ide_pio_store_word(ctrl, 22 << 1, 4);
-    ide_pio_store_word(ctrl, 23 << 1, 4); // TODO: Firmware Revision (8 chrs, left justified)
-    ide_pio_store_word(ctrl, 24 << 1, 4);
-    ide_pio_store_word(ctrl, 25 << 1, 4);
-    ide_pio_store_word(ctrl, 26 << 1, 4);
-    ide_pio_store_string(ctrl, "HALFIX 123456", 27 << 1, 40, 1, 1);
-    ide_pio_store_word(ctrl, 47 << 1, 128);
-    ide_pio_store_word(ctrl, 48 << 1, 1); // DWORD IO supported
-    ide_pio_store_word(ctrl, 49 << 1, 1 << 9); // LBA supported (TODO: DMA)
-    ide_pio_store_word(ctrl, 50 << 1, 0);
-    ide_pio_store_word(ctrl, 51 << 1, 0x200);
-    ide_pio_store_word(ctrl, 52 << 1, 0x200);
-    ide_pio_store_word(ctrl, 53 << 1, 7);
-    ide_pio_store_word(ctrl, 54 << 1, TRANSLATED(ctrl, cylinders));
-    ide_pio_store_word(ctrl, 55 << 1, TRANSLATED(ctrl, heads));
-    ide_pio_store_word(ctrl, 56 << 1, TRANSLATED(ctrl, sectors_per_track));
-    ide_pio_store_word(ctrl, 57 << 1, SELECTED(ctrl, total_sectors_chs) & 0xFFFF);
-    ide_pio_store_word(ctrl, 58 << 1, SELECTED(ctrl, total_sectors_chs) >> 16 & 0xFFFF);
+        // General configuration
+        ide_pio_store_byte(ctrl, (0 << 1) | 0, 0x40);
+        ide_pio_store_byte(ctrl, (0 << 1) | 1, -cdrom & 0x85);
+        ide_pio_store_word(ctrl, 1 << 1, NOT_TRANSLATED(ctrl, cylinders));
+        ide_pio_store_word(ctrl, 2 << 1, 0);
+        ide_pio_store_word(ctrl, 3 << 1, NOT_TRANSLATED(ctrl, heads));
+        ide_pio_store_word(ctrl, 4 << 1, NOT_TRANSLATED(ctrl, sectors_per_track) * 512);
+        ide_pio_store_word(ctrl, 5 << 1, 512);
+        ide_pio_store_word(ctrl, 6 << 1, NOT_TRANSLATED(ctrl, sectors_per_track));
+        ide_pio_store_word(ctrl, 7 << 1, 0);
+        ide_pio_store_word(ctrl, 8 << 1, 0);
+        ide_pio_store_word(ctrl, 9 << 1, 0);
+        ide_pio_store_string(ctrl, "HFXHD 000000", 10 << 1, 20, 1, 0);
+        ide_pio_store_word(ctrl, 20 << 1, 3);
+        ide_pio_store_word(ctrl, 21 << 1, 16 * 512 / 512);
+        ide_pio_store_word(ctrl, 22 << 1, 4);
+        ide_pio_store_word(ctrl, 23 << 1, 4); // TODO: Firmware Revision (8 chrs, left justified)
+        ide_pio_store_word(ctrl, 24 << 1, 4);
+        ide_pio_store_word(ctrl, 25 << 1, 4);
+        ide_pio_store_word(ctrl, 26 << 1, 4);
+        ide_pio_store_string(ctrl, "HALFIX 123456", 27 << 1, 40, 1, 1);
+        ide_pio_store_word(ctrl, 47 << 1, 128);
+        ide_pio_store_word(ctrl, 48 << 1, 1); // DWORD IO supported
+        ide_pio_store_word(ctrl, 49 << 1, 1 << 9); // LBA supported (TODO: DMA)
+        ide_pio_store_word(ctrl, 50 << 1, 0);
+        ide_pio_store_word(ctrl, 51 << 1, 0x200);
+        ide_pio_store_word(ctrl, 52 << 1, 0x200 | (ctrl->dma_enabled ? 0x100 : 0));
+        ide_pio_store_word(ctrl, 53 << 1, 7);
+        ide_pio_store_word(ctrl, 54 << 1, TRANSLATED(ctrl, cylinders));
+        ide_pio_store_word(ctrl, 55 << 1, TRANSLATED(ctrl, heads));
+        ide_pio_store_word(ctrl, 56 << 1, TRANSLATED(ctrl, sectors_per_track));
+        ide_pio_store_word(ctrl, 57 << 1, SELECTED(ctrl, total_sectors_chs) & 0xFFFF);
+        ide_pio_store_word(ctrl, 58 << 1, SELECTED(ctrl, total_sectors_chs) >> 16 & 0xFFFF);
 
-    int multiple_sector_mask = -(ctrl->multiple_sectors_count != 0);
-    ide_pio_store_word(ctrl, 59 << 1, multiple_sector_mask & (0x100 | ctrl->multiple_sectors_count));
+        int multiple_sector_mask = -(ctrl->multiple_sectors_count != 0);
+        ide_pio_store_word(ctrl, 59 << 1, multiple_sector_mask & (0x100 | ctrl->multiple_sectors_count));
 
-    ide_pio_store_word(ctrl, 60 << 1, SELECTED(ctrl, total_sectors) & 0xFFFF);
-    ide_pio_store_word(ctrl, 61 << 1, SELECTED(ctrl, total_sectors) >> 16 & 0xFFFF);
-    for (int i = 62; i < 65; i++)
-        ide_pio_store_word(ctrl, i << 1, 0);
-    for (int i = 65; i < 69; i++)
-        ide_pio_store_word(ctrl, i << 1, 0x78);
-    for (int i = 69; i < 80; i++)
-        ide_pio_store_word(ctrl, i << 1, 0);
-    ide_pio_store_word(ctrl, 80 << 1, 0x7E);
-    ide_pio_store_word(ctrl, 81 << 1, 0);
-    ide_pio_store_word(ctrl, 82 << 1, 1 << 14);
-    ide_pio_store_word(ctrl, 83 << 1, 1 << 14); // TODO: Set bit 10 for LBA48
-    ide_pio_store_word(ctrl, 84 << 1, 1 << 14);
-    ide_pio_store_word(ctrl, 85 << 1, 1 << 14);
-    ide_pio_store_word(ctrl, 86 << 1, 1 << 14); // Same as word 83
-    ide_pio_store_word(ctrl, 87 << 1, 1 << 14);
-    ide_pio_store_word(ctrl, 88 << 1, 1 << 14);
-    for (int i = 89; i < 93; i++)
-        ide_pio_store_word(ctrl, i << 1, 0);
-    ide_pio_store_word(ctrl, 93 << 1, 24577);
-    for (int i = 94; i < 100; i++)
-        ide_pio_store_word(ctrl, i << 1, 0);
-    ide_pio_store_word(ctrl, 100 << 1, SELECTED(ctrl, total_sectors) & 0xFFFF);
-    ide_pio_store_word(ctrl, 101 << 1, SELECTED(ctrl, total_sectors) >> 16 & 0xFFFF);
-    ide_pio_store_word(ctrl, 102 << 1, 0);
-    ide_pio_store_word(ctrl, 103 << 1, 0);
+        ide_pio_store_word(ctrl, 60 << 1, SELECTED(ctrl, total_sectors) & 0xFFFF);
+        ide_pio_store_word(ctrl, 61 << 1, SELECTED(ctrl, total_sectors) >> 16 & 0xFFFF);
+        ide_pio_store_word(ctrl, 62 << 1, 0);
+        ide_pio_store_word(ctrl, 63 << 1, 7 | ctrl->mdma);
+        for (int i = 64; i < 65; i++)
+            ide_pio_store_word(ctrl, i << 1, 0);
+        for (int i = 65; i < 69; i++)
+            ide_pio_store_word(ctrl, i << 1, 0x78);
+        for (int i = 69; i < 80; i++)
+            ide_pio_store_word(ctrl, i << 1, 0);
+        ide_pio_store_word(ctrl, 80 << 1, 0x7E);
+        ide_pio_store_word(ctrl, 81 << 1, 0);
+        ide_pio_store_word(ctrl, 82 << 1, 1 << 14);
+        ide_pio_store_word(ctrl, 83 << 1, (1 << 14) | (1 << 13) | (1 << 12)); // TODO: Set bit 10 for LBA48
+        ide_pio_store_word(ctrl, 84 << 1, 1 << 14);
+        ide_pio_store_word(ctrl, 85 << 1, 1 << 14);
+        ide_pio_store_word(ctrl, 86 << 1, (1 << 14) | (1 << 13) | (1 << 12)); // Same as word 83
+        ide_pio_store_word(ctrl, 87 << 1, 1 << 14);
+        ide_pio_store_word(ctrl, 88 << 1, -(ctrl->dma_enabled != 0) & (0x3F | ctrl->udma));
+        for (int i = 89; i < 93; i++)
+            ide_pio_store_word(ctrl, i << 1, 0);
+        ide_pio_store_word(ctrl, 93 << 1, 24577);
+        for (int i = 94; i < 100; i++)
+            ide_pio_store_word(ctrl, i << 1, 0);
+        ide_pio_store_word(ctrl, 100 << 1, SELECTED(ctrl, total_sectors) & 0xFFFF);
+        ide_pio_store_word(ctrl, 101 << 1, SELECTED(ctrl, total_sectors) >> 16 & 0xFFFF);
+        ide_pio_store_word(ctrl, 102 << 1, 0);
+        ide_pio_store_word(ctrl, 103 << 1, 0);
+    }
     ctrl->pio_length = 512;
     ctrl->pio_position = 0;
 }
@@ -813,6 +1573,14 @@ static void ide_write(uint32_t port, uint32_t data)
         ctrl->error = 0;
         ctrl->command_issued = data;
         switch (data) {
+        case 8: // ATAPI Reset
+            if (SELECTED(ctrl, type) == DRIVE_TYPE_CDROM) {
+                ctrl->error &= ~ATA_ERROR_BBK;
+                ctrl->status = 0; // ?
+                ide_set_signature(ctrl);
+            } else
+                ide_abort_command(ctrl);
+            break;
         case 0x10 ... 0x1F: // Calibrate Drive
             if (SELECTED(ctrl, type) != DRIVE_TYPE_DISK)
                 ide_abort_command(ctrl);
@@ -904,11 +1672,34 @@ static void ide_write(uint32_t port, uint32_t data)
             ctrl->status = ATA_STATUS_DRDY;
             ide_raise_irq(ctrl); // nothing much to do here...
             break;
+        case 0xA0: // ATAPI Packet
+            IDE_LOG("Command: ATAPI Packet\n");
+            if (SELECTED(ctrl, type) == DRIVE_TYPE_CDROM) {
+                if (ctrl->feature & 2) {
+                    IDE_LOG("Overlapped packet feature not supported\n");
+                    ide_abort_command(ctrl);
+                    break;
+                }
+                ide_atapi_init_command(ctrl);
+                ctrl->status &= ~(ATA_STATUS_BSY | ATA_STATUS_DF);
+                ctrl->atapi_dma_enabled = ctrl->feature & 1;
 
+                // Prepare for PIO transfer
+                ctrl->pio_length = 12;
+                ctrl->pio_position = 0;
+            } else
+                ide_abort_command(ctrl);
+            break;
         case 0xA1: // ATAPI Identify
-            IDE_LOG("Command: ATAPI IDENTIFY (todo)\n");
-            //__asm__("int3");
-            ide_abort_command(ctrl);
+            IDE_LOG("Command: ATAPI IDENTIFY\n");
+            if (SELECTED(ctrl, type) == DRIVE_TYPE_CDROM) {
+                ctrl->error = 0;
+                ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_DRQ | ATA_STATUS_DSC;
+                ide_identify(ctrl);
+                ide_set_signature(ctrl);
+                ide_raise_irq(ctrl);
+            } else
+                ide_abort_command(ctrl);
             break;
 
         case 0xEC: // Identify
@@ -922,6 +1713,7 @@ static void ide_write(uint32_t port, uint32_t data)
                 ide_abort_command(ctrl);
             } else {
                 ide_identify(ctrl);
+                ctrl->error = 0;
                 ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_DRQ | ATA_STATUS_DSC;
                 ide_raise_irq(ctrl);
             }
@@ -930,6 +1722,27 @@ static void ide_write(uint32_t port, uint32_t data)
         case 0xEF: // Set Features
             IDE_LOG("Command: SET FEATURES [idx=%02x]\n", ctrl->feature);
             switch (ctrl->feature) {
+            case 3: // Set transfer mode
+                switch (ctrl->sector_count) {
+                case 0 ... 15: // PIO
+                    ctrl->mdma = 0;
+                    ctrl->udma = 0;
+                    break;
+                case 32 ... 39: // MDMA
+                    ctrl->mdma = 16 << (ctrl->sector_count & 7);
+                    ctrl->udma = 0;
+                    break;
+                case 64 ... 0x71: // UDMA
+                    ctrl->mdma = 0;
+                    ctrl->udma = 16 << (ctrl->sector_count & 7);
+                    break;
+                default:
+                    ide_abort_command(ctrl);
+                    return;
+                }
+                ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_DSC;
+                ide_raise_irq(ctrl);
+                break;
             case 2: // ?
             case 130: // ?
             case 0x66: // Windows XP writes to this one
@@ -960,6 +1773,8 @@ static void ide_write(uint32_t port, uint32_t data)
             break;
         case 0xF0:
         case 0xF5: // No clue, but Windows XP writes to this register
+        case 0xDA: // Windows 98 boot
+        case 0xDE: // Windows 2000 boot
             IDE_LOG("Command %02x unknown, aborting!\n", data);
             ide_abort_command(ctrl);
             break;
@@ -979,14 +1794,17 @@ static void ide_write(uint32_t port, uint32_t data)
                 // Clears BSY bit, sets DRDY
                 ctrl->status = ATA_STATUS_DRDY;
                 ctrl->error = 1;
-                ctrl->selected = 0;
                 ide_set_signature(ctrl);
+
+                // Reset to master after we have set the signature
+                ctrl->selected = 0;
 
                 // Cancel any pending requests, if any.
                 drive_cancel_transfers();
             }
         }
         ctrl->device_control = data;
+        ide_update_irq(ctrl);
         break;
     default:
         IDE_FATAL("Unknown IDE writeb: 0x%x\n", port);
@@ -996,15 +1814,54 @@ static void ide_write(uint32_t port, uint32_t data)
 // The following section is just for PCI-enabled DMA
 void ide_write_prdt(uint32_t addr, uint32_t data)
 {
-    IDE_FATAL("TODO: write prdt addr=%08x data=%02x\n", addr, data);
+    struct ide_controller* this = &ide[addr >> 3 & 1];
+    switch (addr & 7) {
+    case 0: {
+        uint8_t diffxor = this->dma_command ^ data;
+        if (diffxor & 1) { // Only update status bits if bit 0 changed.
+            this->dma_command = data & 9;
+            if ((data & 1) == 0)
+                return;
+            IDE_FATAL("TODO: run command\n");
+        }
+        break;
+    }
+    case 2:
+        this->dma_status &= ~(data & 6);
+        break;
+    default:
+        IDE_FATAL("TODO: write prdt addr=%08x data=%02x\n", addr, data);
+    }
 }
 uint32_t ide_read_prdt(uint32_t addr)
 {
-    IDE_FATAL("TODO: read prdt addr=%08x\n", addr);
+    struct ide_controller* this = &ide[addr >> 3 & 1];
+    switch (addr & 7) {
+    case 0:
+        return this->dma_command;
+    case 2:
+        return this->dma_status;
+    case 1:
+    case 3:
+        return 0; // Invalid
+    case 4:
+        return this->prdt_address >> 0 & 0xFF;
+    case 5:
+        return this->prdt_address >> 8 & 0xFF;
+    case 6:
+        return this->prdt_address >> 16 & 0xFF;
+    case 7:
+        return this->prdt_address >> 24 & 0xFF;
+    }
+    return 0; // unreachable
 }
 
 void ide_init(struct pc_settings* pc)
 {
+#ifdef PIO_LOG
+    test = fopen("idelog.txt", "wb");
+    setbuf(test, NULL);
+#endif
     io_register_reset(ide_reset);
     state_register(ide_state);
     io_register_read(0x1F0, 1, ide_pio_readb, ide_pio_readw, ide_pio_readd);
@@ -1032,15 +1889,21 @@ void ide_init(struct pc_settings* pc)
 
         int drive_id = i & 1;
         ctrl->info[drive_id] = info;
+        ctrl->dma_enabled = pc->pci_enabled;
 
         if (info->sectors != 0) {
             printf("Initializing disk %d\n", i);
+            // Set appropriate DMA status bit
+            ctrl->dma_status |= 0x20 << (i & 1);
+
+            // Note that we store all these values whether it's a CD-ROM drive or not.
+            // These values are bogus and ignored if they're an ATAPI drive.
             ctrl->sectors_per_track[drive_id << 1] = info->sectors_per_cylinder;
             ctrl->heads[drive_id << 1] = info->heads;
             ctrl->cylinders[drive_id << 1] = info->cylinders_per_head;
             ctrl->media_inserted[drive_id] = 1;
             ctrl->total_sectors_chs[drive_id] = info->cylinders_per_head * info->heads * info->sectors_per_cylinder;
-            ctrl->total_sectors[drive_id] = info->sectors;
+            ctrl->total_sectors[drive_id] = info->type == DRIVE_TYPE_CDROM ? info->sectors >> 2 : info->sectors; // Adjust for 2048-byte sectors
             ctrl->type[drive_id] = info->type;
         } else {
             ctrl->media_inserted[drive_id] = 0;
