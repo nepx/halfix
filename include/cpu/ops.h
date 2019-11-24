@@ -29,8 +29,8 @@ void cpu_neg8(uint8_t* dest_ptr);
 void cpu_neg16(uint16_t* dest_ptr);
 void cpu_neg32(uint32_t* dest_ptr);
 
-int cpu_muldiv8(int op, uint8_t src);
-int cpu_muldiv16(int op, uint16_t src);
+int cpu_muldiv8(int op, uint32_t src);
+int cpu_muldiv16(int op, uint32_t src);
 int cpu_muldiv32(int op, uint32_t src);
 uint8_t cpu_imul8(uint8_t op1, uint8_t op2);
 uint16_t cpu_imul16(uint16_t op1, uint16_t op2);
