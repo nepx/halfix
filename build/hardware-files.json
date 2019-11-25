@@ -224,5 +224,25 @@
         "additional_flags": [
             
         ]
+    },
+    "src/hardware/acpi.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/pc.h",
+            "include/drive.h",
+            "include/state.h",
+            "include/devices.h",
+            "include/util.h",
+            "include/io.h",
+            "include/pc.h",
+            "include/io.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+            
+        ]
     }
 }
