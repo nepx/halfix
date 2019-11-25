@@ -1125,6 +1125,28 @@ int callf(uint32_t eip, uint32_t cs, uint32_t oldeip, int is32)
     }
 }
 
+static void iret_handle_seg(int x){
+    uint16_t access = cpu.seg_access[x];
+    int invalid = 0, type = ACCESS_TYPE(access);
+    if((cpu.seg[x] & 0xFFFC) == 0) invalid = 1;
+    else if(cpu.cpl > ACCESS_DPL(access)){
+        switch(type){
+            case 0x1C ... 0x1F: // Conforming code
+            case 0x10 ... 0x17: // Data
+                invalid = 1;
+                break;
+        }
+    }
+    if(invalid){
+        // Mark as NULL and invalid
+        cpu.seg[x] = 0;
+        cpu.seg_access[x] = 0;
+        cpu.seg_base[x] = 0;
+        cpu.seg_limit[x] = 0;
+        cpu.seg_valid[x] = 0;
+    }
+}
+
 // Handles all interrupt returns
 int iret(uint32_t tss_eip, int is32)
 {
@@ -1326,6 +1348,11 @@ int iret(uint32_t tss_eip, int is32)
                     if (cpu_load_csip_protected(cs, &cs_info, eip))
                         return 1;
                     cpu.reg32[ESP] = (esp & esp_mask) | (cpu.reg32[ESP] & ~esp_mask);
+
+                    iret_handle_seg(ES);
+                    iret_handle_seg(FS);
+                    iret_handle_seg(GS);
+                    iret_handle_seg(DS);
                 } else { // Return to same privilege
                     if (cpu_load_csip_protected(cs, &cs_info, eip))
                         return 1;
