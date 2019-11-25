@@ -8,7 +8,19 @@
 void cpu_mmu_tlb_flush(void)
 {
     for (unsigned int i = 0; i < cpu.tlb_entry_count; i++) {
+        uint32_t entry = cpu.tlb_entry_indexes[i] & ((1 << 20) - 1);
+        cpu.tlb[entry] = NULL;
+        cpu.tlb_tags[entry] = 0xFF;
+        cpu.tlb_entry_indexes[i] = -1;
+    }
+    cpu.tlb_entry_count = 0;
+}
+void cpu_mmu_tlb_flush_nonglobal(void)
+{
+    for (unsigned int i = 0; i < cpu.tlb_entry_count; i++) {
         uint32_t entry = cpu.tlb_entry_indexes[i];
+        if(entry & 0x80000000) continue;
+        entry &= (1 << 20) - 1;
         cpu.tlb[entry] = NULL;
         cpu.tlb_tags[entry] = 0xFF;
         cpu.tlb_entry_indexes[i] = -1;
@@ -16,7 +28,7 @@ void cpu_mmu_tlb_flush(void)
     cpu.tlb_entry_count = 0;
 }
 
-static void cpu_set_tlb_entry(uint32_t lin, uint32_t phys, int user, int write)
+static void cpu_set_tlb_entry(uint32_t lin, uint32_t phys, int user, int write, int global)
 {
     // Mask out the A20 gate line here so that we don't have to do it after every access
     phys &= cpu.a20_mask;
@@ -49,7 +61,7 @@ static void cpu_set_tlb_entry(uint32_t lin, uint32_t phys, int user, int write)
         user_write = (tag_write | (!user | !write ? 3 : 0)) << TLB_USER_WRITE;
 
     uint32_t entry = lin >> 12;
-    cpu.tlb_entry_indexes[cpu.tlb_entry_count++] = entry;
+    cpu.tlb_entry_indexes[cpu.tlb_entry_count++] = entry | (global ? 0x80000000 : 0);
     cpu.tlb[entry] = (void*)(((uintptr_t)cpu.mem + phys) - lin);
     cpu.tlb_tags[entry] = system_read | system_write | user_read | user_write;
 }
@@ -69,7 +81,7 @@ static void cpu_write_phys(uint32_t addr, uint32_t data){
 int cpu_mmu_translate(uint32_t lin, int shift)
 {
     if (!(cpu.cr[0] & CR0_PG)) {
-        cpu_set_tlb_entry(lin & ~0xFFF, lin & ~0xFFF, 1, 1);
+        cpu_set_tlb_entry(lin & ~0xFFF, lin & ~0xFFF, 1, 1, 0);
         return 0; // No page faults at all!
     } else {
         // https://wiki.osdev.org/Paging
@@ -109,7 +121,7 @@ int cpu_mmu_translate(uint32_t lin, int shift)
 #endif
             }
             uint32_t phys = (page_directory_entry & 0xFFC00000) | (lin & 0x3FF000);
-            cpu_set_tlb_entry(lin & ~0xFFF, phys, user, write);
+            cpu_set_tlb_entry(lin & ~0xFFF, phys, user, write, page_directory_entry & 0x100);
         } else {
             page_table_entry = cpu_read_phys(page_table_entry_addr);
 
@@ -165,7 +177,7 @@ int cpu_mmu_translate(uint32_t lin, int shift)
                 cpu_instrument_paging_modified(page_table_entry_addr);
 #endif
             }
-        cpu_set_tlb_entry(lin & ~0xFFF, page_table_entry & ~0xFFF, user, write);
+        cpu_set_tlb_entry(lin & ~0xFFF, page_table_entry & ~0xFFF, user, write, page_table_entry & 0x100);
         }
         return 0;
     // A page fault has occurred
@@ -178,8 +190,7 @@ int cpu_mmu_translate(uint32_t lin, int shift)
         CPU_LOG("Address to translate: %08x [%s %sing]\n", lin, user ? "user" : "kernel", write ? "writ" : "read");
         CPU_LOG("CR3: %08x CPL: %d\n", cpu.cr[3], cpu.cpl);
         CPU_LOG("EIP: %08x ESP: %08x\n", VIRT_EIP(), cpu.reg32[ESP]);
-        //if(lin == 0x77f7f000/* || lin == 0x77f7efff*/)
-        //    __asm__("int3");
+        //if(lin == 0xe11fb2a0)__asm__("int3");
         //if(cpu.cpl == 3 && !user) __asm__("int3");
         EXCEPTION_PF(error_code);
         return -1; // Never reached

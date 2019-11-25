@@ -49,6 +49,8 @@
 #define BH 13
 #define ZR8 32
 
+#define XMM32(n) cpu.xmm32[(n) << 2]
+
 #define RESULT_INVALID (uint32_t) - 1
 
 #define CR0_PE 1
@@ -156,6 +158,8 @@ enum {
 #define ACCESS_B 0x4000
 #define ACCESS_AVL 0x1000
 
+#define MXCSR_MASK 0xFFFF
+
 #define DESC_ACCESS(info) ((info)->raw[1] >> 8 & 0xFFFF)
 #define IS_PRESENT(acc) ((acc & ACCESS_P) != 0)
 
@@ -206,6 +210,16 @@ struct cpu {
         uint16_t reg16[16 * 2];
         uint8_t reg8[16 * 4];
     };
+
+    // SSE registers
+    union {
+        uint32_t xmm32[32];
+        uint16_t xmm16[64];
+        uint8_t xmm8[128];
+        uint64_t xmm64[16];
+    };
+    uint32_t mxcsr;
+
     uint32_t esp_mask;
 
     // ========================================================================
@@ -523,6 +537,7 @@ void cpu_smc_set_code(uint32_t phys);
 
 // mmu.c
 void cpu_mmu_tlb_flush(void);
+void cpu_mmu_tlb_flush_nonglobal(void);
 int cpu_mmu_translate(uint32_t lin, int shift);
 void cpu_mmu_tlb_invalidate(uint32_t lin);
 

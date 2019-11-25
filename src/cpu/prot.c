@@ -12,10 +12,11 @@ int cpu_prot_set_cr(int cr, uint32_t v){
             break;
         case 3: // PDBR
             cpu.cr[3] &= ~0xFFF;
-            cpu_mmu_tlb_flush();
+            cpu_mmu_tlb_flush_nonglobal();
             break;
         case 4: 
-            if(diffxor & CR4_PSE) cpu_mmu_tlb_flush();
+            if(diffxor & (CR4_PGE | CR4_PAE | CR4_PSE | CR4_PCIDE | CR4_SMEP))
+                cpu_mmu_tlb_flush();
     }
     return 0;
 }
