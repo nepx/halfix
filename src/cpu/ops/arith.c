@@ -682,9 +682,9 @@ uint8_t cpu_imul8(uint8_t op1, uint8_t op2)
     uint16_t result = (uint16_t)(int8_t)op1 * (uint16_t)(int8_t)op2;
     cpu.laux = MUL;
     int8_t high = result >> 8, low = result;
-        cpu.lop1 = low >> 7;
-        cpu.lop2 = high;
-        cpu.lr = low;
+    cpu.lop1 = low >> 7;
+    cpu.lop2 = high;
+    cpu.lr = low;
     return (uint8_t)result;
 }
 uint16_t cpu_imul16(uint16_t op1, uint16_t op2)
@@ -692,9 +692,9 @@ uint16_t cpu_imul16(uint16_t op1, uint16_t op2)
     uint32_t result = (uint32_t)(int16_t)op1 * (uint32_t)(int16_t)op2;
     cpu.laux = MUL;
     int16_t high = result >> 16, low = result;
-        cpu.lop1 = low >> 15;
-        cpu.lop2 = high;
-        cpu.lr = low;
+    cpu.lop1 = low >> 15;
+    cpu.lop2 = high;
+    cpu.lr = low;
     return (uint16_t)result;
 }
 uint32_t cpu_imul32(uint32_t op1, uint32_t op2)
@@ -702,9 +702,9 @@ uint32_t cpu_imul32(uint32_t op1, uint32_t op2)
     uint64_t result = (uint64_t)(int32_t)op1 * (uint64_t)(int32_t)op2;
     cpu.laux = MUL;
     int32_t high = result >> 32, low = result;
-        cpu.lop1 = low >> 31;
-        cpu.lop2 = high;
-        cpu.lr = low;
+    cpu.lop1 = low >> 31;
+    cpu.lop2 = high;
+    cpu.lr = low;
     return (uint32_t)result;
 }
 
