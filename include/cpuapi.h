@@ -57,6 +57,8 @@ void cpu_set_break(void);
 
 // Requests that the CPU halt execution and return to the main loop
 void cpu_request_fast_return(int);
+// Requests that the CPU break out of the execution loop
+void cpu_cancel_execution_cycle(int reason);
 // Raise the INTR line to the CPU
 void cpu_raise_intr_line(void);
 void cpu_lower_intr_line(void);
