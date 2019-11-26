@@ -2245,9 +2245,9 @@ static int decode_0F28(struct decoded_instruction* i){
     int flags = parse_modrm(i, modrm, 6); // Always use standard REG decoding, regardless of operand size
     if(modrm < 0xC0){
         flags = swap_rm_reg(flags);
-        i->handler = op_movaps_x128x128;
+        i->handler = op_mov_x128x128;
     }else
-        i->handler = op_movaps_x128m128;
+        i->handler = op_mov_x128m128;
     i->flags = flags;
     return 0;
 }
@@ -2256,9 +2256,9 @@ static int decode_0F29(struct decoded_instruction* i){
     uint8_t modrm = rb();
     int flags = parse_modrm(i, modrm, 6); // Always use standard REG decoding, regardless of operand size
     if(modrm < 0xC0)
-        i->handler = op_movaps_x128x128;
+        i->handler = op_mov_x128x128;
     else
-        i->handler = op_movaps_x128m128;
+        i->handler = op_mov_x128m128;
     i->flags = flags;
     return 0;
 }
@@ -2267,9 +2267,9 @@ static int decode_0F2B(struct decoded_instruction* i){
     uint8_t modrm = rb();
     int flags = parse_modrm(i, modrm, 6);
     if(modrm < 0xC0)
-        i->handler = op_movaps_m128x128;
+        i->handler = op_mov_m128x128;
     else
-        i->handler = op_movaps_x128x128;
+        i->handler = op_mov_x128x128;
     i->flags = flags;
     return 0;
 }
@@ -2305,26 +2305,88 @@ static int decode_0F57(struct decoded_instruction* i)
     uint8_t modrm = rb();
     int flags = parse_modrm(i, modrm, 6); // Always use standard REG decoding, regardless of operand size
     if(modrm < 0xC0)
-        i->handler = op_xorps_x128m128;
+        i->handler = op_xor_x128m128;
     else
-        i->handler = op_xorps_x128x128;
+        i->handler = op_xor_x128x128;
     i->flags = flags;
     return 0;
 }
 
+static int decode_0F6E(struct decoded_instruction* i)
+{
+    // MOVQ reg, r/m
+    uint8_t modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    if(modrm < 0xC0){
+        static const insn_handler_t a[4] = {
+            op_mov_r64m32, // none - movd mmx
+            op_mov_x128m32, // 66 - movd sse
+            op_mov_r64m32, // F2 - invalid
+            op_mov_r64m32 // F3 - invalid
+        };
+        i->handler = a[sse_prefix];
+    } else {
+        static const insn_handler_t a[4] = {
+            op_mov_r64r32, // none - movd mmx
+            op_mov_x128r32, // 66 - movd sse
+            op_mov_r64r32, // F2 - invalid
+            op_mov_r64r32 // F3 - invalid
+        };
+        i->handler = a[sse_prefix];
+    }
+    i->flags = flags;
+    return 0;
+}
 static int decode_0F6F(struct decoded_instruction* i)
 {
     // MOVQ reg, r/m
     uint8_t modrm = rb();
     int flags = parse_modrm(i, modrm, 6);
-    if(modrm < 0xC0)
-        i->handler = op_xorps_x128m128;
-    else {
+    if(modrm < 0xC0){
+        static const insn_handler_t a[4] = {
+            op_movq_r64m64, // none - movq
+            op_movu_x128m128, // 66 - movdqa
+            op_movq_r64m64, // F2 - invalid, movq
+            op_mov_x128m128 // F3 - movdqu
+        };
+        i->handler = a[sse_prefix];
+    } else {
+        static const insn_handler_t a[4] = {
+            op_movq_r64r64, // none - movq
+            op_mov_x128x128, // 66 - movdqa
+            op_movq_r64r64, // F2 - invalid, movq
+            op_mov_x128x128 // F3 - movdqu
+        };
         flags = swap_rm_reg(flags);
-        i->handler = op_xorps_x128x128;
+        i->handler = a[sse_prefix];
     }
-    // TODO: finish
     i->flags = flags;
+    return 0;
+}
+static int decode_0F7E(struct decoded_instruction* i)
+{
+    // MOVQ reg, r/m
+    uint8_t modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    if(modrm < 0xC0){
+        static const insn_handler_t a[4] = {
+            op_mov_m32r64, // none - movd mmx
+            op_mov_m32x128, // 66 - movd sse
+            op_mov_m32r64, // F2 - invalid
+            op_mov_m32r64 // F3 - invalid
+        };
+        i->handler = a[sse_prefix];
+    } else {
+        static const insn_handler_t a[4] = {
+            op_mov_r32r64, // none - movd mmx
+            op_mov_r32x128, // 66 - movd sse
+            op_mov_r32r64, // F2 - invalid
+            op_mov_r32r64 // F3 - invalid
+        };
+        i->handler = a[sse_prefix];
+    }
+    i->flags = flags;
+    return 0;
 }
 
 static int decode_0FA0(struct decoded_instruction* i)
@@ -2730,6 +2792,32 @@ static int decode_0FC7(struct decoded_instruction* i)
         i->handler = op_cmpxchg8b_e32;
         return 0;
     }
+}
+
+static int decode_0FEF(struct decoded_instruction* i){
+    // PXOR reg, r/m
+    uint8_t modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    if(modrm < 0xC0){
+        static const insn_handler_t a[4] = {
+            op_xor_r64m64, // none - pxor mmx
+            op_xor_x128m128, // 66 - pxor sse
+            op_xor_r64m64, // F2 - invalid
+            op_xor_r64m64 // F3 - invalid
+        };
+        i->handler = a[sse_prefix];
+    } else {
+        static const insn_handler_t a[4] = {
+            op_xor_r64r64, // none - pxor mmx
+            op_xor_x128x128, // 66 - pxor sse
+            op_xor_r64m64, // F2 - invalid
+            op_xor_r64m64 // F3 - invalid
+        };
+        flags = swap_rm_reg(flags);
+        i->handler = a[sse_prefix];
+    }
+    i->flags = flags;
+    return 0;
 }
 
 static void set_smc(int length, uint32_t lin)
@@ -3197,8 +3285,8 @@ static const decode_handler_t table0F[256] = {
     /* 0F 6B */ decode_invalid0F,
     /* 0F 6C */ decode_invalid0F,
     /* 0F 6D */ decode_invalid0F,
-    /* 0F 6E */ decode_invalid0F,
-    /* 0F 6F */ decode_0F6F, // MOVQ, unsupported currently
+    /* 0F 6E */ decode_0F6E,
+    /* 0F 6F */ decode_0F6F,
     /* 0F 70 */ decode_invalid0F,
     /* 0F 71 */ decode_invalid0F,
     /* 0F 72 */ decode_invalid0F,
@@ -3213,7 +3301,7 @@ static const decode_handler_t table0F[256] = {
     /* 0F 7B */ decode_invalid0F,
     /* 0F 7C */ decode_invalid0F,
     /* 0F 7D */ decode_invalid0F,
-    /* 0F 7E */ decode_invalid0F,
+    /* 0F 7E */ decode_0F7E,
     /* 0F 7F */ decode_invalid0F,
     /* 0F 80 */ decode_jccv,
     /* 0F 81 */ decode_jccv,
@@ -3326,7 +3414,7 @@ static const decode_handler_t table0F[256] = {
     /* 0F EC */ decode_invalid0F,
     /* 0F ED */ decode_invalid0F,
     /* 0F EE */ decode_invalid0F,
-    /* 0F EF */ decode_ud,
+    /* 0F EF */ decode_0FEF,
     /* 0F F0 */ decode_invalid0F,
     /* 0F F1 */ decode_invalid0F,
     /* 0F F2 */ decode_invalid0F,

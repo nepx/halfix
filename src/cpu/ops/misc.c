@@ -7,6 +7,8 @@
 
 #define EXCEPTION_HANDLER return 1
 
+#define P4_SUPPORT
+
 void cpuid(void)
 {
     CPU_LOG("CPUID called with EAX=%08x\n", cpu.reg32[EAX]);
@@ -19,27 +21,52 @@ void cpuid(void)
         cpu.reg32[EBX] = 0x756e6547; // GenuineIntel
         break;
     case 1:
+#ifdef P4_SUPPORT
+        cpu.reg32[EAX] = 0x00000f12;
+        cpu.reg32[ECX] = 0;
+        cpu.reg32[EDX] = 0x1febfbff | cpu_apic_connected() << 9;
+        cpu.reg32[EBX] = 0x00010800;
+#else
         cpu.reg32[EAX] = 0x000006a0;
         cpu.reg32[ECX] = 0;
         cpu.reg32[EDX] = 0x1842c1bf | cpu_apic_connected() << 9;
         cpu.reg32[EBX] = 0x00010000;
+#endif
         break;
     case 2:
+#ifdef P4_SUPPORT
+        cpu.reg32[EAX] = 0x665b5001;
+        cpu.reg32[ECX] = 0;
+        cpu.reg32[EDX] = 0x007a7040;
+        cpu.reg32[EBX] = 0;
+#else
         cpu.reg32[EAX] = 0x00410601;
         cpu.reg32[ECX] = 0;
         cpu.reg32[EDX] = 0;
         cpu.reg32[EBX] = 0;
+#endif
         break;
     case 0x80000000:
+#ifdef P4_SUPPORT
+        cpu.reg32[EAX] = 0x80000004;
+        cpu.reg32[ECX] = cpu.reg32[EDX] = cpu.reg32[EBX] = 0;
+#else
         cpu.reg32[EAX] = 0x80000008;
         cpu.reg32[ECX] = cpu.reg32[EDX] = cpu.reg32[EBX] = 0;
+#endif
         break;
     case 0x80000001:
         cpu.reg32[EBX] = 0;
         cpu.reg32[ECX] = cpu.reg32[EDX] = cpu.reg32[EAX] = 0;
         break;
     case 0x80000002 ... 0x80000004: {
-        static const char* brand_string = "Halfix Virtual CPU                             ";
+        static const char* brand_string = 
+#ifdef P4_SUPPORT
+            "              Intel(R) Pentium(R) 4 CPU 1.80GHz"
+#else
+            "Halfix Virtual CPU                             "
+#endif
+        ;
         static const int reg_ids[] = { EAX, EBX, ECX, EDX }; // Note: not in ordinary A/C/D/B order
         int offset = (cpu.reg32[EAX] - 0x80000002) << 4;
         for (int i = 0; i < 16; i++) {
@@ -82,26 +109,22 @@ int rdmsr(uint32_t index, uint32_t* high, uint32_t* low)
         if(!cpu_apic_connected()) EXCEPTION_GP(0);
         value = cpu.apic_base;
         break;
-    case 0x8B: // ??
-    case 0x179: // MCG_CAP
-    case 0x17A: // MCG_STATUS
-    case 0x17B: // MCG_CTL
-    case 0x186: // EVNTSEL0
-    case 0x187: // EVNTSEL1
-    case 0x400: // MC0_CTL
-    case 0x19A: // ?? Windows Vista reads from this one
-    case 0x19B: // ??
-    case 0x19C: // ??
-    case 0x1A0: // ??
-    case 0x17: // ??
-        CPU_LOG("Unknown MSR: 0x%x\n", index); 
+    default:
+        CPU_LOG("Unknown MSR read: 0x%x\n", index); 
         value = 0;
+        break;
+    case 0x174 ... 0x176:
+        value = cpu.sysenter[index - 0x174];
+        break;
+    case 0xFE: // MTRR
+        value = 0x508;
+        break;
+    case 0x2FF:
+        value = 0xC06;
         break;
     case 0x10:
         value = cpu_get_cycles() - cpu.tsc_fudge;
         break;
-    default:
-        CPU_FATAL("Unknown MSR: 0x%x\n", index);
     }
 
     *high = value >> 32;
@@ -115,10 +138,19 @@ int rdmsr(uint32_t index, uint32_t* high, uint32_t* low)
 
 int wrmsr(uint32_t index, uint32_t high, uint32_t low)
 {
+    CPU_LOG("WRMSR index=%x\n", index);
     uint64_t msr_value = ((uint64_t)high) << 32 | (uint64_t)low;
     switch (index) {
+    case 0x1B:
+        cpu.apic_base = msr_value;
+        break;
+    case 0x174 ... 0x176: // SYSENTER
+        cpu.sysenter[index - 0x174] = low;
+        break;
     case 0x8B: // ??
     case 0x17: // ??
+    case 0xC1: // PERFCTR0
+    case 0xC2: // PERFCTR1
     case 0x179: // MCG_CAP
     case 0x17A: // MCG_STATUS
     case 0x17B: // MCG_CTL
@@ -126,13 +158,16 @@ int wrmsr(uint32_t index, uint32_t high, uint32_t low)
     case 0x187: // EVNTSEL1
     case 0x19A: // Windows Vista MSR
     case 0x19B: // ??
+    case 0xFE:
+    case 0x200 ... 0x2FF:
         CPU_LOG("Unknown MSR: 0x%x\n", index);
         break;
     case 0x10:
         cpu.tsc_fudge = cpu_get_cycles() - msr_value;
         break;
     default:
-        CPU_FATAL("Unknown MSR: 0x%x\n", index);
+        CPU_LOG("Unknown MSR write: 0x%x\n", index);
+        //CPU_FATAL("Unknown MSR: 0x%x\n", index);
     }
 
 #ifdef INSTRUMENT
