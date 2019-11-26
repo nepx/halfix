@@ -321,6 +321,9 @@ struct cpu {
     int interrupts_blocked;
     // The reason why we exited from the CPU loop
     int exit_reason;
+
+    uint32_t sysenter[3]; // CS, ESP, and EIP for SYSENTER instruction.
+
     // <<< END STRUCT "struct" >>>
 
     // ========================================================================
