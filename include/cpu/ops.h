@@ -8,6 +8,8 @@ int jmpf(uint32_t eip, uint32_t cs, uint32_t eip_after);
 int callf(uint32_t eip, uint32_t cs, uint32_t oldeip, int is32);
 int iret(uint32_t tss_eip, int is32);
 int retf(int adjust, int is32);
+int sysenter(void);
+int sysexit(void);
 
 // arith.c
 void cpu_arith8(int op, uint8_t* dest, uint8_t src);

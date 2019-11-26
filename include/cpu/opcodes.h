@@ -452,10 +452,31 @@ OPTYPE op_clts(struct decoded_instruction* i);
 OPTYPE op_wbinvd(struct decoded_instruction* i);
 OPTYPE op_prefetchh(struct decoded_instruction* i);
 
+OPTYPE op_sysenter(struct decoded_instruction* i);
+OPTYPE op_sysexit(struct decoded_instruction* i);
+OPTYPE op_ldmxcsr(struct decoded_instruction* i);
+OPTYPE op_stmxcsr(struct decoded_instruction* i);
+
 // FPU
 OPTYPE op_fpu_mem(struct decoded_instruction* i);
 OPTYPE op_fpu_reg(struct decoded_instruction* i);
 OPTYPE op_fwait(struct decoded_instruction* i);
+
+OPTYPE op_mfence(struct decoded_instruction* i);
+OPTYPE op_fxsave(struct decoded_instruction* i);
+OPTYPE op_fxrstor(struct decoded_instruction* i);
+
+// SSE
+OPTYPE op_movaps_x128x128(struct decoded_instruction* i);
+OPTYPE op_movaps_m128x128(struct decoded_instruction* i);
+OPTYPE op_movaps_x128m128(struct decoded_instruction* i);
+OPTYPE op_xorps_x128x128(struct decoded_instruction* i);
+OPTYPE op_xorps_x128m128(struct decoded_instruction* i);
+
+// MMX
+OPTYPE op_movq_r64r64(struct decoded_instruction* i);
+OPTYPE op_movq_m64r64(struct decoded_instruction* i);
+OPTYPE op_movq_r64m64(struct decoded_instruction* i);
 
 // <<< BEGIN AUTOGENERATE "string" >>>
 OPTYPE op_movsb16(struct decoded_instruction* i);

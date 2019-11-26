@@ -491,6 +491,16 @@ static int decode_0F(struct decoded_instruction* i)
 {
     return table0F[rb()](i);
 }
+
+// A variable set to see what the current SSE prefix is
+enum {
+    SSE_PREFIX_NONE = 0,
+    SSE_PREFIX_66,
+    SSE_PREFIX_F3,
+    SSE_PREFIX_F2
+};
+
+static int sse_prefix = 0;
 static int decode_prefix(struct decoded_instruction* i)
 {
     uint8_t prefix = rawp[-1];
@@ -499,6 +509,7 @@ static int decode_prefix(struct decoded_instruction* i)
     while (1) {
         switch (prefix) {
         case 0xF3: // repz
+            sse_prefix = 0xF3;
             if (!prefix_set)
                 if (find_instruction_length(15) == -1)
                     goto error;
@@ -507,6 +518,7 @@ static int decode_prefix(struct decoded_instruction* i)
             state_hash |= 4;
             break;
         case 0xF2: // repnz
+            sse_prefix = 0xF2;
             if (!prefix_set)
                 if (find_instruction_length(15) == -1)
                     goto error;
@@ -515,6 +527,7 @@ static int decode_prefix(struct decoded_instruction* i)
             state_hash |= 4;
             break;
         case 0x66: // Operand size
+            sse_prefix = 0x66;
             if (!prefix_set)
                 if (find_instruction_length(15) == -1)
                     goto error;
@@ -575,7 +588,7 @@ done:
                 valid = optable0F[prefix] & 0x80;
             else
                 valid = optable[prefix] & 0x80;
-            CPU_LOG("LOCK opcode=%02x valid=%d\n", prefix, valid);
+            //CPU_LOG("LOCK opcode=%02x valid=%d\n", prefix, valid);
             if (!valid)
                 goto error;
         }
@@ -585,8 +598,10 @@ done:
         seg_prefix[1] = SS;
         state_hash = cpu.state_hash;
     }
+    sse_prefix = 0;
     return return_value;
 error:
+    sse_prefix = 0;
     i->handler = op_ud_exception;
     return 1;
 }
@@ -2224,6 +2239,41 @@ static int decode_0F23(struct decoded_instruction* i)
     return 0;
 }
 
+static int decode_0F28(struct decoded_instruction* i){
+    // MOVAPS/MOVAPD -- Different instructions, same functionality
+    uint8_t modrm = rb();
+    int flags = parse_modrm(i, modrm, 6); // Always use standard REG decoding, regardless of operand size
+    if(modrm < 0xC0){
+        flags = swap_rm_reg(flags);
+        i->handler = op_movaps_x128x128;
+    }else
+        i->handler = op_movaps_x128m128;
+    i->flags = flags;
+    return 0;
+}
+static int decode_0F29(struct decoded_instruction* i){
+    // MOVAPS/MOVAPD
+    uint8_t modrm = rb();
+    int flags = parse_modrm(i, modrm, 6); // Always use standard REG decoding, regardless of operand size
+    if(modrm < 0xC0)
+        i->handler = op_movaps_x128x128;
+    else
+        i->handler = op_movaps_x128m128;
+    i->flags = flags;
+    return 0;
+}
+static int decode_0F2B(struct decoded_instruction* i){
+    // MOVNTPD/MOVNTPS
+    uint8_t modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    if(modrm < 0xC0)
+        i->handler = op_movaps_m128x128;
+    else
+        i->handler = op_movaps_x128x128;
+    i->flags = flags;
+    return 0;
+}
+
 static int decode_0F30(struct decoded_instruction* i)
 {
     i->flags = 0;
@@ -2241,6 +2291,40 @@ static int decode_0F32(struct decoded_instruction* i)
     i->flags = 0;
     i->handler = op_rdmsr;
     return 0;
+}
+
+static int decode_sysenter_sysexit(struct decoded_instruction* i) // 0F34, 0F35
+{
+    i->flags = 0;
+    i->handler = rawp[-1] & 1 ? op_sysexit : op_sysenter;
+    return 0;
+}
+
+static int decode_0F57(struct decoded_instruction* i)
+{
+    uint8_t modrm = rb();
+    int flags = parse_modrm(i, modrm, 6); // Always use standard REG decoding, regardless of operand size
+    if(modrm < 0xC0)
+        i->handler = op_xorps_x128m128;
+    else
+        i->handler = op_xorps_x128x128;
+    i->flags = flags;
+    return 0;
+}
+
+static int decode_0F6F(struct decoded_instruction* i)
+{
+    // MOVQ reg, r/m
+    uint8_t modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    if(modrm < 0xC0)
+        i->handler = op_xorps_x128m128;
+    else {
+        flags = swap_rm_reg(flags);
+        i->handler = op_xorps_x128x128;
+    }
+    // TODO: finish
+    i->flags = flags;
 }
 
 static int decode_0FA0(struct decoded_instruction* i)
@@ -2352,6 +2436,55 @@ static int decode_0FAD(struct decoded_instruction* i)
     else
         i->handler = SIZEOP(op_shrd_r16r16cl, op_shrd_r32r32cl);
     return 0;
+}
+static int decode_0FAE(struct decoded_instruction* i)
+{
+#if 1
+    uint8_t modrm = rb();
+    i->flags = parse_modrm(i, modrm, 0);
+    switch(modrm >> 3 & 7){
+        case 0:
+            if(modrm >= 0xC0) {
+                i->handler = op_ud_exception;
+                return 1;
+            }else 
+                i->handler = op_fxsave;
+            break;
+        case 1:
+            if(modrm >= 0xC0) {
+                i->handler = op_ud_exception;
+                return 1;
+            }else 
+                i->handler = op_fxrstor;
+            break;
+        case 2:
+            if(modrm >= 0xC0){
+                i->handler = op_ud_exception;
+                return 1;
+            } else
+                i->handler = op_ldmxcsr;
+            break;
+        case 3:
+            if(modrm >= 0xC0){
+                i->handler = op_ud_exception;
+                return 1;
+            } else
+                i->handler = op_stmxcsr;
+            break;
+        case 6:
+        case 5:
+        case 7: // *fence or clflush
+            // Whether or not CPUID is supported, we have to support this opcode since Windows 7 crashes if you trigger a #UD here. 
+            i->handler = op_mfence;
+            break;
+        default:
+            CPU_FATAL("Unknown opcode: 0F AE /%d\n", modrm >> 3 & 7);
+    }
+    return 0;
+#else
+    i->handler = op_ud_exception;
+    return 1;
+#endif
 }
 static int decode_0FAF(struct decoded_instruction* i)
 {
@@ -2961,15 +3094,15 @@ static const decode_handler_t table0F[256] = {
     /* 0F 04 */ decode_ud,
     /* 0F 05 */ decode_ud,
     /* 0F 06 */ decode_0F06,
-    /* 0F 07 */ decode_invalid0F,
+    /* 0F 07 */ decode_ud,
     /* 0F 08 */ decode_invalid0F,
     /* 0F 09 */ decode_0F09,
-    /* 0F 0A */ decode_invalid0F,
+    /* 0F 0A */ decode_ud,
     /* 0F 0B */ decode_0F0B,
-    /* 0F 0C */ decode_invalid0F,
+    /* 0F 0C */ decode_ud,
     /* 0F 0D */ decode_invalid0F,
-    /* 0F 0E */ decode_invalid0F,
-    /* 0F 0F */ decode_invalid0F,
+    /* 0F 0E */ decode_ud,
+    /* 0F 0F */ decode_ud,
     /* 0F 10 */ decode_invalid0F,
     /* 0F 11 */ decode_invalid0F,
     /* 0F 12 */ decode_ud, // MOVHLPS - not supported yet
@@ -2994,10 +3127,10 @@ static const decode_handler_t table0F[256] = {
     /* 0F 25 */ decode_invalid0F,
     /* 0F 26 */ decode_invalid0F,
     /* 0F 27 */ decode_invalid0F,
-    /* 0F 28 */ decode_invalid0F,
-    /* 0F 29 */ decode_invalid0F,
+    /* 0F 28 */ decode_0F28,
+    /* 0F 29 */ decode_0F29,
     /* 0F 2A */ decode_invalid0F,
-    /* 0F 2B */ decode_invalid0F,
+    /* 0F 2B */ decode_0F2B,
     /* 0F 2C */ decode_invalid0F,
     /* 0F 2D */ decode_invalid0F,
     /* 0F 2E */ decode_invalid0F,
@@ -3006,8 +3139,8 @@ static const decode_handler_t table0F[256] = {
     /* 0F 31 */ decode_0F31,
     /* 0F 32 */ decode_0F32,
     /* 0F 33 */ decode_invalid0F,
-    /* 0F 34 */ decode_invalid0F,
-    /* 0F 35 */ decode_invalid0F,
+    /* 0F 34 */ decode_sysenter_sysexit,
+    /* 0F 35 */ decode_sysenter_sysexit,
     /* 0F 36 */ decode_invalid0F,
     /* 0F 37 */ decode_invalid0F,
     /* 0F 38 */ decode_invalid0F,
@@ -3041,7 +3174,7 @@ static const decode_handler_t table0F[256] = {
     /* 0F 54 */ decode_invalid0F,
     /* 0F 55 */ decode_invalid0F,
     /* 0F 56 */ decode_invalid0F,
-    /* 0F 57 */ decode_invalid0F,
+    /* 0F 57 */ decode_0F57,
     /* 0F 58 */ decode_invalid0F,
     /* 0F 59 */ decode_invalid0F,
     /* 0F 5A */ decode_invalid0F,
@@ -3065,7 +3198,7 @@ static const decode_handler_t table0F[256] = {
     /* 0F 6C */ decode_invalid0F,
     /* 0F 6D */ decode_invalid0F,
     /* 0F 6E */ decode_invalid0F,
-    /* 0F 6F */ decode_ud, // MOVQ, unsupported currently
+    /* 0F 6F */ decode_0F6F, // MOVQ, unsupported currently
     /* 0F 70 */ decode_invalid0F,
     /* 0F 71 */ decode_invalid0F,
     /* 0F 72 */ decode_invalid0F,
@@ -3128,7 +3261,7 @@ static const decode_handler_t table0F[256] = {
     /* 0F AB */ decode_0FAB,
     /* 0F AC */ decode_0FAC,
     /* 0F AD */ decode_0FAD,
-    /* 0F AE */ decode_ud, // FXSAVE - TODO
+    /* 0F AE */ decode_0FAE, // FXSAVE - TODO
     /* 0F AF */ decode_0FAF,
     /* 0F B0 */ decode_0FB0,
     /* 0F B1 */ decode_0FB1,

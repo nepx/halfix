@@ -760,6 +760,9 @@ void cpu_exception(int vec, int code)
             vec = 8;
             code = 0 | EXCEPTION_HAS_ERROR_CODE; // Error code of double fault is always zero
         }
+#ifndef EMSCRIPTEN
+        CPU_LOG("HALFIX EXCEPTION: %02x(%04x) @ EIP=%08x lin=%08x\n", vec, code, VIRT_EIP(), LIN_EIP());
+#endif
         current_exception = vec;
         if (cpu_interrupt(vec, code, INTERRUPT_TYPE_EXCEPTION, VIRT_EIP()))
             current_exception = vec; // Error while handling exception
@@ -1527,4 +1530,77 @@ int retf(int adjust, int is32)
         }
         return 0;
     }
+}
+
+#define SYSENTER_CS 0
+#define SYSENTER_ESP 1
+#define SYSENTER_EIP 2
+
+static void reload_cs_base(void)
+{
+    // For sysenter/sysexit, virt_eip == lin_eip
+    uint32_t virt_eip = VIRT_EIP();
+    uint32_t lin_page = virt_eip >> 12,
+             shift = cpu.tlb_shift_read,
+             tag = cpu.tlb_tags[virt_eip >> 12] >> shift;
+    if (tag & 2) {
+        cpu.last_phys_eip = cpu.phys_eip + 0x1000;
+        return;
+    }
+    cpu.phys_eip = PTR_TO_PHYS(cpu.tlb[lin_page] + virt_eip);
+    cpu.last_phys_eip = cpu.phys_eip & ~0xFFF;
+    cpu.eip_phys_bias = virt_eip - cpu.phys_eip;
+}
+
+// Sysenter
+int sysenter(void){
+    uint32_t cs = cpu.sysenter[SYSENTER_CS],
+             cs_offset = cs & 0xFFFC;
+    if((cpu.cr[0] & CR0_PE) == 0 || cs_offset == 0) EXCEPTION_GP(0);
+
+    cpu.eflags &= ~(EFLAGS_IF | EFLAGS_VM);
+
+    SET_VIRT_EIP(cpu.sysenter[SYSENTER_EIP]);
+    cpu.reg32[ESP] = cpu.sysenter[SYSENTER_ESP];
+    cpu.seg[CS] = cs_offset;
+    cpu.seg_base[CS] = 0;
+    cpu.seg_limit[CS] = -1;
+    cpu.seg_access[CS] = ACCESS_S | 0x0B | ACCESS_P | ACCESS_G; // 32-bit, r/x code, accessed, present, 4kb granularity
+    cpu.cpl = 0;
+    cpu_prot_update_cpl();
+    cpu.state_hash = 0; // 32-bit code/data
+
+    cpu.seg[SS] = (cs_offset + 8) & 0xFFFC;
+    cpu.seg_base[SS] = 0;
+    cpu.seg_limit[SS] = -1;
+    cpu.seg_access[SS] = ACCESS_S | 0x03 | ACCESS_P | ACCESS_G | ACCESS_B; // 32-bit, r/x data, accessed, present, 4kb granularity, 32-bit
+    cpu.esp_mask = -1;
+
+    reload_cs_base();
+    return 0;
+}
+
+int sysexit(void){
+    uint32_t cs = cpu.sysenter[SYSENTER_CS],
+             cs_offset = cs & 0xFFFC;
+    if((cpu.cr[0] & CR0_PE) == 0 || cs_offset == 0 || cpu.cpl != 0) EXCEPTION_GP(0);
+
+    SET_VIRT_EIP(cpu.reg32[EDX]);
+    cpu.reg32[ESP] = cpu.reg32[ECX];
+    cpu.seg[CS] = (cpu.sysenter[SYSENTER_CS] | 3) + 16;
+    cpu.seg_base[CS] = 0;
+    cpu.seg_limit[CS] = -1;
+    cpu.seg_access[CS] = ACCESS_S | 0x0B | ACCESS_P | ACCESS_G | ACCESS_DPL_MASK; // 32-bit, r/x code, accessed, present, 4kb granularity, dpl=3
+    cpu.cpl = 3;
+    cpu_prot_update_cpl();
+    cpu.state_hash = 0; // 32-bit code/data
+
+    cpu.seg[SS] = (cpu.sysenter[SYSENTER_CS] | 3) +24;
+    cpu.seg_base[SS] = 0;
+    cpu.seg_limit[SS] = -1;
+    cpu.seg_access[SS] = ACCESS_S | 0x03 | ACCESS_P | ACCESS_G | ACCESS_B | ACCESS_DPL_MASK; // 32-bit, r/x data, accessed, present, 4kb granularity, 32-bit, dpl=3
+    cpu.esp_mask = -1;
+
+    reload_cs_base();
+    return 0;
 }

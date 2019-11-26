@@ -34,7 +34,11 @@
         INSTRUMENT_INSN();      \
         return cpu_get_trace(); \
     } while (0)
-#define EXCEP() do { cpu.cycles_to_run++; return cpu_get_trace(); } while(0)
+#define EXCEP()                 \
+    do {                        \
+        cpu.cycles_to_run++;    \
+        return cpu_get_trace(); \
+    } while (0)
 #define STOP2() return i
 #define R8(i) cpu.reg8[i]
 #define R16(i) cpu.reg16[i]
@@ -264,7 +268,8 @@ OPTYPE op_jmp_rel16(struct decoded_instruction* i)
 }
 OPTYPE op_jmpf(struct decoded_instruction* i)
 {
-    if(jmpf(i->imm32, i->disp16, VIRT_EIP() + I_LENGTH2(i->flags))) EXCEP();
+    if (jmpf(i->imm32, i->disp16, VIRT_EIP() + I_LENGTH2(i->flags)))
+        EXCEP();
     STOP();
 }
 OPTYPE op_jmpf_e16(struct decoded_instruction* i)
@@ -607,7 +612,7 @@ OPTYPE op_int(struct decoded_instruction* i)
 }
 OPTYPE op_into(struct decoded_instruction* i)
 {
-    if(cpu_get_of()){
+    if (cpu_get_of()) {
         if (cpu_interrupt(4, 0, INTERRUPT_TYPE_SOFTWARE, VIRT_EIP() + i->flags))
             EXCEP();
         STOP();
@@ -2404,7 +2409,7 @@ OPTYPE op_hlt(struct decoded_instruction* i)
 {
     if (cpu.cpl != 0)
         EXCEPTION_GP(0);
-    
+
     // Request a fast return from the CPU loop.
     cpu.cycles += cpu_get_cycles() - cpu.cycles;
     cpu.cycles_to_run = 1;
@@ -2425,12 +2430,14 @@ OPTYPE op_cpuid(struct decoded_instruction* i)
 }
 OPTYPE op_rdmsr(struct decoded_instruction* i)
 {
-    if(rdmsr(cpu.reg32[ECX], &cpu.reg32[EDX], &cpu.reg32[EAX])) EXCEP();
+    if (rdmsr(cpu.reg32[ECX], &cpu.reg32[EDX], &cpu.reg32[EAX]))
+        EXCEP();
     NEXT2(i->flags);
 }
 OPTYPE op_wrmsr(struct decoded_instruction* i)
 {
-    if(wrmsr(cpu.reg32[ECX], cpu.reg32[EDX], cpu.reg32[EAX])) EXCEP();
+    if (wrmsr(cpu.reg32[ECX], cpu.reg32[EDX], cpu.reg32[EAX]))
+        EXCEP();
     NEXT2(i->flags);
 }
 OPTYPE op_rdtsc(struct decoded_instruction* i)
@@ -3044,385 +3051,523 @@ OPTYPE op_fwait(struct decoded_instruction* i)
         EXCEP();
     NEXT2(i->flags);
 }
+
+OPTYPE op_sysenter(struct decoded_instruction* i){
+    UNUSED(i);
+    if(sysenter()) EXCEP();
+    STOP();
+}
+OPTYPE op_sysexit(struct decoded_instruction* i){
+    UNUSED(i);
+    if(sysexit()) EXCEP();
+    STOP();
+}
+
 // String operations
 // <<< BEGIN AUTOGENERATE "string" >>>
-OPTYPE op_movsb16(struct decoded_instruction* i){
+OPTYPE op_movsb16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = movsb16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_movsb32(struct decoded_instruction* i){
+OPTYPE op_movsb32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = movsb32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_movsw16(struct decoded_instruction* i){
+OPTYPE op_movsw16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = movsw16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_movsw32(struct decoded_instruction* i){
+OPTYPE op_movsw32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = movsw32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_movsd16(struct decoded_instruction* i){
+OPTYPE op_movsd16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = movsd16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_movsd32(struct decoded_instruction* i){
+OPTYPE op_movsd32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = movsd32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_stosb16(struct decoded_instruction* i){
+OPTYPE op_stosb16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = stosb16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_stosb32(struct decoded_instruction* i){
+OPTYPE op_stosb32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = stosb32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_stosw16(struct decoded_instruction* i){
+OPTYPE op_stosw16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = stosw16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_stosw32(struct decoded_instruction* i){
+OPTYPE op_stosw32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = stosw32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_stosd16(struct decoded_instruction* i){
+OPTYPE op_stosd16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = stosd16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_stosd32(struct decoded_instruction* i){
+OPTYPE op_stosd32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = stosd32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_scasb16(struct decoded_instruction* i){
+OPTYPE op_scasb16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = scasb16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_scasb32(struct decoded_instruction* i){
+OPTYPE op_scasb32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = scasb32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_scasw16(struct decoded_instruction* i){
+OPTYPE op_scasw16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = scasw16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_scasw32(struct decoded_instruction* i){
+OPTYPE op_scasw32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = scasw32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_scasd16(struct decoded_instruction* i){
+OPTYPE op_scasd16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = scasd16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_scasd32(struct decoded_instruction* i){
+OPTYPE op_scasd32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = scasd32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_insb16(struct decoded_instruction* i){
+OPTYPE op_insb16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = insb16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_insb32(struct decoded_instruction* i){
+OPTYPE op_insb32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = insb32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_insw16(struct decoded_instruction* i){
+OPTYPE op_insw16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = insw16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_insw32(struct decoded_instruction* i){
+OPTYPE op_insw32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = insw32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_insd16(struct decoded_instruction* i){
+OPTYPE op_insd16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = insd16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_insd32(struct decoded_instruction* i){
+OPTYPE op_insd32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = insd32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_outsb16(struct decoded_instruction* i){
+OPTYPE op_outsb16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = outsb16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_outsb32(struct decoded_instruction* i){
+OPTYPE op_outsb32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = outsb32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_outsw16(struct decoded_instruction* i){
+OPTYPE op_outsw16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = outsw16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_outsw32(struct decoded_instruction* i){
+OPTYPE op_outsw32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = outsw32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_outsd16(struct decoded_instruction* i){
+OPTYPE op_outsd16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = outsd16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_outsd32(struct decoded_instruction* i){
+OPTYPE op_outsd32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = outsd32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_cmpsb16(struct decoded_instruction* i){
+OPTYPE op_cmpsb16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = cmpsb16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_cmpsb32(struct decoded_instruction* i){
+OPTYPE op_cmpsb32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = cmpsb32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_cmpsw16(struct decoded_instruction* i){
+OPTYPE op_cmpsw16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = cmpsw16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_cmpsw32(struct decoded_instruction* i){
+OPTYPE op_cmpsw32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = cmpsw32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_cmpsd16(struct decoded_instruction* i){
+OPTYPE op_cmpsd16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = cmpsd16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_cmpsd32(struct decoded_instruction* i){
+OPTYPE op_cmpsd32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = cmpsd32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_lodsb16(struct decoded_instruction* i){
+OPTYPE op_lodsb16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = lodsb16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_lodsb32(struct decoded_instruction* i){
+OPTYPE op_lodsb32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = lodsb32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_lodsw16(struct decoded_instruction* i){
+OPTYPE op_lodsw16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = lodsw16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_lodsw32(struct decoded_instruction* i){
+OPTYPE op_lodsw32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = lodsw32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_lodsd16(struct decoded_instruction* i){
+OPTYPE op_lodsd16(struct decoded_instruction* i)
+{
     int flags = i->flags, result = lodsd16(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
-OPTYPE op_lodsd32(struct decoded_instruction* i){
+OPTYPE op_lodsd32(struct decoded_instruction* i)
+{
     int flags = i->flags, result = lodsd32(flags);
-    if(result == 0) NEXT(flags);
+    if (result == 0)
+        NEXT(flags);
 #ifdef INSTRUMENT
-    else if(result == 1) STOP2();
+    else if (result == 1)
+        STOP2();
     else
 #endif
-    EXCEP();
+        EXCEP();
 }
 
 // <<< END AUTOGENERATE "string" >>>
