@@ -25,7 +25,7 @@ void cpu_mmu_tlb_flush_nonglobal(void)
         cpu.tlb_tags[entry] = 0xFF;
         cpu.tlb_entry_indexes[i] = -1;
     }
-    cpu.tlb_entry_count = 0;
+    cpu.tlb_entry_count = cpu.tlb_entry_count; // We may still have global entries. 
 }
 
 static void cpu_set_tlb_entry(uint32_t lin, uint32_t phys, int user, int write, int global)
@@ -190,7 +190,7 @@ int cpu_mmu_translate(uint32_t lin, int shift)
         CPU_LOG("Address to translate: %08x [%s %sing]\n", lin, user ? "user" : "kernel", write ? "writ" : "read");
         CPU_LOG("CR3: %08x CPL: %d\n", cpu.cr[3], cpu.cpl);
         CPU_LOG("EIP: %08x ESP: %08x\n", VIRT_EIP(), cpu.reg32[ESP]);
-        //if(lin == 0xe11fb2a0)__asm__("int3");
+        //if(lin == 0x804d4da0)__asm__("int3");
         //if(cpu.cpl == 3 && !user) __asm__("int3");
         EXCEPTION_PF(error_code);
         return -1; // Never reached
