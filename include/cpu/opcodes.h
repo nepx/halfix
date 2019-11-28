@@ -478,17 +478,32 @@ OPTYPE op_mov_x128r32(struct decoded_instruction* i);
 OPTYPE op_mov_x128m32(struct decoded_instruction* i);
 OPTYPE op_mov_r32x128(struct decoded_instruction* i);
 OPTYPE op_mov_m32x128(struct decoded_instruction* i);
+OPTYPE op_sse_pshift_x128x128(struct decoded_instruction* i);
+OPTYPE op_sse_pshift_x128i8(struct decoded_instruction* i);
+OPTYPE op_sse_pshift_x128m128(struct decoded_instruction* i);
+OPTYPE op_sse_pshift128_x128i8(struct decoded_instruction* i);
+OPTYPE op_sse_punpckl_x128x128(struct decoded_instruction* i);
+OPTYPE op_sse_punpckl_x128m128(struct decoded_instruction* i);
+OPTYPE op_sse_pmullw_x128x128(struct decoded_instruction* i);
+OPTYPE op_sse_pmullw_x128m128(struct decoded_instruction* i);
 
 // MMX
-OPTYPE op_movq_r64r64(struct decoded_instruction* i);
-OPTYPE op_movq_m64r64(struct decoded_instruction* i);
-OPTYPE op_movq_r64m64(struct decoded_instruction* i);
+OPTYPE op_mov_r64r64(struct decoded_instruction* i);
+OPTYPE op_mov_m64r64(struct decoded_instruction* i);
+OPTYPE op_mov_r64m64(struct decoded_instruction* i);
 OPTYPE op_xor_r64r64(struct decoded_instruction* i);
 OPTYPE op_xor_r64m64(struct decoded_instruction* i);
 OPTYPE op_mov_r64r32(struct decoded_instruction* i);
 OPTYPE op_mov_r64m32(struct decoded_instruction* i);
 OPTYPE op_mov_r32r64(struct decoded_instruction* i);
 OPTYPE op_mov_m32r64(struct decoded_instruction* i);
+OPTYPE op_mmx_pshift_r64x64(struct decoded_instruction* i);
+OPTYPE op_mmx_pshift_r64i8(struct decoded_instruction* i);
+OPTYPE op_mmx_pshift_r64m64(struct decoded_instruction* i);
+OPTYPE op_mmx_punpckl_r64r64(struct decoded_instruction* i);
+OPTYPE op_mmx_punpckl_r64m64(struct decoded_instruction* i);
+OPTYPE op_mmx_pmullw_r64r64(struct decoded_instruction* i);
+OPTYPE op_mmx_pmullw_r64m64(struct decoded_instruction* i);
 
 // <<< BEGIN AUTOGENERATE "string" >>>
 OPTYPE op_movsb16(struct decoded_instruction* i);

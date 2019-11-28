@@ -1,10 +1,12 @@
 // SSE operations
+// Note: We use the I_OP2 to indicate whether the instruction is register/memory.
 #include "cpu/cpu.h"
 #include "cpu/fpu.h"
 #include "cpu/instrument.h"
 #include "cpu/opcodes.h"
 #include "cpu/ops.h"
 #include "io.h"
+#include <string.h>
 #define EXCEPTION_HANDLER return 1
 
 int cpu_sse_exception(void)
@@ -18,7 +20,9 @@ int cpu_sse_exception(void)
         EXCEPTION_NM();
     return 0;
 }
-#define CHECK_SSE if(cpu_sse_exception()) EXCEP()
+#define CHECK_SSE            \
+    if (cpu_sse_exception()) \
+    EXCEP()
 
 // Transfers 128 bits in one operation
 void cpu_mov128(void* dest, void* src)
@@ -163,6 +167,99 @@ int cpu_read64(uint32_t linaddr, void* x)
     return 0;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// Pointer functions
+///////////////////////////////////////////////////////////////////////////////
+// get_ptr128_read: result_ptr contains either a direct pointer to memory or to
+//                  temp.d128. 16 bytes of memory at this location are
+//                  guaranteed to be valid and contain the exact bytes at linaddr.
+//                  Modifying the bytes at this location
+//                  may or may not modify actual memory, and you shouldn't be
+//                  doing this anyways since the read TLB is used.
+// get_ptr128_write: result_ptr contains either a direct pointer to memory or to
+//                   temp.d128. 16 bytes of memory at this location are
+//                   guaranteed to be writable, but they may or may not contain
+//                   valid memory bytes. All 16 bytes must be written or else
+//                   memory corruption may occur. After you are done, call the
+//                   WRITE_BACK() macro to commit the write to memory.
+static union {
+    uint32_t d32;
+    uint32_t d128[4];
+} temp;
+// This is the actual pointer we can read/write.
+static void* result_ptr;
+
+#if 0
+// This is the linear address to the memory just in case a write was not aligned.
+static uint32_t write_linaddr,
+    // Indicate if we need a separate write-back procedure
+    write_back;
+#endif
+
+static int get_ptr128_read(uint32_t linaddr)
+{
+    if (linaddr & 15) 
+        EXCEPTION_GP(0);
+    int shift = cpu.tlb_shift_write;
+    uint8_t tag = cpu.tlb_tags[linaddr >> 12] >> shift;
+    if (tag & 2) {
+        if (cpu_mmu_translate(linaddr, shift))
+            return 1;
+        tag = cpu.tlb_tags[linaddr >> 12] >> shift;
+    }
+    uint32_t* host_ptr = cpu.tlb[linaddr >> 12] + linaddr;
+    uint32_t phys = PTR_TO_PHYS(host_ptr);
+    // Check for MMIO areas
+    if ((phys >= 0xA0000 && phys < 0xC0000) || (phys >= cpu.memory_size)) {
+        temp.d128[0] = io_handle_mmio_read(phys, 2);
+        temp.d128[1] = io_handle_mmio_read(phys + 4, 2);
+        temp.d128[2] = io_handle_mmio_read(phys + 8, 2);
+        temp.d128[3] = io_handle_mmio_read(phys + 12, 2);
+        return 0;
+    }
+    result_ptr = host_ptr;
+    return 0;
+}
+
+#if 0
+static int get_ptr128_write(uint32_t linaddr)
+{
+    // We just need to provide 16 valid bytes to the caller.
+    // We can deal with writing later
+    if (linaddr & 15) 
+        EXCEPTION_GP(0);
+    int shift = cpu.tlb_shift_write;
+    uint8_t tag = cpu.tlb_tags[linaddr >> 12] >> shift;
+    if (tag & 2) {
+        if (cpu_mmu_translate(linaddr, shift))
+            return 1;
+        tag = cpu.tlb_tags[linaddr >> 12] >> shift;
+    }
+    uint32_t* host_ptr = cpu.tlb[linaddr >> 12] + linaddr;
+    uint32_t phys = PTR_TO_PHYS(host_ptr);
+    // Check for MMIO areas
+    if ((phys >= 0xA0000 && phys < 0xC0000) || (phys >= cpu.memory_size)) {
+        write_back = 1;
+        write_linaddr = linaddr;
+        result_ptr = temp.d128;
+        return 0;
+    }
+    write_back = 0;
+    result_ptr = host_ptr;
+    return 0;
+}
+static inline int commit_write(void)
+{
+    if (write_back) {
+        if (cpu_write128(write_linaddr, temp.d128))
+            return 1;
+    }
+    return 0;
+}
+#define WRITE_BACK()    \
+    if (commit_write()) \
+    return 1
+#endif
 // Actual SSE operations
 
 // XOR
@@ -172,6 +269,100 @@ void cpu_sse_xorps(uint32_t* dest, uint32_t* src)
     dest[1] ^= src[1];
     dest[2] ^= src[2];
     dest[3] ^= src[3];
+}
+
+// Interleave bytes, generic function for MMX/SSE
+void punpckl(void* dst, void* src, int size, int copysize)
+{
+    // XXX -- make this faster
+    uint8_t *dst8 = dst, *src8 = src, tmp[16];
+    int idx = 0, nidx = 0;
+    while (idx < size) {
+        for (int i = 0; i < copysize; i++)
+            tmp[idx++] = dst8[nidx + i]; // Copy destination bytes
+        for (int i = 0; i < copysize; i++)
+            tmp[idx++] = src8[nidx + i]; // Copy source bytes
+        nidx += copysize;
+    }
+    memcpy(dst, tmp, size);
+}
+void pmullw(uint16_t* dest, uint16_t* src, int wordcount){
+    for(int i=0;i<wordcount;i++) {
+        uint32_t result = (uint32_t)(int16_t)dest[i] * (uint32_t)(int16_t)src[i];
+        dest[i] = result;
+    }
+}
+void cpu_psraw(uint16_t* a, int shift, int mask, int wordcount)
+{
+    // SAR but with MMX/SSE operands
+    for (int i = 0; i < wordcount; i++)
+        a[i] = (int16_t)a[i] >> shift & mask;
+}
+void cpu_psrlw(uint16_t* a, int shift, int mask, int wordcount)
+{
+    // SHR but with MMX/SSE operands
+    for (int i = 0; i < wordcount; i++)
+        a[i] = a[i] >> shift & mask;
+}
+void cpu_psllw(uint16_t* a, int shift, int mask, int wordcount)
+{
+    // SHL but with MMX/SSE operands
+    for (int i = 0; i < wordcount; i++)
+        a[i] = a[i] << shift & mask;
+}
+void cpu_psrad(uint32_t* a, int shift, int mask, int dwordcount)
+{
+    for (int i = 0; i < dwordcount; i++)
+        a[i] = (int32_t)a[i] >> shift & mask;
+}
+void cpu_psrld(uint32_t* a, int shift, int mask, int dwordcount)
+{
+    for (int i = 0; i < dwordcount; i++)
+        a[i] = a[i] >> shift & mask;
+}
+void cpu_pslld(uint32_t* a, int shift, int mask, int dwordcount)
+{
+    for (int i = 0; i < dwordcount; i++)
+        a[i] = a[i] << shift & mask;
+}
+void cpu_psraq(uint64_t* a, int shift, int mask, int qwordcount)
+{
+    for (int i = 0; i < qwordcount; i++)
+        a[i] = (int64_t)a[i] >> shift & mask;
+}
+void cpu_psrlq(uint64_t* a, int shift, int mask, int qwordcount)
+{
+    for (int i = 0; i < qwordcount; i++)
+        a[i] = a[i] >> shift & mask;
+}
+void cpu_psllq(uint64_t* a, int shift, int mask, int qwordcount)
+{
+    for (int i = 0; i < qwordcount; i++)
+        a[i] = a[i] << shift & mask;
+}
+static void cpu_pslldq(uint64_t* a, int shift, int mask)
+{
+    if (mask == 0) {
+        a[0] = 0;
+        a[1] = 0;
+        return;
+    }
+    // This is a 128 bit SHL shift for xmm registers only
+    a[0] <<= shift; // Bottom bits should be 0
+    a[0] |= a[1] >> (64L - shift);
+    a[1] <<= shift;
+}
+static void cpu_psrldq(uint64_t* a, int shift, int mask)
+{
+    if (mask == 0) {
+        a[0] = 0;
+        a[1] = 0;
+        return;
+    }
+    // This is a 128 bit SHR shift for xmm registers only
+    a[1] >>= shift;
+    a[1] |= a[0] << (64L - shift);
+    a[0] >>= shift;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -220,10 +411,12 @@ static inline uint32_t cpu_get_linaddr(uint32_t i, struct decoded_instruction* j
     return FAST_BRANCHLESS_MASK(addr, i) + cpu.seg_base[I_SEG_BASE(i)];
 }
 
-static union {
-    uint32_t d32;
-    uint32_t d128[4];
-} temp;
+#define read128(linaddr, data)      \
+    if (cpu_read128(linaddr, data)) \
+    EXCEP()
+#define write128(linaddr, data)      \
+    if (cpu_write128(linaddr, data)) \
+    EXCEP()
 
 OPTYPE op_ldmxcsr(struct decoded_instruction* i)
 {
@@ -367,32 +560,172 @@ OPTYPE op_xor_x128m128(struct decoded_instruction* i)
     NEXT(flags);
 }
 
-#if 0
-static inline int getmask(uint32_t* a, int n){
+static inline int getmask(uint32_t* a, unsigned int n)
+{
     // Same as a >= n ? 0 : -1
     return -!(a[1] | a[2] | a[3] | (a[0] > (n - 1)));
 }
-OPTYPE op_psrlw_r64r64(struct decoded_instruction* i){
+static inline int getmask2(uint32_t a, unsigned int n)
+{
+    // Same as a >= n ? 0 : -1
+    return -(a < (n - 1));
+}
+
+OPTYPE op_sse_pshift_x128x128(struct decoded_instruction* i)
+{
     CHECK_SSE;
-    uint32_t flags = i->flags, shift = MM(I_REG(flags)).r32[0] & 15, mask = getmask(MM(I_REG(flags)).r32, 16);
-    uint16_t* x = MM(I_REG(flags)).r16;
-    x[0] = ((uint32_t)x[0] >> shift) & mask;
-    x[1] = ((uint32_t)x[1] >> shift) & mask;
-    x[2] = ((uint32_t)x[2] >> shift) & mask;
-    x[3] = ((uint32_t)x[3] >> shift) & mask;
+    uint32_t flags = i->flags, shift = XMM32(I_RM(flags));
+    void *x = &XMM32(I_REG(flags)), *maskptr = &XMM32(I_RM(flags));
+    switch (i->imm16 >> 8 & 15) {
+    case 0: // PSRLW
+        cpu_psrlw(x, shift & 15, getmask(maskptr, 16), 8);
+        break;
+    case 1: // PSRAW
+        cpu_psraw(x, shift & 15, getmask(maskptr, 16), 8);
+        break;
+    case 2: // PSLLW
+        cpu_psllw(x, shift & 15, getmask(maskptr, 16), 8);
+        break;
+    case 3: // PSRLD
+        cpu_psrld(x, shift & 31, getmask(maskptr, 32), 4);
+        break;
+    case 4: // PSRAD
+        cpu_psrad(x, shift & 31, getmask(maskptr, 32), 4);
+        break;
+    case 5: // PSLLD
+        cpu_pslld(x, shift & 31, getmask(maskptr, 32), 4);
+        break;
+    case 6: // PSRLQ
+        cpu_psrlq(x, shift & 63, getmask(maskptr, 64), 2);
+        break;
+    case 7: // PSRAQ
+        cpu_psraq(x, shift & 63, getmask(maskptr, 64), 2);
+        break;
+    case 8: // PSLLQ
+        cpu_psllq(x, shift & 63, getmask(maskptr, 64), 2);
+        break;
+    }
     NEXT(flags);
 }
-OPTYPE op_psrlw_r64m64(struct decoded_instruction* i){
-    CHECK_MMX;
-    uint32_t flags = i->flags, linaddr = cpu_get_linaddr(flags, i), shift, mask;
-    read64(linaddr, temp.d64);
-    shift = temp.d64 & 15;
-    mask = -(shift <= 15) & 0xFFFF;
-    uint16_t* x = MM(I_REG(flags)).r16;
-    x[0] = ((uint32_t)x[0] >> shift) & mask;
-    x[1] = ((uint32_t)x[1] >> shift) & mask;
-    x[2] = ((uint32_t)x[2] >> shift) & mask;
-    x[3] = ((uint32_t)x[3] >> shift) & mask;
+
+OPTYPE op_sse_pshift_x128i8(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags, shift = i->imm8;
+    void* x = &XMM32(I_REG(flags));
+    switch (i->imm16 >> 8 & 15) {
+    case 0: // PSRLW
+        cpu_psrlw(x, shift & 15, getmask2(shift, 16), 8);
+        break;
+    case 1: // PSRAW
+        cpu_psraw(x, shift & 15, getmask2(shift, 16), 8);
+        break;
+    case 2: // PSLLW
+        cpu_psllw(x, shift & 15, getmask2(shift, 16), 8);
+        break;
+    case 3: // PSRLD
+        cpu_psrld(x, shift & 31, getmask2(shift, 32), 4);
+        break;
+    case 4: // PSRAD
+        cpu_psrad(x, shift & 31, getmask2(shift, 32), 4);
+        break;
+    case 5: // PSLLD
+        cpu_pslld(x, shift & 31, getmask2(shift, 32), 4);
+        break;
+    case 6: // PSRLQ
+        cpu_psrlq(x, shift & 63, getmask2(shift, 64), 2);
+        break;
+    case 7: // PSRAQ
+        cpu_psraq(x, shift & 63, getmask2(shift, 64), 2);
+        break;
+    case 8: // PSLLQ
+        cpu_psllq(x, shift & 63, getmask2(shift, 64), 2);
+        break;
+    }
     NEXT(flags);
 }
-#endif
+
+OPTYPE op_sse_pshift_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags, shift, linaddr = cpu_get_linaddr(flags, i);
+    void *x = &XMM32(I_REG(flags)), *maskptr;
+    read128(linaddr, temp.d128);
+    shift = temp.d32;
+    maskptr = temp.d128;
+    switch (i->imm16 >> 8 & 15) {
+    case 0: // PSRLW
+        cpu_psrlw(x, shift & 15, getmask(maskptr, 16), 8);
+        break;
+    case 1: // PSRAW
+        cpu_psraw(x, shift & 15, getmask(maskptr, 16), 8);
+        break;
+    case 2: // PSLLW
+        cpu_psllw(x, shift & 15, getmask(maskptr, 16), 8);
+        break;
+    case 3: // PSRLD
+        cpu_psrld(x, shift & 31, getmask(maskptr, 32), 4);
+        break;
+    case 4: // PSRAD
+        cpu_psrad(x, shift & 31, getmask(maskptr, 32), 4);
+        break;
+    case 5: // PSLLD
+        cpu_pslld(x, shift & 31, getmask(maskptr, 32), 4);
+        break;
+    case 6: // PSRLQ
+        cpu_psrlq(x, shift & 63, getmask(maskptr, 64), 2);
+        break;
+    case 7: // PSRAQ
+        cpu_psraq(x, shift & 63, getmask(maskptr, 64), 2);
+        break;
+    case 8: // PSLLQ
+        cpu_psllq(x, shift & 63, getmask(maskptr, 64), 2);
+        break;
+    }
+    NEXT(flags);
+}
+
+OPTYPE op_sse_pshift128_x128i8(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags, shift = i->imm8;
+    void* x = &XMM32(I_REG(flags));
+    if (i->imm16 >> 8 & 15)
+        cpu_pslldq(x, (shift & 15) << 3, shift < 16);
+    else
+        cpu_psrldq(x, (shift & 15) << 3, shift < 16);
+    NEXT(flags);
+}
+
+OPTYPE op_sse_punpckl_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    punpckl(&XMM32(I_REG(flags)), &XMM32(I_RM(flags)), 16, i->imm8);
+    NEXT(flags);
+}
+OPTYPE op_sse_punpckl_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    punpckl(&XMM32(I_REG(flags)), result_ptr, 16, i->imm8);
+    NEXT(flags);
+}
+OPTYPE op_sse_pmullw_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    pmullw(&XMM16(I_REG(flags)), &XMM16(I_RM(flags)), 8);
+    NEXT(flags);
+}
+OPTYPE op_sse_pmullw_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    pmullw(&XMM16(I_REG(flags)), result_ptr, 8);
+    NEXT(flags);
+}
