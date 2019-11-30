@@ -496,8 +496,8 @@ static int decode_0F(struct decoded_instruction* i)
 enum {
     SSE_PREFIX_NONE = 0,
     SSE_PREFIX_66,
-    SSE_PREFIX_F3,
-    SSE_PREFIX_F2
+    SSE_PREFIX_F2,
+    SSE_PREFIX_F3
 };
 
 static int sse_prefix = 0;
@@ -2165,6 +2165,18 @@ static int decode_0F0B(struct decoded_instruction* i)
     i->handler = op_ud_exception;
     return 1;
 }
+static int decode_movhlps(struct decoded_instruction* i)
+{
+    uint8_t opcode = rawp[-1], modrm = rb();
+    if(modrm >= 0xC0){
+        i->handler = op_ud_exception;
+        return 1;
+    }
+    i->flags = parse_modrm(i, modrm, 6);
+    i->handler = op_sse_mov_m64x128;
+    i->imm8 = opcode == 0x17 ? 8 : 0;
+    return 0;
+}
 static int decode_0F18(struct decoded_instruction* i)
 {
     uint8_t modrm = rb();
@@ -2462,6 +2474,21 @@ static int decode_punpckl(struct decoded_instruction* i){
         i->handler = sse_prefix == SSE_PREFIX_66 ? op_sse_punpckl_x128x128 : op_mmx_punpckl_r64r64;
     return 0;
 }
+static int decode_0F6C(struct decoded_instruction* i){
+    if(sse_prefix != SSE_PREFIX_66){
+        i->flags = 0;
+        i->handler = op_ud_exception;
+        return 1;
+    }
+    uint8_t modrm = rb();
+    i->imm8 = 8;
+    i->flags = parse_modrm(i, modrm, 6);
+    if(modrm < 0xC0)
+        i->handler = op_sse_punpckl_x128m128;
+    else
+        i->handler = op_sse_punpckl_x128x128;
+    return 0;
+}
 static int decode_punpckh(struct decoded_instruction* i){
     // XXX -- improve decoding
     uint8_t modrm = rb();
@@ -2471,6 +2498,21 @@ static int decode_punpckh(struct decoded_instruction* i){
         i->handler = sse_prefix == SSE_PREFIX_66 ? op_sse_punpckh_x128m128 : op_mmx_punpckh_r64m64;
     else
         i->handler = sse_prefix == SSE_PREFIX_66 ? op_sse_punpckh_x128x128 : op_mmx_punpckh_r64r64;
+    return 0;
+}
+static int decode_0F6D(struct decoded_instruction* i){
+    if(sse_prefix != SSE_PREFIX_66){
+        i->flags = 0;
+        i->handler = op_ud_exception;
+        return 1;
+    }
+    uint8_t modrm = rb();
+    i->imm8 = 8;
+    i->flags = parse_modrm(i, modrm, 6);
+    if(modrm < 0xC0)
+        i->handler = op_sse_punpckh_x128m128;
+    else
+        i->handler = op_sse_punpckh_x128x128;
     return 0;
 }
 
@@ -2484,7 +2526,7 @@ static int decode_0F7E(struct decoded_instruction* i)
             op_mov_m32r64, // none - movd mmx
             op_mov_m32x128, // 66 - movd sse
             op_mov_m32r64, // F2 - invalid
-            op_mov_m32r64 // F3 - invalid
+            op_mov_x128m64 // F3 - invalid
         };
         i->handler = a[sse_prefix];
     } else {
@@ -2492,7 +2534,7 @@ static int decode_0F7E(struct decoded_instruction* i)
             op_mov_r32r64, // none - movd mmx
             op_mov_r32x128, // 66 - movd sse
             op_mov_r32r64, // F2 - invalid
-            op_mov_r32r64 // F3 - invalid
+            op_mov_x128x64 // F3 - invalid
         };
         i->handler = a[sse_prefix];
     }
@@ -2971,6 +3013,24 @@ static int decode_0FE5(struct decoded_instruction* i){
     return 0;
 }
 
+static int decode_0FE8(struct decoded_instruction* i){
+    uint8_t modrm = rb();
+    i->flags = parse_modrm(i, modrm, 6);
+    if(modrm < 0xC0)
+        i->handler = sse_prefix == SSE_PREFIX_66 ? op_sse_psubssb_x128m128 : op_mmx_psubssb_r64m64;
+    else 
+        i->handler = sse_prefix == SSE_PREFIX_66 ? op_sse_psubssb_x128x128 : op_mmx_psubssb_r64r64;
+    return 0;
+}
+static int decode_0FE9(struct decoded_instruction* i){
+    uint8_t modrm = rb();
+    i->flags = parse_modrm(i, modrm, 6);
+    if(modrm < 0xC0)
+        i->handler = sse_prefix == SSE_PREFIX_66 ? op_sse_psubssw_x128m128 : op_mmx_psubssw_r64m64;
+    else 
+        i->handler = sse_prefix == SSE_PREFIX_66 ? op_sse_psubssw_x128x128 : op_mmx_psubssw_r64r64;
+    return 0;
+}
 static int decode_0FEC(struct decoded_instruction* i){
     uint8_t modrm = rb();
     i->flags = parse_modrm(i, modrm, 6);
@@ -3425,11 +3485,11 @@ static const decode_handler_t table0F[256] = {
     /* 0F 10 */ decode_invalid0F,
     /* 0F 11 */ decode_invalid0F,
     /* 0F 12 */ decode_ud, // MOVHLPS - not supported yet
-    /* 0F 13 */ decode_invalid0F,
+    /* 0F 13 */ SSE(decode_movhlps),
     /* 0F 14 */ decode_invalid0F,
     /* 0F 15 */ decode_invalid0F,
     /* 0F 16 */ decode_invalid0F,
-    /* 0F 17 */ decode_invalid0F,
+    /* 0F 17 */ SSE(decode_movhlps),
     /* 0F 18 */ decode_0F18,
     /* 0F 19 */ decode_invalid0F,
     /* 0F 1A */ decode_invalid0F,
@@ -3514,8 +3574,8 @@ static const decode_handler_t table0F[256] = {
     /* 0F 69 */ SSE(decode_punpckh),
     /* 0F 6A */ SSE(decode_punpckh),
     /* 0F 6B */ SSE(decode_0F6B),
-    /* 0F 6C */ decode_invalid0F,
-    /* 0F 6D */ decode_invalid0F,
+    /* 0F 6C */ SSE(decode_0F6C),
+    /* 0F 6D */ SSE(decode_0F6D),
     /* 0F 6E */ SSE(decode_0F6E),
     /* 0F 6F */ SSE(decode_0F6F),
     /* 0F 70 */ SSE(decode_0F70),
@@ -3638,8 +3698,8 @@ static const decode_handler_t table0F[256] = {
     /* 0F E5 */ SSE(decode_0FE5),
     /* 0F E6 */ decode_invalid0F,
     /* 0F E7 */ decode_invalid0F,
-    /* 0F E8 */ decode_invalid0F,
-    /* 0F E9 */ decode_invalid0F,
+    /* 0F E8 */ SSE(decode_0FE8),
+    /* 0F E9 */ SSE(decode_0FE9),
     /* 0F EA */ decode_invalid0F,
     /* 0F EB */ decode_invalid0F,
     /* 0F EC */ SSE(decode_0FEC),

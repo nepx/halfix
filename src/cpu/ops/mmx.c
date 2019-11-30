@@ -510,7 +510,8 @@ OPTYPE op_mmx_paddusw_r64m64(struct decoded_instruction* i)
     mmx_set_exp(I_REG(flags));
     mmx_reset_fpu();
     NEXT(flags);
-}OPTYPE op_mmx_paddssb_r64r64(struct decoded_instruction* i)
+}
+OPTYPE op_mmx_paddssb_r64r64(struct decoded_instruction* i)
 {
     CHECK_MMX;
     uint32_t flags = i->flags;
@@ -545,6 +546,46 @@ OPTYPE op_mmx_paddssw_r64m64(struct decoded_instruction* i)
     if (get_ptr64_read(cpu_get_linaddr(flags, i)))
         EXCEP();
     paddssw(MM(I_REG(flags)).r16, result_ptr, 8);
+    mmx_set_exp(I_REG(flags));
+    mmx_reset_fpu();
+    NEXT(flags);
+}
+
+OPTYPE op_mmx_psubssb_r64r64(struct decoded_instruction* i)
+{
+    CHECK_MMX;
+    uint32_t flags = i->flags;
+    psubssb(MM(I_REG(flags)).r8, MM(I_RM(flags)).r8, 16);
+    mmx_reset_fpu();
+    NEXT(flags);
+}
+OPTYPE op_mmx_psubssb_r64m64(struct decoded_instruction* i)
+{
+    CHECK_MMX;
+    uint32_t flags = i->flags;
+    if (get_ptr64_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    psubssb(MM(I_REG(flags)).r8, result_ptr, 16);
+    mmx_set_exp(I_REG(flags));
+    mmx_reset_fpu();
+    NEXT(flags);
+}
+OPTYPE op_mmx_psubssw_r64r64(struct decoded_instruction* i)
+{
+    CHECK_MMX;
+    uint32_t flags = i->flags;
+    psubssw(MM(I_REG(flags)).r16, MM(I_RM(flags)).r16, 8);
+    mmx_set_exp(I_REG(flags));
+    mmx_reset_fpu();
+    NEXT(flags);
+}
+OPTYPE op_mmx_psubssw_r64m64(struct decoded_instruction* i)
+{
+    CHECK_MMX;
+    uint32_t flags = i->flags;
+    if (get_ptr64_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    psubssw(MM(I_REG(flags)).r16, result_ptr, 8);
     mmx_set_exp(I_REG(flags));
     mmx_reset_fpu();
     NEXT(flags);

@@ -329,6 +329,40 @@ void paddssw(uint16_t* dest, uint16_t* src, int wordcount)
         dest[i] = res;
     }
 }
+
+void psubusb(uint8_t* dest, uint8_t* src, int bytecount)
+{
+    for (int i = 0; i < bytecount; i++) {
+        uint8_t result = dest[i] - src[i];
+        dest[i] = -(result <= dest[i]) & result;
+    }
+}
+void psubusw(uint16_t* dest, uint16_t* src, int wordcount)
+{
+    for (int i = 0; i < wordcount; i++) {
+        uint16_t result = dest[i] - src[i];
+        dest[i] = -(result <= dest[i]) & result;
+    }
+}
+void psubssb(uint8_t* dest, uint8_t* src, int bytecount)
+{
+    for (int i = 0; i < bytecount; i++) {
+        uint8_t x = dest[i], y = src[i], res = x - y;
+        x = (x >> 7) + 0x7FFF;
+        if((int8_t)((x ^ y) & (x ^ res)) < 0) res = x;
+        dest[i] = res;
+    }
+}
+void psubssw(uint16_t* dest, uint16_t* src, int wordcount)
+{
+    for (int i = 0; i < wordcount; i++) {
+        uint16_t x = dest[i], y = src[i], res = x - y;
+        //printf("%x - %x = %x\n", x, y, res);
+        x = (x >> 15) + 0x7FFF;
+        if((int16_t)((x ^ y) & (x ^ res)) < 0) res = x;
+        dest[i] = res;
+    }
+}
 void punpckh(void* dst, void* src, int size, int copysize)
 {
     // XXX -- make this faster
@@ -1037,6 +1071,39 @@ OPTYPE op_sse_paddssw_x128m128(struct decoded_instruction* i)
     paddssw(&XMM16(I_REG(flags)), result_ptr, 8);
     NEXT(flags);
 }
+OPTYPE op_sse_psubssb_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    psubssb(&XMM8(I_REG(flags)), &XMM8(I_RM(flags)), 16);
+    NEXT(flags);
+}
+OPTYPE op_sse_psubssb_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    psubssb(&XMM8(I_REG(flags)), result_ptr, 16);
+    NEXT(flags);
+}
+OPTYPE op_sse_psubssw_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    psubssw(&XMM16(I_REG(flags)), &XMM16(I_RM(flags)), 8);
+    NEXT(flags);
+}
+OPTYPE op_sse_psubssw_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    psubssw(&XMM16(I_REG(flags)), result_ptr, 8);
+    NEXT(flags);
+}
+
 
 OPTYPE op_sse_punpckh_x128x128(struct decoded_instruction* i)
 {
@@ -1112,12 +1179,12 @@ OPTYPE op_sse_pshufw_x128x128(struct decoded_instruction* i)
     uint32_t *src = &XMM32(I_RM(flags)), *dest = &XMM32(I_REG(flags));
     printf("pshuf: phys=%08x imm16=%04x\n", cpu.phys_eip, i->imm16);
     switch(i->imm16  >> 8 & 3){
-        case 3: // PSHUFLW
+        case 2: // PSHUFLW
             pshuf(dest, src, i->imm8, 1);
             dest[2] = src[2];
             dest[3] = src[3];
             break;
-        case 2: // PSHUFHW
+        case 3: // PSHUFHW
             pshuf(dest+2, src+2, i->imm8, 1);
             dest[0] = src[0];
             dest[1] = src[1];
@@ -1137,12 +1204,12 @@ OPTYPE op_sse_pshufw_x128m128(struct decoded_instruction* i)
     printf("pshuf: phys=%08x imm16=%04x\n", cpu.phys_eip, i->imm16);
     uint32_t* dest = &XMM32(I_REG(flags)), *src = result_ptr;
     switch(i->imm16 >> 8 & 3){
-        case 3: // PSHUFLW
+        case 2: // PSHUFLW
             pshuf(dest, src, i->imm8, 1);
             dest[2] = src[2];
             dest[3] = src[3];
             break;
-        case 2: // PSHUFHW
+        case 3: // PSHUFHW
             dest[0] = src[0];
             dest[1] = src[1];
             pshuf(dest+2, src+2, i->imm8, 1);
@@ -1255,5 +1322,32 @@ OPTYPE op_sse_psub_x128m128(struct decoded_instruction* i)
         psubq(dest, src, 2);
         break;
     }
+    NEXT(flags);
+}
+OPTYPE op_sse_mov_m64x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    void* src = &XMM32(I_REG(flags));
+    if(cpu_write64(cpu_get_linaddr(flags, i), src + i->imm8)) EXCEP();
+    NEXT(flags);
+}
+OPTYPE op_mov_x128m64(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags, *dest = &XMM32(I_REG(flags));
+    if(cpu_read64(cpu_get_linaddr(flags, i),dest)) EXCEP();
+    dest[2] = 0;
+    dest[3] = 0;
+    NEXT(flags);
+}
+OPTYPE op_mov_x128x64(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags, *dest = &XMM32(I_REG(flags)), *src = &XMM32(I_RM(flags));
+    dest[0] = src[0];
+    dest[1] = src[1];
+    dest[2] = 0;
+    dest[3] = 0;
     NEXT(flags);
 }
