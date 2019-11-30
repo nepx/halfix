@@ -62,8 +62,8 @@ for (var i = 0; i < argv.length; i++) {
             process.exit(0);
             break;
         case "release":
-        process.argv.push("--optimization-level", "3");
-        process.argv.push("--disable-debug");
+            argv.push("--optimization-level", "3");
+            argv.push("--disable-debug");
             break;
         case "--optimization-level":
             if (isNaN(parseInt(argv[i + 1])))
