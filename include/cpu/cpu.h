@@ -50,6 +50,8 @@
 #define ZR8 32
 
 #define XMM32(n) cpu.xmm32[(n) << 2]
+#define XMM16(n) cpu.xmm16[(n) << 3]
+#define XMM8(n) cpu.xmm8[(n) << 4]
 
 #define RESULT_INVALID (uint32_t) - 1
 
@@ -302,6 +304,18 @@ struct cpu {
 
     // The amount to shift the TLB tag by. See docs/cpu/tlb.md for details.
     int tlb_shift_read, tlb_shift_write;
+
+    // ========================================================================
+    // Memory Type Range Register (MTRR)
+    // ========================================================================
+    // TODO: We do not have data caches, so these are not actually used. 
+    // However, some operating systems (i.e. Windows 7) do read/write them, so
+    // we save their values to amuse them. 
+
+    // There are two types of MTRRs -- fixed range and variable range. 
+    uint64_t mtrr_fixed[32];
+    uint64_t mtrr_variable_addr_mask[16]; // Order: addr[0], mask[0], addr[1], mask[1]
+    uint64_t mtrr_deftype;
 
     // ========================================================================
     // Miscellaneous state

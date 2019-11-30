@@ -202,6 +202,8 @@ void cpu_reset(void)
         cpu.apic_base = 0xFEE00900; // We are BSP
     else
         cpu.apic_base = 0;
+    
+    cpu.mxcsr = 0x1F80;
 
     // Reset TLB
     memset(cpu.tlb, 0, sizeof(void*) * (1 << 20));
@@ -217,8 +219,10 @@ int cpu_apic_connected(void)
 static void cpu_state(void)
 {
     // <<< BEGIN AUTOGENERATE "state" >>>
-    struct bjson_object* obj = state_obj("cpu", 36);
+    struct bjson_object* obj = state_obj("cpu", 42);
     state_field(obj, 64, "cpu.reg32", &cpu.reg32);
+    state_field(obj, 128, "cpu.xmm32", &cpu.xmm32);
+    state_field(obj, 4, "cpu.mxcsr", &cpu.mxcsr);
     state_field(obj, 4, "cpu.esp_mask", &cpu.esp_mask);
     state_field(obj, 4, "cpu.memory_size", &cpu.memory_size);
     state_field(obj, 4, "cpu.eflags", &cpu.eflags);
@@ -247,6 +251,9 @@ static void cpu_state(void)
     state_field(obj, 4, "cpu.trace_cache_usage", &cpu.trace_cache_usage);
     state_field(obj, 4, "cpu.tlb_shift_read", &cpu.tlb_shift_read);
     state_field(obj, 4, "cpu.tlb_shift_write", &cpu.tlb_shift_write);
+    state_field(obj, 256, "cpu.mtrr_fixed", &cpu.mtrr_fixed);
+    state_field(obj, 128, "cpu.mtrr_variable_addr_mask", &cpu.mtrr_variable_addr_mask);
+    state_field(obj, 8, "cpu.mtrr_deftype", &cpu.mtrr_deftype);
     state_field(obj, 4, "cpu.a20_mask", &cpu.a20_mask);
     state_field(obj, 8, "cpu.apic_base", &cpu.apic_base);
     state_field(obj, 8, "cpu.tsc_fudge", &cpu.tsc_fudge);
@@ -254,6 +261,7 @@ static void cpu_state(void)
     state_field(obj, 4, "cpu.intr_line_state", &cpu.intr_line_state);
     state_field(obj, 4, "cpu.interrupts_blocked", &cpu.interrupts_blocked);
     state_field(obj, 4, "cpu.exit_reason", &cpu.exit_reason);
+    state_field(obj, 12, "cpu.sysenter", &cpu.sysenter);
 // <<< END AUTOGENERATE "state" >>>
     state_file(cpu.memory_size, "ram", cpu.mem);
 

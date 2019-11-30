@@ -109,6 +109,15 @@ int rdmsr(uint32_t index, uint32_t* high, uint32_t* low)
         if(!cpu_apic_connected()) EXCEPTION_GP(0);
         value = cpu.apic_base;
         break;
+    case 0x250 ... 0x26F:
+        value = cpu.mtrr_fixed[index - 0x250];
+        break;
+    case 0x200 ... 0x20F:
+        value = cpu.mtrr_variable_addr_mask[index ^ 0x200];
+        break;
+    case 0x2FF:
+        value = cpu.mtrr_deftype;
+        break;
     default:
         CPU_LOG("Unknown MSR read: 0x%x\n", index); 
         value = 0;
@@ -118,9 +127,6 @@ int rdmsr(uint32_t index, uint32_t* high, uint32_t* low)
         break;
     case 0xFE: // MTRR
         value = 0x508;
-        break;
-    case 0x2FF:
-        value = 0xC06;
         break;
     case 0x10:
         value = cpu_get_cycles() - cpu.tsc_fudge;
@@ -159,8 +165,16 @@ int wrmsr(uint32_t index, uint32_t high, uint32_t low)
     case 0x19A: // Windows Vista MSR
     case 0x19B: // ??
     case 0xFE:
-    case 0x200 ... 0x2FF:
         CPU_LOG("Unknown MSR: 0x%x\n", index);
+        break;
+    case 0x250 ... 0x26F:
+        cpu.mtrr_fixed[index - 0x250] = msr_value;
+        break;
+    case 0x200 ... 0x20F:
+        cpu.mtrr_variable_addr_mask[index ^ 0x200] = msr_value;
+        break;
+    case 0x2FF:
+        cpu.mtrr_deftype = msr_value;
         break;
     case 0x10:
         cpu.tsc_fudge = cpu_get_cycles() - msr_value;
@@ -304,7 +318,7 @@ int lldt(uint32_t selector)
 
     if (selector_offset == 0) {
         //  bits 2-15 of the source operand are 0, LDTR is marked invalid and the LLDT instruction completes silently.
-        CPU_LOG("Disabling LDT (selector=0)\n");
+        //CPU_LOG("Disabling LDT (selector=0)\n");
         cpu.seg_base[SEG_LDTR] = 0;
         cpu.seg_limit[SEG_LDTR] = 0;
         cpu.seg_access[SEG_LDTR] = 0;
