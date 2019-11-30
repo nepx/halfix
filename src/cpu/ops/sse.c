@@ -77,7 +77,7 @@ int cpu_write128(uint32_t linaddr, void* x)
 // Assumes the address is aligned to 16 bytes
 int cpu_read128(uint32_t linaddr, void* x)
 {
-    int shift = cpu.tlb_shift_write;
+    int shift = cpu.tlb_shift_read;
     uint32_t* data32 = x;
     uint8_t tag = cpu.tlb_tags[linaddr >> 12] >> shift;
     if (tag & 2) {
@@ -122,10 +122,10 @@ int cpu_read128u(uint32_t linaddr, void* x)
 {
     if (linaddr & 15) {
         uint32_t* data32 = x;
-        cpu_read32(linaddr, data32[0], cpu.tlb_shift_write);
-        cpu_read32(linaddr + 4, data32[1], cpu.tlb_shift_write);
-        cpu_read32(linaddr + 8, data32[2], cpu.tlb_shift_write);
-        cpu_read32(linaddr + 12, data32[3], cpu.tlb_shift_write);
+        cpu_read32(linaddr, data32[0], cpu.tlb_shift_read);
+        cpu_read32(linaddr + 4, data32[1], cpu.tlb_shift_read);
+        cpu_read32(linaddr + 8, data32[2], cpu.tlb_shift_read);
+        cpu_read32(linaddr + 12, data32[3], cpu.tlb_shift_read);
         return 0;
     } else
         return cpu_read128(linaddr, x);
@@ -139,7 +139,7 @@ int cpu_write64(uint32_t linaddr, void* x)
     uint8_t tag = cpu.tlb_tags[linaddr >> 12] >> shift;
     if ((tag & 3) | (linaddr & 7)) {
         cpu_write32(linaddr, data32[0], shift);
-        cpu_write32(linaddr, data32[1], shift);
+        cpu_write32(linaddr + 4, data32[1], shift);
         return 0;
     }
     uint32_t* host_ptr = cpu.tlb[linaddr >> 12] + linaddr;
@@ -157,7 +157,7 @@ int cpu_read64(uint32_t linaddr, void* x)
     uint8_t tag = cpu.tlb_tags[linaddr >> 12] >> shift;
     if ((tag & 3) | (linaddr & 7)) {
         cpu_read32(linaddr, data32[0], shift);
-        cpu_read32(linaddr, data32[1], shift);
+        cpu_read32(linaddr + 4, data32[1], shift);
         return 0;
     }
     uint32_t* host_ptr = cpu.tlb[linaddr >> 12] + linaddr;
@@ -198,9 +198,9 @@ static uint32_t write_linaddr,
 
 static int get_ptr128_read(uint32_t linaddr)
 {
-    if (linaddr & 15) 
+    if (linaddr & 15)
         EXCEPTION_GP(0);
-    int shift = cpu.tlb_shift_write;
+    int shift = cpu.tlb_shift_read;
     uint8_t tag = cpu.tlb_tags[linaddr >> 12] >> shift;
     if (tag & 2) {
         if (cpu_mmu_translate(linaddr, shift))
@@ -276,21 +276,74 @@ void punpckl(void* dst, void* src, int size, int copysize)
 {
     // XXX -- make this faster
     uint8_t *dst8 = dst, *src8 = src, tmp[16];
-    int idx = 0, nidx = 0;
+    int idx = 0, nidx = 0, xor = copysize - 1;
+    UNUSED (xor);
+    const int xormask = (size - 1) ^ (copysize - 1);
+    UNUSED(xormask);
     while (idx < size) {
         for (int i = 0; i < copysize; i++)
-            tmp[idx++] = dst8[nidx + i]; // Copy destination bytes
+            tmp[idx++] = dst8[(nidx + i)]; // Copy destination bytes
         for (int i = 0; i < copysize; i++)
-            tmp[idx++] = src8[nidx + i]; // Copy source bytes
+            tmp[idx++] = src8[(nidx + i)]; // Copy source bytes
         nidx += copysize;
     }
     memcpy(dst, tmp, size);
 }
-void pmullw(uint16_t* dest, uint16_t* src, int wordcount){
-    for(int i=0;i<wordcount;i++) {
+void pmullw(uint16_t* dest, uint16_t* src, int wordcount, int shift)
+{
+    for (int i = 0; i < wordcount; i++) {
         uint32_t result = (uint32_t)(int16_t)dest[i] * (uint32_t)(int16_t)src[i];
-        dest[i] = result;
+        dest[i] = result >> shift;
     }
+}
+void paddusb(uint8_t* dest, uint8_t* src, int bytecount)
+{
+    for (int i = 0; i < bytecount; i++) {
+        uint8_t result = dest[i] + src[i];
+        dest[i] = -(result < dest[i]) | result;
+    }
+}
+void paddusw(uint16_t* dest, uint16_t* src, int wordcount)
+{
+    for (int i = 0; i < wordcount; i++) {
+        uint16_t result = dest[i] + src[i];
+        dest[i] = -(result < dest[i]) | result;
+    }
+}
+void paddssb(uint8_t* dest, uint8_t* src, int bytecount)
+{
+    // https://locklessinc.com/articles/sat_arithmetic/
+    for (int i = 0; i < bytecount; i++) {
+        uint8_t x = dest[i], y = src[i], res = x + y;
+        x = (x >> 7) + 0x7F;
+        if((int8_t)((x ^ y) | ~(y ^ res)) >= 0) res = x;
+        dest[i] = res;
+    }
+}
+void paddssw(uint16_t* dest, uint16_t* src, int wordcount)
+{
+    for (int i = 0; i < wordcount; i++) {
+        uint16_t x = dest[i], y = src[i], res = x + y;
+        x = (x >> 15) + 0x7FFF;
+        if((int16_t)((x ^ y) | ~(y ^ res)) >= 0) res = x;
+        dest[i] = res;
+    }
+}
+void punpckh(void* dst, void* src, int size, int copysize)
+{
+    // XXX -- make this faster
+    // too many xors
+    uint8_t *dst8 = dst, *src8 = src, tmp[16];
+    int idx = 0, nidx = 0;
+    const int xormask = (size - 1) ^ (copysize - 1);
+    while (idx < size) {
+        for (int i = 0; i < copysize; i++)
+            tmp[idx++ ^ xormask] = src8[(nidx + i) ^ xormask]; // Copy source bytes
+        for (int i = 0; i < copysize; i++)
+            tmp[idx++ ^ xormask] = dst8[(nidx + i) ^ xormask]; // Copy destination bytes
+        nidx += copysize;
+    }
+    memcpy(dst, tmp, size);
 }
 void cpu_psraw(uint16_t* a, int shift, int mask, int wordcount)
 {
@@ -363,6 +416,181 @@ static void cpu_psrldq(uint64_t* a, int shift, int mask)
     a[1] >>= shift;
     a[1] |= a[0] << (64L - shift);
     a[0] >>= shift;
+}
+static inline uint8_t pack_i16_to_u8(uint16_t x)
+{
+    if (x >= 0x100) {
+        if (x & 0x8000)
+            return 0;
+        return 0xFF;
+    }
+    return x;
+}
+static inline uint8_t pack_i16_to_i8(uint16_t x)
+{
+    if (x >= 0x8000) {
+        if(x >= 0xFF80) x &= 0xFF;
+        else return 0x80; // x <= -128
+    }else{
+        // x <= 0x7FFF
+        if(x > 0x7F)
+            return 0x7F;
+    }
+    return x;
+}
+static inline uint16_t pack_i32_to_i16(uint32_t x)
+{
+    //printf("i32 -> i16: %08x\n", x);
+    if (x >= 0x80000000) {
+        if(x >= 0xFFFF8000) x &= 0xFFFF;
+        else return 0x8000; // x <= -65536
+    }else{
+        // x <= 0x7FFFFFFF
+        if(x > 0x7FFF)
+            return 0x7FFF;
+    }
+    return x;
+}
+void packuswb(void* dest, void* src, int wordcount)
+{
+    uint8_t res[16];
+    uint16_t *dest16 = dest, *src16 = src;
+    for (int i = 0; i < wordcount; i++) {
+        res[i] = pack_i16_to_u8(dest16[i]);
+        res[i | wordcount] = pack_i16_to_u8(src16[i]);
+    }
+    memcpy(dest, res, wordcount << 1);
+}
+void packsswb(void* dest, void* src, int wordcount)
+{
+    uint8_t res[16];
+    uint16_t *dest16 = dest, *src16 = src;
+    for (int i = 0; i < wordcount; i++) {
+        res[i] = pack_i16_to_i8(dest16[i]);
+        res[i | wordcount] = pack_i16_to_i8(src16[i]);
+    }
+    memcpy(dest, res, wordcount << 1);
+}
+void packssdw(void* dest, void* src, int dwordcount)
+{
+    uint16_t res[8];
+    uint32_t *dest32 = dest, *src32 = src;
+    for (int i = 0; i < dwordcount; i++) {
+        res[i] = pack_i32_to_i16(dest32[i]);
+        res[i | dwordcount] = pack_i32_to_i16(src32[i]);
+    }
+    memcpy(dest, res, dwordcount << 2);
+}
+void pshuf(void* dest, void* src, int imm, int shift)
+{
+    uint8_t* src8 = src;
+    uint8_t res[16];
+    int id = 0;
+    printf("%p: ", src);
+    for(int i=0;i<16;i++) printf("%02x", src8[i]);
+    printf("\n");
+    for (int i = 0; i < 4; i++) {
+        int index = imm & 3, index4 = index << shift;
+        if (shift == 2) { // Doubleword size
+            //printf("index: %d resid=%d %02x%02x%02x%02x\n", index, id, src8[index4 + 0], src8[index4 + 1], src8[index4 + 2], src8[index4 + 3]);
+            res[id + 0] = src8[index4 + 0];
+            res[id + 1] = src8[index4 + 1];
+            res[id + 2] = src8[index4 + 2];
+            res[id + 3] = src8[index4 + 3];
+            id += 4;
+        } else { // shift == 1: Word size
+            res[id + 0] = src8[index4 + 0];
+            res[id + 1] = src8[index4 + 1];
+            id += 2;
+        }
+        imm >>= 2;
+    }
+    memcpy(dest, res, 4 << shift);
+}
+void pmaddwd(void* dest, void* src, int dwordcount)
+{
+    uint16_t *src16 = src, *dest16 = dest;
+    uint32_t res[4];
+    int idx = 0;
+    for (int i = 0; i < dwordcount; i++) {
+        // "Multiplies the individual signed words of the destination operand (first operand) by the corresponding signed words of the source operand (second operand), producing temporary signed, doubleword results."
+        res[i] = ((uint32_t)(int16_t)src16[idx] * (uint32_t)(int16_t)dest16[idx]) + ((uint32_t)(int16_t)src16[idx + 1] * (uint32_t)(int16_t)dest16[idx + 1]);
+        idx += 2;
+    }
+    memcpy(dest, res, dwordcount << 2);
+}
+void paddb(uint8_t* dest, uint8_t* src, int bytecount)
+{
+    if (dest == src) // Faster alternative -- requires just a RMW SHL instead of a MOV from src[i] and a RMW add to dst[i]
+        for (int i = 0; i < bytecount; i++)
+            dest[i] <<= 1;
+    else
+        for (int i = 0; i < bytecount; i++)
+            dest[i] += src[i];
+}
+void paddw(uint16_t* dest, uint16_t* src, int wordcount)
+{
+    if (dest == src)
+        for (int i = 0; i < wordcount; i++)
+            dest[i] <<= 1;
+    else
+        for (int i = 0; i < wordcount; i++)
+            dest[i] += src[i];
+}
+void paddd(uint32_t* dest, uint32_t* src, int dwordcount)
+{
+    if (dest == src)
+        for (int i = 0; i < dwordcount; i++)
+            dest[i] <<= 1;
+    else
+        for (int i = 0; i < dwordcount; i++)
+            dest[i] += src[i];
+}
+void paddq(uint64_t* dest, uint64_t* src, int qwordcount)
+{
+    if (dest == src)
+        for (int i = 0; i < qwordcount; i++)
+            dest[i] <<= 1;
+    else
+        for (int i = 0; i < qwordcount; i++)
+            dest[i] += src[i];
+}
+
+void psubb(uint8_t* dest, uint8_t* src, int bytecount)
+{
+    if (dest == src) 
+        for (int i = 0; i < bytecount; i++)
+            dest[i] >>= 1;
+    else
+        for (int i = 0; i < bytecount; i++)
+            dest[i] -= src[i];
+}
+void psubw(uint16_t* dest, uint16_t* src, int wordcount)
+{
+    if (dest == src)
+        for (int i = 0; i < wordcount; i++)
+            dest[i] >>= 1;
+    else
+        for (int i = 0; i < wordcount; i++)
+            dest[i] -= src[i];
+}
+void psubd(uint32_t* dest, uint32_t* src, int dwordcount)
+{
+    if (dest == src)
+        for (int i = 0; i < dwordcount; i++)
+            dest[i] >>= 1;
+    else
+        for (int i = 0; i < dwordcount; i++)
+            dest[i] -= src[i];
+}
+void psubq(uint64_t* dest, uint64_t* src, int qwordcount)
+{
+    if (dest == src)
+        for (int i = 0; i < qwordcount; i++)
+            dest[i] >>= 1;
+    else
+        for (int i = 0; i < qwordcount; i++)
+            dest[i] -= src[i];
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -612,7 +840,7 @@ OPTYPE op_sse_pshift_x128i8(struct decoded_instruction* i)
 {
     CHECK_SSE;
     uint32_t flags = i->flags, shift = i->imm8;
-    void* x = &XMM32(I_REG(flags));
+    void* x = &XMM32(I_RM(flags));
     switch (i->imm16 >> 8 & 15) {
     case 0: // PSRLW
         cpu_psrlw(x, shift & 15, getmask2(shift, 16), 8);
@@ -717,7 +945,7 @@ OPTYPE op_sse_pmullw_x128x128(struct decoded_instruction* i)
 {
     CHECK_SSE;
     uint32_t flags = i->flags;
-    pmullw(&XMM16(I_REG(flags)), &XMM16(I_RM(flags)), 8);
+    pmullw(&XMM16(I_REG(flags)), &XMM16(I_RM(flags)), 8, 0);
     NEXT(flags);
 }
 OPTYPE op_sse_pmullw_x128m128(struct decoded_instruction* i)
@@ -726,6 +954,306 @@ OPTYPE op_sse_pmullw_x128m128(struct decoded_instruction* i)
     uint32_t flags = i->flags;
     if (get_ptr128_read(cpu_get_linaddr(flags, i)))
         EXCEP();
-    pmullw(&XMM16(I_REG(flags)), result_ptr, 8);
+    pmullw(&XMM16(I_REG(flags)), result_ptr, 8, 0);
+    NEXT(flags);
+}
+OPTYPE op_sse_pmulhw_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    pmullw(&XMM16(I_REG(flags)), &XMM16(I_RM(flags)), 8, 16);
+    NEXT(flags);
+}
+OPTYPE op_sse_pmulhw_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    pmullw(&XMM16(I_REG(flags)), result_ptr, 8, 16);
+    NEXT(flags);
+}
+OPTYPE op_sse_paddusb_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    paddusb(&XMM8(I_REG(flags)), &XMM8(I_RM(flags)), 16);
+    NEXT(flags);
+}
+OPTYPE op_sse_paddusb_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    paddusb(&XMM8(I_REG(flags)), result_ptr, 16);
+    NEXT(flags);
+}
+OPTYPE op_sse_paddusw_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    paddusw(&XMM16(I_REG(flags)), &XMM16(I_RM(flags)), 8);
+    NEXT(flags);
+}
+OPTYPE op_sse_paddusw_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    paddusw(&XMM16(I_REG(flags)), result_ptr, 8);
+    NEXT(flags);
+}
+OPTYPE op_sse_paddssb_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    paddssb(&XMM8(I_REG(flags)), &XMM8(I_RM(flags)), 16);
+    NEXT(flags);
+}
+OPTYPE op_sse_paddssb_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    paddssb(&XMM8(I_REG(flags)), result_ptr, 16);
+    NEXT(flags);
+}
+OPTYPE op_sse_paddssw_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    paddssw(&XMM16(I_REG(flags)), &XMM16(I_RM(flags)), 8);
+    NEXT(flags);
+}
+OPTYPE op_sse_paddssw_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    paddssw(&XMM16(I_REG(flags)), result_ptr, 8);
+    NEXT(flags);
+}
+
+OPTYPE op_sse_punpckh_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    punpckh(&XMM32(I_REG(flags)), &XMM32(I_RM(flags)), 16, i->imm8);
+    NEXT(flags);
+}
+OPTYPE op_sse_punpckh_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    punpckh(&XMM32(I_REG(flags)), result_ptr, 16, i->imm8);
+    NEXT(flags);
+}
+OPTYPE op_sse_packuswb_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    packuswb(&XMM32(I_REG(flags)), &XMM32(I_RM(flags)), 8);
+    NEXT(flags);
+}
+OPTYPE op_sse_packuswb_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    packuswb(&XMM32(I_REG(flags)), result_ptr, 8);
+    NEXT(flags);
+}
+OPTYPE op_sse_packsswb_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    packsswb(&XMM32(I_REG(flags)), &XMM32(I_RM(flags)), 8);
+    NEXT(flags);
+}
+OPTYPE op_sse_packsswb_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    packsswb(&XMM32(I_REG(flags)), result_ptr, 8);
+    NEXT(flags);
+}
+OPTYPE op_sse_packssdw_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    packssdw(&XMM32(I_REG(flags)), &XMM32(I_RM(flags)), 4);
+    NEXT(flags);
+}
+OPTYPE op_sse_packssdw_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    packssdw(&XMM32(I_REG(flags)), result_ptr, 4);
+    NEXT(flags);
+}
+OPTYPE op_sse_pshufw_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    // Format of PSHUFW immediate operand:
+    //  0...7: Immediate
+    //  8...9: Opcode
+    uint32_t *src = &XMM32(I_RM(flags)), *dest = &XMM32(I_REG(flags));
+    printf("pshuf: phys=%08x imm16=%04x\n", cpu.phys_eip, i->imm16);
+    switch(i->imm16  >> 8 & 3){
+        case 3: // PSHUFLW
+            pshuf(dest, src, i->imm8, 1);
+            dest[2] = src[2];
+            dest[3] = src[3];
+            break;
+        case 2: // PSHUFHW
+            pshuf(dest+2, src+2, i->imm8, 1);
+            dest[0] = src[0];
+            dest[1] = src[1];
+            break;
+        case 1: // PSHUFD
+            pshuf(dest, src, i->imm8, 2);
+            break;
+    }
+    NEXT(flags);
+}
+OPTYPE op_sse_pshufw_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    printf("pshuf: phys=%08x imm16=%04x\n", cpu.phys_eip, i->imm16);
+    uint32_t* dest = &XMM32(I_REG(flags)), *src = result_ptr;
+    switch(i->imm16 >> 8 & 3){
+        case 3: // PSHUFLW
+            pshuf(dest, src, i->imm8, 1);
+            dest[2] = src[2];
+            dest[3] = src[3];
+            break;
+        case 2: // PSHUFHW
+            dest[0] = src[0];
+            dest[1] = src[1];
+            pshuf(dest+2, src+2, i->imm8, 1);
+            break;
+        case 1: // PSHUFD
+            pshuf(dest, src, i->imm8, 2);
+            break;
+    }
+    NEXT(flags);
+}
+OPTYPE op_sse_pmaddwd_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    pmaddwd(&XMM32(I_REG(flags)), &XMM32(I_RM(flags)), 4);
+    NEXT(flags);
+}
+OPTYPE op_sse_pmaddwd_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    pmaddwd(&XMM32(I_REG(flags)), result_ptr, 4);
+    NEXT(flags);
+}
+OPTYPE op_sse_padd_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    void *dest = &XMM32(I_REG(flags)), *src = &XMM32(I_RM(flags));
+    switch (i->imm8 & 3) {
+    case 0: // paddb
+        paddb(dest, src, 16);
+        break;
+    case 1: // paddw
+        paddw(dest, src, 8);
+        break;
+    case 2: // paddd
+        paddd(dest, src, 4);
+        break;
+    case 3: // paddq
+        paddq(dest, src, 2);
+        break;
+    }
+    NEXT(flags);
+}
+OPTYPE op_sse_padd_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    void *dest = &XMM32(I_REG(flags)), *src = result_ptr;
+    switch (i->imm8 & 3) {
+    case 0: // paddb
+        paddb(dest, src, 16);
+        break;
+    case 1: // paddw
+        paddw(dest, src, 8);
+        break;
+    case 2: // paddd
+        paddd(dest, src, 4);
+        break;
+    case 3: // paddq
+        paddq(dest, src, 2);
+        break;
+    }
+    NEXT(flags);
+}
+OPTYPE op_sse_psub_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    void *dest = &XMM32(I_REG(flags)), *src = &XMM32(I_RM(flags));
+    switch (i->imm8 & 3) {
+    case 0: // psubb
+        psubb(dest, src, 16);
+        break;
+    case 1: // psubw
+        psubw(dest, src, 8);
+        break;
+    case 2: // psubd
+        psubd(dest, src, 4);
+        break;
+    case 3: // psubq
+        psubq(dest, src, 2);
+        break;
+    }
+    NEXT(flags);
+}
+OPTYPE op_sse_psub_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    void *dest = &XMM32(I_REG(flags)), *src = result_ptr;
+    switch (i->imm8 & 3) {
+    case 0: // psubb
+        psubb(dest, src, 16);
+        break;
+    case 1: // psubw
+        psubw(dest, src, 8);
+        break;
+    case 2: // psubd
+        psubd(dest, src, 4);
+        break;
+    case 3: // psubq
+        psubq(dest, src, 2);
+        break;
+    }
     NEXT(flags);
 }
