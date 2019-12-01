@@ -519,6 +519,8 @@ OPTYPE op_sse_psub_x128m128(struct decoded_instruction* i);
 OPTYPE op_sse_mov_m64x128(struct decoded_instruction* i);
 OPTYPE op_mov_x128m64(struct decoded_instruction* i);
 OPTYPE op_mov_x128x64(struct decoded_instruction* i);
+OPTYPE op_sse_pandn_x128x128(struct decoded_instruction* i);
+OPTYPE op_sse_pandn_x128m128(struct decoded_instruction* i);
 
 // MMX
 OPTYPE op_mov_r64r64(struct decoded_instruction* i);
@@ -568,6 +570,8 @@ OPTYPE op_mmx_padd_r64r64(struct decoded_instruction* i);
 OPTYPE op_mmx_padd_r64m64(struct decoded_instruction* i);
 OPTYPE op_mmx_psub_r64r64(struct decoded_instruction* i);
 OPTYPE op_mmx_psub_r64m64(struct decoded_instruction* i);
+OPTYPE op_mmx_pandn_r64r64(struct decoded_instruction* i);
+OPTYPE op_mmx_pandn_r64m64(struct decoded_instruction* i);
 
 // <<< BEGIN AUTOGENERATE "string" >>>
 OPTYPE op_movsb16(struct decoded_instruction* i);

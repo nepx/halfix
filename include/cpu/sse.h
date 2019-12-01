@@ -47,5 +47,6 @@ void psubb(uint8_t* dest, uint8_t* src, int);
 void psubw(uint16_t* dest, uint16_t* src, int);
 void psubd(uint32_t* dest, uint32_t* src, int);
 void psubq(uint64_t* dest, uint64_t* src, int);
+void pandn(uint32_t* dest, uint32_t* src, int dwordcount);
 
 #endif

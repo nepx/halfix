@@ -2456,8 +2456,8 @@ static int decode_pshift(struct decoded_instruction* i){
             i->handler = op_ud_exception;
             return 1;
         }
-        printf("%p %d %d %d\n", i, size, modrm >> 4 & 3, size + (modrm >> 4 & 3) - 1);
-        if((size + (modrm >> 4 & 3) - 1) > 8) __asm__("int3");
+        //printf("%p %d %d %d\n", i, size, modrm >> 4 & 3, size + (modrm >> 4 & 3) - 1);
+        //if((size + (modrm >> 4 & 3) - 1) > 8) __asm__("int3");
         i->imm16 = ((size + (modrm >> 4 & 3) - 1) << 8) | rb();
         i->handler = sse_prefix == SSE_PREFIX_66 ? op_sse_pshift_x128i8 : op_mmx_pshift_r64i8;
     }
@@ -3000,6 +3000,15 @@ static int decode_0FDD(struct decoded_instruction* i){
         i->handler = sse_prefix == SSE_PREFIX_66 ? op_sse_paddusw_x128m128 : op_mmx_paddusw_r64m64;
     else 
         i->handler = sse_prefix == SSE_PREFIX_66 ? op_sse_paddusw_x128x128 : op_mmx_paddusw_r64r64;
+    return 0;
+}
+static int decode_0FDF(struct decoded_instruction* i){
+    uint8_t modrm = rb();
+    i->flags = parse_modrm(i, modrm, 6);
+    if(modrm < 0xC0)
+        i->handler = sse_prefix == SSE_PREFIX_66 ? op_sse_pandn_x128m128 : op_mmx_pandn_r64m64;
+    else 
+        i->handler = sse_prefix == SSE_PREFIX_66 ? op_sse_pandn_x128x128 : op_mmx_pandn_r64r64;
     return 0;
 }
 static int decode_0FE5(struct decoded_instruction* i){
@@ -3689,7 +3698,7 @@ static const decode_handler_t table0F[256] = {
     /* 0F DC */ SSE(decode_0FDC),
     /* 0F DD */ SSE(decode_0FDD),
     /* 0F DE */ decode_invalid0F,
-    /* 0F DF */ decode_invalid0F,
+    /* 0F DF */ SSE(decode_0FDF),
     /* 0F E0 */ decode_invalid0F,
     /* 0F E1 */ decode_invalid0F,
     /* 0F E2 */ decode_invalid0F,

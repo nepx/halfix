@@ -811,3 +811,19 @@ OPTYPE op_mmx_psub_r64m64(struct decoded_instruction* i){
     mmx_reset_fpu();
     NEXT(flags);
 }
+OPTYPE op_mmx_pandn_r64r64(struct decoded_instruction* i)
+{
+    CHECK_MMX;
+    uint32_t flags = i->flags;
+    pandn(MM(I_REG(flags)).r32, MM(I_RM(flags)).r32, 2);
+    NEXT(flags);
+}
+OPTYPE op_mmx_pandn_r64m64(struct decoded_instruction* i)
+{
+    CHECK_MMX;
+    uint32_t flags = i->flags;
+    if (get_ptr64_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    pandn(MM(I_REG(flags)).r32, result_ptr, 2);
+    NEXT(flags);
+}

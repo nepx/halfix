@@ -520,9 +520,6 @@ void pshuf(void* dest, void* src, int imm, int shift)
     uint8_t* src8 = src;
     uint8_t res[16];
     int id = 0;
-    printf("%p: ", src);
-    for(int i=0;i<16;i++) printf("%02x", src8[i]);
-    printf("\n");
     for (int i = 0; i < 4; i++) {
         int index = imm & 3, index4 = index << shift;
         if (shift == 2) { // Doubleword size
@@ -625,6 +622,10 @@ void psubq(uint64_t* dest, uint64_t* src, int qwordcount)
     else
         for (int i = 0; i < qwordcount; i++)
             dest[i] -= src[i];
+}
+void pandn(uint32_t* dest, uint32_t* src, int dwordcount){
+    for(int i=0;i<dwordcount;i++)
+        dest[i] = ~dest[i] & src[i];
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1177,7 +1178,6 @@ OPTYPE op_sse_pshufw_x128x128(struct decoded_instruction* i)
     //  0...7: Immediate
     //  8...9: Opcode
     uint32_t *src = &XMM32(I_RM(flags)), *dest = &XMM32(I_REG(flags));
-    printf("pshuf: phys=%08x imm16=%04x\n", cpu.phys_eip, i->imm16);
     switch(i->imm16  >> 8 & 3){
         case 2: // PSHUFLW
             pshuf(dest, src, i->imm8, 1);
@@ -1201,7 +1201,6 @@ OPTYPE op_sse_pshufw_x128m128(struct decoded_instruction* i)
     uint32_t flags = i->flags;
     if (get_ptr128_read(cpu_get_linaddr(flags, i)))
         EXCEP();
-    printf("pshuf: phys=%08x imm16=%04x\n", cpu.phys_eip, i->imm16);
     uint32_t* dest = &XMM32(I_REG(flags)), *src = result_ptr;
     switch(i->imm16 >> 8 & 3){
         case 2: // PSHUFLW
@@ -1349,5 +1348,21 @@ OPTYPE op_mov_x128x64(struct decoded_instruction* i)
     dest[1] = src[1];
     dest[2] = 0;
     dest[3] = 0;
+    NEXT(flags);
+}
+OPTYPE op_sse_pandn_x128x128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    pandn(&XMM32(I_REG(flags)), &XMM32(I_RM(flags)), 4);
+    NEXT(flags);
+}
+OPTYPE op_sse_pandn_x128m128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(cpu_get_linaddr(flags, i)))
+        EXCEP();
+    pandn(&XMM32(I_REG(flags)), result_ptr, 4);
     NEXT(flags);
 }
