@@ -831,7 +831,7 @@ static inline int getmask(uint32_t* a, unsigned int n)
 static inline int getmask2(uint32_t a, unsigned int n)
 {
     // Same as a >= n ? 0 : -1
-    return -(a < (n - 1));
+    return -(a < n);
 }
 
 OPTYPE op_sse_pshift_x128x128(struct decoded_instruction* i)
@@ -1329,6 +1329,16 @@ OPTYPE op_sse_mov_m64x128(struct decoded_instruction* i)
     uint32_t flags = i->flags;
     void* src = &XMM32(I_REG(flags));
     if(cpu_write64(cpu_get_linaddr(flags, i), src + i->imm8)) EXCEP();
+    NEXT(flags);
+}
+OPTYPE op_sse_mov_x64x64(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags, * dest = &XMM32(I_REG(flags)), * src = &XMM32(I_RM(flags));
+    dest[0] = src[0];
+    dest[1] = src[1];
+    dest[2] = 0;
+    dest[3] = 0;
     NEXT(flags);
 }
 OPTYPE op_mov_x128m64(struct decoded_instruction* i)

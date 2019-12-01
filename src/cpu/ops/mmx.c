@@ -732,10 +732,10 @@ OPTYPE op_mmx_padd_r64r64(struct decoded_instruction* i){
             paddw(dest, src, 4);
             break;
         case 2: // paddd
-            paddq(dest, src, 2);
+            paddd(dest, src, 2);
             break;
         case 3: // paddq
-            paddd(dest, src, 1);
+            paddq(dest, src, 1);
             break;
     }
     mmx_set_exp(I_REG(flags));
@@ -777,10 +777,10 @@ OPTYPE op_mmx_padd_r64m64(struct decoded_instruction* i){
             psubw(dest, src, 4);
             break;
         case 2: // psubd
-            psubq(dest, src, 2);
+            psubd(dest, src, 2);
             break;
         case 3: // psubq
-            psubd(dest, src, 1);
+            psubq(dest, src, 1);
             break;
     }
     mmx_set_exp(I_REG(flags));
@@ -825,5 +825,21 @@ OPTYPE op_mmx_pandn_r64m64(struct decoded_instruction* i)
     if (get_ptr64_read(cpu_get_linaddr(flags, i)))
         EXCEP();
     pandn(MM(I_REG(flags)).r32, result_ptr, 2);
+    NEXT(flags);
+}
+OPTYPE op_mmx_movq2dq(struct decoded_instruction* i){
+    CHECK_MMX;
+    uint32_t flags = i->flags, *dest = &XMM32(I_REG(flags)), *src = MM(I_RM(flags)).r32;
+    dest[0] = src[0];
+    dest[1] = src[1];
+    dest[2] = 0;
+    dest[3] = 0;
+    NEXT(flags);
+}
+OPTYPE op_mmx_movdq2q(struct decoded_instruction* i){
+    CHECK_MMX;
+    uint32_t flags = i->flags, *src = &XMM32(I_REG(flags)), *dest = MM(I_RM(flags)).r32;
+    dest[0] = src[0];
+    dest[1] = src[1];
     NEXT(flags);
 }

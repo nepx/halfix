@@ -2392,9 +2392,9 @@ static int decode_0F6F(struct decoded_instruction* i)
     if(modrm < 0xC0){
         static const insn_handler_t a[4] = {
             op_mov_r64m64, // none - movq
-            op_movu_x128m128, // 66 - movdqa
+            op_mov_x128m128, // 66 - movdqa
             op_mov_r64m64, // F2 - invalid, movq
-            op_mov_x128m128 // F3 - movdqu
+            op_movu_x128m128 // F3 - movdqu
         };
         i->handler = a[sse_prefix];
     } else {
@@ -2972,6 +2972,29 @@ static int decode_0FC7(struct decoded_instruction* i)
     }
 }
 
+static int decode_0FD6(struct decoded_instruction* i){
+    // PMULLW
+    uint8_t modrm = rb();
+    i->flags = parse_modrm(i, modrm, 6);
+    if(modrm < 0xC0){
+        if(sse_prefix != SSE_PREFIX_66) {
+            i->handler = op_ud_exception;
+            i->flags = 0;
+            return 1;
+        }
+        i->handler = op_sse_mov_m64x128;
+    }
+    else {
+        static const insn_handler_t a[4] = {
+            op_ud_exception, // No MMX opcode this time
+            op_sse_mov_x64x64, // 66 - MOVQ
+            op_mmx_movdq2q, // F2 - MOVDQ2Q
+            op_mmx_movq2dq // F2 - MOVQ2DQ
+        };
+        i->handler = a[sse_prefix];
+    }
+    return 0;
+}
 static int decode_0FD5(struct decoded_instruction* i){
     // PMULLW
     uint8_t modrm = rb();
@@ -3689,7 +3712,7 @@ static const decode_handler_t table0F[256] = {
     /* 0F D3 */ decode_invalid0F,
     /* 0F D4 */ SSE(decode_padd),
     /* 0F D5 */ SSE(decode_0FD5),
-    /* 0F D6 */ decode_invalid0F,
+    /* 0F D6 */ SSE(decode_0FD6),
     /* 0F D7 */ decode_invalid0F,
     /* 0F D8 */ decode_invalid0F,
     /* 0F D9 */ decode_invalid0F,
