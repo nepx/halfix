@@ -52,5 +52,6 @@ int cvt_f_to_i32(void* dest, void* src, int dwordcount, int truncate);
 int cvt_d_to_i32(void* dest, void* src, int dwordcount, int truncate);
 int cvt_i32_to_f(void* dest, void* src, int dwordcount);
 int cvt_i32_to_d(void* dest, void* src, int dwordcount);
+void psadbw(void* dest, void* src, int qwordcount);
 
 #endif

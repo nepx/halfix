@@ -773,6 +773,20 @@ int cvt_i32_to_d(void* dest, void* src, int dwordcount){
     return cpu_sse_handle_exceptions();
 #endif
 }
+void psadbw(void* dest, void* src, int qwordcount){
+    uint8_t* src8 = src, *dest8 = dest;
+    for(int i=0;i<qwordcount;i++){
+        uint32_t sum = 0, offs = i << 3;
+        for(int j=0;j<8;j++){
+            int diff = src8[j | offs] - dest8[j | offs];
+            if(diff < 0) diff = -diff;
+            sum += diff;
+            dest8[j | offs] = 0;
+        }
+        dest8[offs | 0] = sum;
+        dest8[offs | 1] = sum >> 8;
+    }
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Actual opcodes
@@ -1250,5 +1264,14 @@ OPTYPE op_sse_pandn_x128v128(struct decoded_instruction* i)
     if (get_ptr128_read(flags, i))
         EXCEP();
     pandn(&XMM32(I_REG(flags)), result_ptr, 4);
+    NEXT(flags);
+}
+OPTYPE op_sse_psadbw_x128v128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(flags, i))
+        EXCEP();
+    psadbw(&XMM32(I_REG(flags)), result_ptr, 2);
     NEXT(flags);
 }

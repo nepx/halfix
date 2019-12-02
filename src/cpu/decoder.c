@@ -3083,6 +3083,14 @@ static int decode_0FF5(struct decoded_instruction* i){
     i->handler = sse_prefix == SSE_PREFIX_66 ? op_sse_pmaddwd_x128v128 : op_mmx_pmaddwd_r64v64;
     return 0;
 }
+static int decode_0FF6(struct decoded_instruction* i){
+    // PSADBW
+    uint8_t modrm = rb();
+    i->flags = parse_modrm(i, modrm, 6);
+    I_SET_OP(i->flags, modrm >= 0xC0);
+    i->handler = sse_prefix == SSE_PREFIX_66 ? op_sse_psadbw_x128v128 : op_mmx_psadbw_r64v64;
+    return 0;
+}
 static int decode_padd(struct decoded_instruction* i){
     uint8_t opcode = rawp[-1], modrm = rb();
     i->flags = parse_modrm(i, modrm, 6);
@@ -3707,7 +3715,7 @@ static const decode_handler_t table0F[256] = {
     /* 0F F3 */ decode_invalid0F,
     /* 0F F4 */ decode_invalid0F,
     /* 0F F5 */ SSE(decode_0FF5),
-    /* 0F F6 */ decode_invalid0F,
+    /* 0F F6 */ SSE(decode_0FF6),
     /* 0F F7 */ decode_invalid0F,
     /* 0F F8 */ SSE(decode_psub),
     /* 0F F9 */ SSE(decode_psub),

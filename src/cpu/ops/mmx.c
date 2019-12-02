@@ -675,3 +675,14 @@ OPTYPE op_cvttf2i(struct decoded_instruction* i)
     }
     NEXT(flags);
 }
+OPTYPE op_mmx_psadbw_r64v64(struct decoded_instruction* i)
+{
+    CHECK_MMX;
+    uint32_t flags = i->flags;
+    if (get_ptr64_read(flags, i))
+        EXCEP();
+    psadbw(MM(I_REG(flags)).r32, result_ptr, 1);
+    mmx_set_exp(I_REG(flags));
+    mmx_reset_fpu();
+    NEXT(flags);
+}
