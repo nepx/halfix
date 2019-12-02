@@ -48,5 +48,9 @@ void psubw(uint16_t* dest, uint16_t* src, int);
 void psubd(uint32_t* dest, uint32_t* src, int);
 void psubq(uint64_t* dest, uint64_t* src, int);
 void pandn(uint32_t* dest, uint32_t* src, int dwordcount);
+int cvt_f_to_i32(void* dest, void* src, int dwordcount, int truncate);
+int cvt_d_to_i32(void* dest, void* src, int dwordcount, int truncate);
+int cvt_i32_to_f(void* dest, void* src, int dwordcount);
+int cvt_i32_to_d(void* dest, void* src, int dwordcount);
 
 #endif

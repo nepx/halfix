@@ -521,6 +521,9 @@ OPTYPE op_mmx_pandn_r64v64(struct decoded_instruction* i);
 OPTYPE op_mmx_movq2dq(struct decoded_instruction* i);
 OPTYPE op_mmx_movdq2q(struct decoded_instruction* i);
 
+// Both MMX/SSE 
+OPTYPE op_cvttf2i(struct decoded_instruction* i);
+
 // <<< BEGIN AUTOGENERATE "string" >>>
 OPTYPE op_movsb16(struct decoded_instruction* i);
 OPTYPE op_movsb32(struct decoded_instruction* i);

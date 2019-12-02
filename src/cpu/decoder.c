@@ -2259,6 +2259,7 @@ static int decode_0F28(struct decoded_instruction* i){
         i->handler = op_mov_x128m128;
     else {
         flags = swap_rm_reg(flags);
+        I_SET_OP(flags, 1);
         // I_OP is already zero
         i->handler = op_mov_v128x128;
     }
@@ -2280,6 +2281,16 @@ static int decode_0F2B(struct decoded_instruction* i){
     int flags = parse_modrm(i, modrm, 6);
     I_SET_OP(flags, modrm >= 0xC0);
     i->handler = op_mov_v128x128;
+    i->flags = flags;
+    return 0;
+}
+static int decode_0F2C_0F2D(struct decoded_instruction* i){
+    // MOVNTPD/MOVNTPS
+    uint8_t opcode = rawp[-1], modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    I_SET_OP(flags, modrm >= 0xC0);
+    i->handler = op_cvttf2i;
+    i->imm8 = sse_prefix | (opcode << 2 & 4);
     i->flags = flags;
     return 0;
 }
@@ -3494,8 +3505,8 @@ static const decode_handler_t table0F[256] = {
     /* 0F 29 */ SSE(decode_0F29),
     /* 0F 2A */ decode_invalid0F,
     /* 0F 2B */ SSE(decode_0F2B),
-    /* 0F 2C */ decode_invalid0F,
-    /* 0F 2D */ decode_invalid0F,
+    /* 0F 2C */ SSE(decode_0F2C_0F2D),
+    /* 0F 2D */ SSE(decode_0F2C_0F2D),
     /* 0F 2E */ decode_invalid0F,
     /* 0F 2F */ decode_invalid0F,
     /* 0F 30 */ decode_0F30,

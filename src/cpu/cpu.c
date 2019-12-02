@@ -269,6 +269,7 @@ static void cpu_state(void)
         cpu_trace_flush(); // Remove all residual code traces
         cpu_mmu_tlb_flush(); // Remove all stale TLB entries
         cpu_prot_update_cpl(); // Update cpu.tlb_shift_*
+        cpu_update_mxcsr();
 
         // The following line doesn't work with OS/2, which assumes that the base/limit/access of all segmentation registers are stored in the cache.
         // In many cases, OS/2 loads the base/limit/access into the segment register (updating the cache) and then modifies descriptors in memorys.

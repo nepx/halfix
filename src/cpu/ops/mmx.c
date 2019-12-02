@@ -73,10 +73,11 @@ static union {
     uint16_t d16;
     uint32_t d32;
     uint64_t d64;
+    uint32_t d128[4];
 
     uint16_t d16a[4];
     uint32_t d32a[2];
-} temp;
+} temp __attribute__((aligned(16)));
 // This is the actual pointer we can read/write.
 static void* result_ptr;
 
@@ -574,5 +575,103 @@ OPTYPE op_mmx_movdq2q(struct decoded_instruction* i)
     dest[1] = src[1];
     mmx_set_exp(I_REG(flags));
     mmx_reset_fpu();
+    NEXT(flags);
+}
+
+OPTYPE op_cvttpi2pf_x128v64(struct decoded_instruction* i)
+{
+    // Convert packed dword integer to packed float
+    CHECK_MMX;
+    uint32_t flags = i->flags;
+    if (get_ptr64_read(flags, i))
+        EXCEP();
+    if (i->imm8 == 0) {
+        if (cvt_i32_to_f(&XMM32(I_REG(flags)), result_ptr, 2))
+            EXCEP();
+    } else {
+        if (cvt_i32_to_d(&XMM32(I_REG(flags)), result_ptr, 2))
+            EXCEP();
+    }
+    NEXT(flags);
+}
+OPTYPE op_cvttsi2sf_x128v32(struct decoded_instruction* i)
+{
+    // Convert scalar dword integer to scalar float
+    CHECK_MMX;
+    uint32_t flags = i->flags;
+    if (I_OP2(flags))
+        temp.d32 = cpu.reg32[I_REG(flags)];
+    else
+        cpu_read32(cpu_get_linaddr(flags, i), temp.d32, cpu.tlb_shift_write);
+    if (i->imm8 == 0) {
+        if (cvt_i32_to_f(&XMM32(I_REG(flags)), &temp.d32, 1))
+            EXCEP();
+    } else {
+        if (cvt_i32_to_d(&XMM32(I_REG(flags)), &temp.d32, 1))
+            EXCEP();
+    }
+    NEXT(flags);
+}
+OPTYPE op_cvttps2pi_x128v64(struct decoded_instruction* i)
+{
+    // Convert packed dword integer to packed float
+    CHECK_MMX;
+    uint32_t flags = i->flags;
+    if (get_ptr64_read(flags, i))
+        EXCEP();
+    if (i->imm8 == 0) {
+        if (cvt_i32_to_f(&XMM32(I_REG(flags)), result_ptr, 2))
+            EXCEP();
+    } else {
+        if (cvt_i32_to_d(&XMM32(I_REG(flags)), result_ptr, 2))
+            EXCEP();
+    }
+    NEXT(flags);
+}
+OPTYPE op_cvttf2i(struct decoded_instruction* i)
+{
+    // Convert scalar/packed dword float to scalar/packed integer
+    CHECK_MMX;
+    uint32_t flags = i->flags, linaddr = cpu_get_linaddr(flags, i);
+    void* res = i->imm8 & 2 ? &cpu.reg32[I_REG(flags)] : MM(I_REG(flags)).r32;
+    // 0: NP 0F 2C - mm  single --> int32 trunc
+    // 1: 66 0F 2C - mm  double --> int32 trunc
+    // 2: F2 0F 2C - r32 single --> int32 trunc
+    // 3: F3 0F 2C - r32 double --> int32 trunc
+    // 4: NP 0F 2D - mm  single --> int32 no trunc
+    // 5: 66 0F 2D - mm  double --> int32 no trunc
+    // 6: F2 0F 2D - r32 single --> int32 no trunc
+    // 7: F3 0F 2D - r32 double --> int32 no trunc
+    int trunc = i->imm8 >> 2 & 1;
+    switch (i->imm8 & 3) {
+    case 0: // CVTTPS2PI - truncate - 0F 2C
+        if (!(I_OP2(flags))) {
+            read64(linaddr, &temp.d64);
+        }else
+            cpu_mov64(&temp.d64, &XMM32(I_RM(flags)));
+        if(cvt_f_to_i32(res, &temp.d64, 2, trunc)) EXCEP();
+        break;
+    case 3: // CVTTSS2SI - truncate - F3 0F 2C
+        if (!(I_OP2(flags)))
+            cpu_read32(linaddr, temp.d32, cpu.tlb_shift_read);
+        else
+            temp.d32 = XMM32(I_RM(flags));
+        if(cvt_f_to_i32(res, &temp.d32, 1, trunc)) EXCEP();
+        break;
+    case 1: // CVTTPD2PI - truncate - 66 0F 2C
+        if (!(I_OP2(flags))){
+            if(cpu_read128(linaddr, temp.d128))EXCEP();
+        }else
+            cpu_mov128(&temp.d128, &XMM32(I_RM(flags)));
+        if(cvt_d_to_i32(res, &temp.d128, 2, trunc)) EXCEP();
+        break;
+    case 2: // CVTTSD2SI - truncate - F2 0F 2C
+        if (!(I_OP2(flags))){
+            read64(linaddr, &temp.d64);
+        }else
+            cpu_mov64(&temp.d64, &XMM32(I_RM(flags)));
+        if(cvt_d_to_i32(res, &temp.d64, 1, trunc)) EXCEP();
+        break;
+    }
     NEXT(flags);
 }

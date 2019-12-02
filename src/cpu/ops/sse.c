@@ -18,6 +18,7 @@
 #define float64_t float64
 static float_status_t status;
 #else
+#include <math.h> 
 #define float32_t float
 #define float64_t double
 #endif
@@ -242,7 +243,7 @@ static inline uint32_t cpu_get_linaddr(uint32_t i, struct decoded_instruction* j
 static union {
     uint32_t d32;
     uint32_t d128[4];
-} temp;
+} temp __attribute__((aligned(16)));
 // This is the actual pointer we can read/write.
 static void* result_ptr;
 
@@ -700,6 +701,78 @@ void pandn(uint32_t* dest, uint32_t* src, int dwordcount)
     for (int i = 0; i < dwordcount; i++)
         dest[i] = ~dest[i] & src[i];
 }
+int cvt_f_to_i32(void* dest, void* src, int dwordcount, int truncate){
+#ifdef FAST_FLOAT
+    uint32_t* dest32 = dest;
+    float* src32 = src;
+    for (int i = 0; i < dwordcount; i++) {
+        if(truncate)
+            dest32[i] = (int32_t)trunc(src32[i]);
+        else
+            dest32[i] = (int32_t)src32[i];
+    }
+#else
+    uint32_t* dest32 = dest;
+    float32* src32 = src;
+    for (int i = 0; i < dwordcount; i++) {
+        if(truncate)
+        dest32[i] = float32_to_int32(src32[i], &status);
+        else
+        dest32[i] = float32_to_int32_round_to_zero(src32[i], &status);
+    }
+    return cpu_sse_handle_exceptions();
+#endif
+}
+int cvt_d_to_i32(void* dest, void* src, int qwordcount, int truncate){
+#ifdef FAST_FLOAT
+    uint32_t* dest32 = dest;
+    double* src32 = src;
+    for (int i = 0; i < qwordcount; i++) {
+        if(truncate)
+            dest32[i] = (int32_t)trunc(src32[i]);
+        else
+            dest32[i] = (int32_t)src32[i];
+    }
+#else
+    uint32_t* dest32 = dest;
+    float64* src64 = src;
+    for (int i = 0; i < qwordcount; i++){
+        if(truncate)
+            dest32[i] = float64_to_int32(src64[i], &status);
+        else
+            dest32[i] = float64_to_int32_round_to_zero(src64[i], &status);
+    }
+    return cpu_sse_handle_exceptions();
+#endif
+}
+int cvt_i32_to_f(void* dest, void* src, int dwordcount){
+#ifdef FAST_FLOAT
+    float* dest32 = dest;
+    uint32_t* src32 = src;
+    for (int i = 0; i < dwordcount; i++)
+        dest32[i] = (float)src32[i];
+#else
+    float32* dest32 = dest;
+    int32_t* src32 = src;
+    for (int i = 0; i < dwordcount; i++)
+        dest32[i] = int32_to_float32(src32[i], &status);
+    return cpu_sse_handle_exceptions();
+#endif
+}
+int cvt_i32_to_d(void* dest, void* src, int dwordcount){
+#ifdef FAST_FLOAT
+    double* dest32 = dest;
+    uint32_t* src32 = src;
+    for (int i = 0; i < dwordcount; i++)
+        dest32[i] = (float)src32[i];
+#else
+    float64* dest64 = dest;
+    int32_t* src32 = src;
+    for (int i = 0; i < dwordcount; i++)
+        dest64[i] = int32_to_float32(src32[i], &status);
+    return cpu_sse_handle_exceptions();
+#endif
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Actual opcodes
@@ -747,6 +820,7 @@ void pandn(uint32_t* dest, uint32_t* src, int dwordcount)
 
 OPTYPE op_ldmxcsr(struct decoded_instruction* i)
 {
+    CHECK_SSE;
     uint32_t flags = i->flags, linaddr = cpu_get_linaddr(flags, i), mxcsr;
     cpu_read32(linaddr, mxcsr, cpu.tlb_shift_read);
     if (mxcsr & ~MXCSR_MASK)
@@ -757,6 +831,7 @@ OPTYPE op_ldmxcsr(struct decoded_instruction* i)
 }
 OPTYPE op_stmxcsr(struct decoded_instruction* i)
 {
+    CHECK_SSE;
     uint32_t flags = i->flags, linaddr = cpu_get_linaddr(flags, i);
     cpu_write32(linaddr, cpu.mxcsr, cpu.tlb_shift_read);
     NEXT(flags);

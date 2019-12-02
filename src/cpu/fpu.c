@@ -49,6 +49,17 @@ FADD:
 #include "cpu/fpu.h"
 #undef NEED_STRUCT
 
+#if 0
+// For savestate generator
+
+    // <<< BEGIN STRUCT "struct" >>>
+    int ftop;
+    uint16_t control_word, status_word, tag_word;
+    uint32_t fpu_eip, fpu_data_ptr;
+    uint16_t fpu_cs, fpu_opcode, fpu_data_seg;
+    // <<< END STRUCT "struct" >>>
+#endif
+
 enum {
     FPU_TAG_VALID = 0,
     FPU_TAG_ZERO = 1,
@@ -165,7 +176,7 @@ static void fpu_state(void)
     state_field(obj, 2, "fpu.fpu_cs", &fpu.fpu_cs);
     state_field(obj, 2, "fpu.fpu_opcode", &fpu.fpu_opcode);
     state_field(obj, 2, "fpu.fpu_data_seg", &fpu.fpu_data_seg);
-    // <<< END AUTOGENERATE "state" >>>
+// <<< END AUTOGENERATE "state" >>>
     char name[32];
     for (int i = 0; i < 8; i++) {
         sprintf(name, "fpu.st[%d].mantissa", i);
@@ -650,7 +661,7 @@ static void fpu_watchpoint(void)
 static void fpu_watchpoint2(void)
 {
     // For debugging purposes
-    //if(fpu.st[5].fraction == 0x00000006e8b877f6) __asm__("int3");
+    //if(fpu.fpu_opcode == 0x77F8) __asm__("int3");
 }
 
 #define FPU_EXCEP() return 1
@@ -1636,12 +1647,15 @@ int fpu_fxsave(uint32_t linaddr)
     for (int i = 0; i < 8; i++)
         if ((fpu.tag_word >> (i * 2) & 3) != FPU_TAG_EMPTY)
             tag |= 1 << i;
-    cpu_write8(linaddr + 4, tag, cpu.tlb_shift_write); // Note: 8-bit with 2 byte gap
+        
+    // Some fields are less than 16 or 32 bits wide, but we write them anyways. 
+    // They are filled with zeros.
+    cpu_write16(linaddr + 4, tag, cpu.tlb_shift_write);
     cpu_write16(linaddr + 6, fpu.fpu_opcode, cpu.tlb_shift_write);
     cpu_write32(linaddr + 8, fpu.fpu_eip, cpu.tlb_shift_write);
-    cpu_write16(linaddr + 12, fpu.fpu_cs, cpu.tlb_shift_write); // Note: 16-bit with 4 byte gap
+    cpu_write32(linaddr + 12, fpu.fpu_cs, cpu.tlb_shift_write);
     cpu_write32(linaddr + 16, fpu.fpu_data_ptr, cpu.tlb_shift_write);
-    cpu_write16(linaddr + 20, fpu.fpu_data_seg, cpu.tlb_shift_write); // Note: 16-bit with 4 byte gap
+    cpu_write32(linaddr + 20, fpu.fpu_data_seg, cpu.tlb_shift_write);
     cpu_write32(linaddr + 24, cpu.mxcsr, cpu.tlb_shift_write);
     cpu_write32(linaddr + 28, MXCSR_MASK, cpu.tlb_shift_write);
     uint32_t tempaddr = linaddr + 32;
@@ -1678,6 +1692,7 @@ int fpu_fxrstor(uint32_t linaddr)
     if (mxcsr & ~MXCSR_MASK)
         EXCEPTION_GP(0);
     cpu.mxcsr = mxcsr;
+    cpu_update_mxcsr();
 
     uint32_t temp = 0;
     cpu_read16(linaddr + 0, temp, cpu.tlb_shift_read);
@@ -1687,12 +1702,15 @@ int fpu_fxrstor(uint32_t linaddr)
     fpu.ftop = fpu.status_word >> 11 & 7;
     fpu.status_word &= ~(7 << 11);
 
-    // TODO: Tag word?
-    cpu_read16(linaddr + 6, fpu.fpu_opcode, cpu.tlb_shift_write);
-    cpu_read32(linaddr + 8, fpu.fpu_eip, cpu.tlb_shift_write);
-    cpu_read16(linaddr + 12, fpu.fpu_cs, cpu.tlb_shift_write); // Note: 16-bit with 4 byte gap
-    cpu_read32(linaddr + 16, fpu.fpu_data_ptr, cpu.tlb_shift_write);
-    cpu_read16(linaddr + 20, fpu.fpu_data_seg, cpu.tlb_shift_write); // Note: 16-bit with 4 byte gap
+    uint8_t small_tag_word;
+    cpu_read8(linaddr + 4, small_tag_word, cpu.tlb_shift_read);
+
+    cpu_read16(linaddr + 6, fpu.fpu_opcode, cpu.tlb_shift_read);
+    fpu.fpu_opcode &= 0x7FF;
+    cpu_read32(linaddr + 8, fpu.fpu_eip, cpu.tlb_shift_read);
+    cpu_read16(linaddr + 12, fpu.fpu_cs, cpu.tlb_shift_read); // Note: 16-bit with 4 byte gap
+    cpu_read32(linaddr + 16, fpu.fpu_data_ptr, cpu.tlb_shift_read);
+    cpu_read16(linaddr + 20, fpu.fpu_data_seg, cpu.tlb_shift_read); // Note: 16-bit with 4 byte gap
     uint32_t tempaddr = linaddr + 32;
     for (int i = 0; i < 8; i++) {
         if (fpu_read_f80(tempaddr, fpu_get_st_ptr(i)))
@@ -1703,12 +1721,23 @@ int fpu_fxrstor(uint32_t linaddr)
     // TODO: Find out what happens on real hardware when OSFXSR isn't set.
     tempaddr = linaddr + 160;
     for (int i = 0; i < 8; i++) {
-        cpu_read32(tempaddr, cpu.xmm32[(i * 4)], cpu.tlb_shift_write);
-        cpu_read32(tempaddr + 4, cpu.xmm32[(i * 4) + 1], cpu.tlb_shift_write);
-        cpu_read32(tempaddr + 8, cpu.xmm32[(i * 4) + 2], cpu.tlb_shift_write);
-        cpu_read32(tempaddr + 12, cpu.xmm32[(i * 4) + 3], cpu.tlb_shift_write);
+        cpu_read32(tempaddr, cpu.xmm32[(i * 4)], cpu.tlb_shift_read);
+        cpu_read32(tempaddr + 4, cpu.xmm32[(i * 4) + 1], cpu.tlb_shift_read);
+        cpu_read32(tempaddr + 8, cpu.xmm32[(i * 4) + 2], cpu.tlb_shift_read);
+        cpu_read32(tempaddr + 12, cpu.xmm32[(i * 4) + 3], cpu.tlb_shift_read);
         tempaddr += 16;
     }
+
+    // Now find out tag word
+    uint16_t tag_word = 0;
+    for(int i=0;i<8;i++){
+        int tagid = FPU_TAG_EMPTY;
+        if(small_tag_word & (1 << i))
+            tagid = fpu_get_tag_from_value(&fpu.st[i]);
+        tag_word |= tagid << (i * 2);
+    }
+    //printf("new tag word: %04x small: %02x\n", tag_word, small_tag_word);
+    fpu.tag_word = tag_word;
     return 0;
 }
 
