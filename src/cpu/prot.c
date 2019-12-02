@@ -1,43 +1,48 @@
 // Protected mode helper functions
 #include "cpu/cpu.h"
 
-int cpu_prot_set_cr(int cr, uint32_t v){
+int cpu_prot_set_cr(int cr, uint32_t v)
+{
     uint32_t diffxor = v ^ cpu.cr[cr];
     cpu.cr[cr] = v;
     // TODO: #GP on invalid bits
-    switch(cr){
-        case 0:
-            if(diffxor & CR0_PG)
+    switch (cr) {
+    case 0:
+        if (diffxor & (CR0_PG | CR0_PE | CR0_WP))
             cpu_mmu_tlb_flush();
-            break;
-        case 3: // PDBR
-            cpu.cr[3] &= ~0xFFF;
+        break;
+    case 3: // PDBR
+        cpu.cr[3] &= ~0xFFF;
+        if(cpu.cr[4] & CR4_PGE)
             cpu_mmu_tlb_flush_nonglobal();
-            break;
-        case 4: 
-            if(diffxor & (CR4_PGE | CR4_PAE | CR4_PSE | CR4_PCIDE | CR4_SMEP))
-                cpu_mmu_tlb_flush();
+        else
+            cpu_mmu_tlb_flush();
+        break;
+    case 4:
+        if (diffxor & (CR4_PGE | CR4_PAE | CR4_PSE | CR4_PCIDE | CR4_SMEP))
+            cpu_mmu_tlb_flush();
     }
     return 0;
 }
 
-
 void cpu_prot_set_dr(int id, uint32_t val)
 {
-    uint32_t xorvec = cpu.dr[id] ^ val;
-    if (xorvec) {
-        // TODO...
-        switch (id) {
-        case 6:
-            cpu.dr[6] = (cpu.dr[6] & 0xffff0ff0) | (val & 0xE00F);
-            break;
-        case 7:
-            cpu.dr[7] = (val & 0xffff2fff) | 0x400;
-            break;
-        default:
-            cpu.dr[id] = val;
-            break;
-        }
+    // Setting the debug registers does nothing.
+    switch (id) {
+    case 0 ... 3:
+        cpu.dr[id] = val;
+        cpu_mmu_tlb_invalidate(val);
+        break;
+    case 6:
+        cpu.dr[6] = (cpu.dr[6] & 0xffff0ff0) | (val & 0xE00F);
+        break;
+    case 7:
+        cpu.dr[7] = (val & 0xffff2fff) | 0x400;
+        cpu_mmu_tlb_flush();
+        break;
+    default:
+        cpu.dr[id] = val;
+        break;
     }
 }
 
