@@ -1975,6 +1975,7 @@ OPTYPE op_xchg_r16e16(struct decoded_instruction* i)
     int tlb_info = cpu.tlb_tags[linaddr >> 12];
     uint16_t* ptr;
     if (TLB_ENTRY_INVALID16(linaddr, tlb_info, cpu.tlb_shift_write)) {
+        tlb_info >>= cpu.tlb_shift_write;
         if (cpu_access_read16(linaddr, tlb_info, cpu.tlb_shift_write))
             EXCEP();
         UNUSED2(cpu_access_write16(linaddr, R16(I_REG(flags)), tlb_info, cpu.tlb_shift_write));
@@ -1993,6 +1994,7 @@ OPTYPE op_xchg_r32e32(struct decoded_instruction* i)
     int tlb_info = cpu.tlb_tags[linaddr >> 12];
     uint32_t* ptr;
     if (TLB_ENTRY_INVALID32(linaddr, tlb_info, cpu.tlb_shift_write)) {
+        tlb_info >>= cpu.tlb_shift_write;
         if (cpu_access_read32(linaddr, tlb_info, cpu.tlb_shift_write))
             EXCEP();
         UNUSED2(cpu_access_write32(linaddr, R32(I_REG(flags)), tlb_info, cpu.tlb_shift_write));
