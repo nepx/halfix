@@ -787,6 +787,41 @@ void psadbw(void* dest, void* src, int qwordcount){
         dest8[offs | 1] = sum >> 8;
     }
 }
+void pcmpgt(void* dest, void* src, int stride, int bytecount){
+    int i = 0;
+    uint8_t* src8 = src, *dest8 = dest;
+#if 0
+    printf("pcmpgt: %p %p\n", src8, dest8);
+    for(int i=0;i<8;i++) printf("%02x", src8[i]);
+    printf("\n");
+    for(int i=0;i<8;i++) printf("%02x", dest8[i]);
+    printf("\n");
+#endif
+    int move = (4 - stride) << 3;
+    while(i < bytecount){
+        int32_t x = 0, y = 0;
+        for(int j=0,shift=0;j<stride;j++,shift+=8){
+            x|=dest8[j + i] << shift;
+            y|=src8[j + i] << shift;
+        }
+        // Note: (given n is a int32)
+        //  n << 16 >> 16 == (int16_t)n
+        //  n << 8 >> 8 == (int8_t)n
+        x = x << move >> move;
+        y = y << move >> move;
+        //printf("%d %d >> %d\n", x, y, move);
+        x = -(x > y);
+        for(int j=0;j<stride;j++){
+            dest8[j + i] = x;
+        }
+        i += stride;
+    }
+}
+void pand(void* dest, void* src, int dwordcount){
+    uint32_t* src32 = src, *dest32 = dest;
+    for(int i=0;i<dwordcount;i++)
+        dest32[i] &= src32[i];
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Actual opcodes
@@ -1089,7 +1124,7 @@ OPTYPE op_sse_paddsubs_x128v128(struct decoded_instruction* i)
             paddssb(dest, src, 16);
             break;
         case 3:
-            paddusb(dest, src, 8);
+            paddssw(dest, src, 8);
             break;
         case 4:
             psubusb(dest, src, 16);
@@ -1101,7 +1136,7 @@ OPTYPE op_sse_paddsubs_x128v128(struct decoded_instruction* i)
             psubssb(dest, src, 16);
             break;
         case 7:
-            psubusb(dest, src, 8);
+            psubssw(dest, src, 8);
             break;
     }
     NEXT(flags);
@@ -1273,5 +1308,23 @@ OPTYPE op_sse_psadbw_x128v128(struct decoded_instruction* i)
     if (get_ptr128_read(flags, i))
         EXCEP();
     psadbw(&XMM32(I_REG(flags)), result_ptr, 2);
+    NEXT(flags);
+}
+OPTYPE op_sse_pcmpgt_x128v128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(flags, i))
+        EXCEP();
+    pcmpgt(&XMM32(I_REG(flags)), result_ptr, i->imm8, 16);
+    NEXT(flags);
+}
+OPTYPE op_sse_pand_x128v128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(flags, i))
+        EXCEP();
+    pand(&XMM32(I_REG(flags)), result_ptr, 4);
     NEXT(flags);
 }

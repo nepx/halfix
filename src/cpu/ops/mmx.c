@@ -686,3 +686,25 @@ OPTYPE op_mmx_psadbw_r64v64(struct decoded_instruction* i)
     mmx_reset_fpu();
     NEXT(flags);
 }
+OPTYPE op_mmx_pcmpgt_r64v64(struct decoded_instruction* i)
+{
+    CHECK_MMX;
+    uint32_t flags = i->flags;
+    if (get_ptr64_read(flags, i))
+        EXCEP();
+    pcmpgt(MM(I_REG(flags)).r32, result_ptr, i->imm8, 8);
+    mmx_set_exp(I_REG(flags));
+    mmx_reset_fpu();
+    NEXT(flags);
+}
+OPTYPE op_mmx_pand_r64v64(struct decoded_instruction* i)
+{
+    CHECK_MMX;
+    uint32_t flags = i->flags;
+    if (get_ptr64_read(flags, i))
+        EXCEP();
+    pand(MM(I_REG(flags)).r32, result_ptr, 2);
+    mmx_set_exp(I_REG(flags));
+    mmx_reset_fpu();
+    NEXT(flags);
+}
