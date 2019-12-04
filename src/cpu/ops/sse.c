@@ -822,6 +822,29 @@ void pand(void* dest, void* src, int dwordcount){
     for(int i=0;i<dwordcount;i++)
         dest32[i] &= src32[i];
 }
+static void shufps(void* dest, void* src, int imm){
+    uint32_t* src32 = src, *dest32 = dest;
+    uint32_t res[4];
+    res[0] = dest32[imm >> 0 & 3];
+    res[1] = dest32[imm >> 2 & 3];
+    res[2] = src32[imm >> 4 & 3];
+    res[3] = src32[imm >> 6 & 3];
+    memcpy(dest32, res, 16);
+}
+static void shufpd(void* dest, void* src, int imm){
+    uint32_t* src32 = src, *dest32 = dest;
+    if(imm & 1){
+        dest32[0] = dest32[2];
+        dest32[1] = dest32[3];
+    }
+    if(imm & 2){
+        dest32[0] = src32[0];
+        dest32[1] = src32[1];
+    }else{
+        dest32[0] = dest32[2];
+        dest32[1] = dest32[3];
+    }
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Actual opcodes
@@ -930,6 +953,14 @@ OPTYPE op_mov_x128m128(struct decoded_instruction* i)
         EXCEPTION_GP(0);
     if (cpu_read128(linaddr, &XMM32(I_REG(flags))))
         EXCEP();
+    NEXT(flags);
+}
+OPTYPE op_mov_x128v128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if(get_ptr128_read(flags, i)) EXCEP();
+    cpu_mov128(&XMM32(I_REG(flags)), result_ptr);
     NEXT(flags);
 }
 OPTYPE op_movu_m128x128(struct decoded_instruction* i)
@@ -1262,32 +1293,18 @@ OPTYPE op_sse_mov_m64x128(struct decoded_instruction* i)
         EXCEP();
     NEXT(flags);
 }
-OPTYPE op_sse_mov_x64x64(struct decoded_instruction* i)
+OPTYPE op_mov_x128v64(struct decoded_instruction* i)
 {
     CHECK_SSE;
-    uint32_t flags = i->flags, *dest = &XMM32(I_REG(flags)), *src = &XMM32(I_RM(flags));
-    dest[0] = src[0];
-    dest[1] = src[1];
-    dest[2] = 0;
-    dest[3] = 0;
-    NEXT(flags);
-}
-OPTYPE op_mov_x128m64(struct decoded_instruction* i)
-{
-    CHECK_SSE;
-    uint32_t flags = i->flags, *dest = &XMM32(I_REG(flags));
+    uint32_t flags = i->flags, *dest = &XMM32(I_REG(flags)), *src;
+    if(I_OP2(flags)) {
     if (cpu_read64(cpu_get_linaddr(flags, i), dest))
         EXCEP();
-    dest[2] = 0;
-    dest[3] = 0;
-    NEXT(flags);
-}
-OPTYPE op_mov_x128x64(struct decoded_instruction* i)
-{
-    CHECK_SSE;
-    uint32_t flags = i->flags, *dest = &XMM32(I_REG(flags)), *src = &XMM32(I_RM(flags));
-    dest[0] = src[0];
-    dest[1] = src[1];
+    }else{
+        src = &XMM32(I_RM(flags));
+        dest[0] = src[0];
+        dest[1] = src[1];
+    }
     dest[2] = 0;
     dest[3] = 0;
     NEXT(flags);
@@ -1326,5 +1343,17 @@ OPTYPE op_sse_pand_x128v128(struct decoded_instruction* i)
     if (get_ptr128_read(flags, i))
         EXCEP();
     pand(&XMM32(I_REG(flags)), result_ptr, 4);
+    NEXT(flags);
+}
+OPTYPE op_sse_shufp_x128v128(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags;
+    if (get_ptr128_read(flags, i))
+        EXCEP();
+    if((i->imm16 >> 8) == 1)
+        shufpd(&XMM32(I_REG(flags)), result_ptr, i->imm8);
+    else 
+        shufps(&XMM32(I_REG(flags)), result_ptr, i->imm8);
     NEXT(flags);
 }
