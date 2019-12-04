@@ -33,7 +33,6 @@ var Module = {
         ctx = Module["canvas"].getContext("2d");
     window["update_size"] = function (fbptr, x, y) {
         if (x == 0 || y == 0) return; // Don't do anything if x or y is zero (VGA resizing sometimes gives weird sizes)
-        console.log("Update size: ", x, y);
         Module["canvas"].width = x;
         Module["canvas"].height = y;
         image_data = new ImageData(new Uint8ClampedArray(Module["HEAPU8"].buffer, fbptr, (x * y) << 2), x, y);
@@ -196,6 +195,11 @@ var Module = {
         /** @type {Int32Array} */
         i32;
 
+    function getBooleanByName(x){
+        var param = getParameterByName(x);
+        if(typeof param !== "string") return true;
+        return param === "true";
+    }
     // ============================================================================
     // Emscripten helper functions
     // ============================================================================
@@ -205,13 +209,14 @@ var Module = {
         vgabios_path: getParameterByName("vgabios") || "vgabios.bin",
         vgabios: null,
         hd: [getParameterByName("hda"), getParameterByName("hdb"), getParameterByName("hdc"), getParameterByName("hdd")],
-        pci: getParameterByName("pcienabled") === "true",
-        apic: getParameterByName("apicenabled") === "true",
+        pci: getBooleanByName("pcienabled"),
+        apic: getBooleanByName("apicenabled"),
+        acpi: getBooleanByName("apicenabled"),
         now: getParameterByName("now") ? parseFloat(getParameterByName("now")) : 1563602400,
         mem: getParameterByName("mem") ? parseInt(getParameterByName("mem")) : 32,
         vgamem: getParameterByName("vgamem") ? parseInt(getParameterByName("vgamem")) : 32,
         fd: [getParameterByName("fda"), getParameterByName("fdb")],
-        boot: getParameterByName("boot") || "hfc" // HDA, FDC, CDROM
+        boot: getParameterByName("boot") || "chf" // HDA, FDC, CDROM
     };
 
     function roundUp(v) {
@@ -331,6 +336,7 @@ var Module = {
         // Start initializing disks
         wrap("emscripten_enable_pci")(options.pci);
         wrap("emscripten_enable_apic")(options.apic);
+        wrap("emscripten_enable_acpi")(options.acpi);
         console.log(options);
 
         wrap("emscripten_initialize")();

@@ -81,6 +81,10 @@ EMSCRIPTEN_KEEPALIVE
 void emscripten_enable_apic(int a){
     pc.apic_enabled = a;
 }
+EMSCRIPTEN_KEEPALIVE
+void emscripten_enable_acpi(int a){
+    pc.acpi_enabled = a;
+}
 
 EMSCRIPTEN_KEEPALIVE
 void* emscripten_alloc(int is_bios, int size)
