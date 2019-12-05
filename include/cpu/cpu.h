@@ -219,7 +219,7 @@ struct cpu {
         uint16_t xmm16[64];
         uint8_t xmm8[128];
         uint64_t xmm64[16];
-    };
+    } __attribute__((aligned(16)));
     uint32_t mxcsr;
 
     uint32_t esp_mask;
@@ -588,6 +588,9 @@ void cpu_prot_update_cpl(void);
 // ops/ctrlflow.c
 void cpu_exception(int vec, int code);
 int cpu_interrupt(int vector, int code, int type, int eip_to_push);
+
+// SSE
+void cpu_update_mxcsr(void);
 
 // XXX
 #ifndef CPUAPI_H
