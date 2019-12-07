@@ -2371,6 +2371,57 @@ static int decode_sysenter_sysexit(struct decoded_instruction* i) // 0F34, 0F35
     return 0;
 }
 
+static const int decode_sse50_57_tbl[8 * 4] = {
+    MOVMSKPS_GdXEo, // 0F 50
+    MOVMSKPD_GdXEo, // 66 0F 50
+    MOVMSKPS_GdXEo, // F2 0F 50 - invalid
+    MOVMSKPS_GdXEo, // F3 0F 50 - invalid
+
+    SQRTPS_XGoXEo, // 0F 51
+    SQRTPD_XGoXEo, // 66 0F 51
+    SQRTSD_XGqXEq, // F2 0F 51
+    SQRTSS_XGdXEd, // F3 0F 51
+
+    RSQRTPS_XGoXEo, // 0F 52
+    RSQRTSS_XGdXEd, // 66 0F 52
+    RSQRTPS_XGoXEo, // F2 0F 52 - invalid
+    RSQRTPS_XGoXEo, // F3 0F 52 - invalid
+
+    RCPPS_XGoXEo, // 0F 53
+    RCPSS_XGdXEd, // 66 0F 53
+    RCPPS_XGoXEo, // F2 0F 53 - invalid
+    RCPPS_XGoXEo, // F3 0F 53 - invalid
+
+    ANDPS_XGoXEo, // 0F 54
+    ANDPS_XGoXEo, // 66 0F 54
+    ANDPS_XGoXEo, // F2 0F 54 - invalid
+    ANDPS_XGoXEo, // F3 0F 54 - invalid
+
+    ANDNPS_XGoXEo, // 0F 55
+    ANDNPS_XGoXEo, // 66 0F 55
+    ANDNPS_XGoXEo, // F2 0F 55 - invalid
+    ANDNPS_XGoXEo, // F3 0F 55 - invalid
+
+    ORPS_XGoXEo, // 0F 56
+    ORPS_XGoXEo, // 66 0F 56
+    ORPS_XGoXEo, // F2 0F 56 - invalid
+    ORPS_XGoXEo, // F3 0F 56 - invalid
+
+    XORPS_XGoXEo, // 0F 57
+    XORPS_XGoXEo, // 66 0F 57
+    XORPS_XGoXEo, // F2 0F 57 - invalid
+    XORPS_XGoXEo // F3 0F 57 - invalid
+};
+static int decode_sse50_57(struct decoded_instruction* i){
+    uint8_t opcode = rawp[-1] & 7, modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    i->handler = op_sse_50_57;
+    I_SET_OP(flags, modrm >= 0xC0);
+    i->flags = flags;
+    i->imm8 = decode_sse50_57_tbl[opcode << 2 | sse_prefix] | ((opcode & 1) << 4);
+    return 0;
+}
+
 static int decode_0F77(struct decoded_instruction* i)
 {
     i->flags = 0;
@@ -3222,14 +3273,14 @@ static const decode_handler_t table0F[256] = {
     /* 0F 4D */ decode_cmov,
     /* 0F 4E */ decode_cmov,
     /* 0F 4F */ decode_cmov,
-    /* 0F 50 */ decode_invalid0F,
-    /* 0F 51 */ decode_invalid0F,
-    /* 0F 52 */ decode_invalid0F,
-    /* 0F 53 */ decode_invalid0F,
-    /* 0F 54 */ decode_invalid0F,
-    /* 0F 55 */ decode_invalid0F,
-    /* 0F 56 */ decode_invalid0F,
-    /* 0F 57 */ decode_invalid0F,
+    /* 0F 50 */ decode_sse50_57,
+    /* 0F 51 */ decode_sse50_57,
+    /* 0F 52 */ decode_sse50_57,
+    /* 0F 53 */ decode_sse50_57,
+    /* 0F 54 */ decode_sse50_57,
+    /* 0F 55 */ decode_sse50_57,
+    /* 0F 56 */ decode_sse50_57,
+    /* 0F 57 */ decode_sse50_57,
     /* 0F 58 */ decode_invalid0F,
     /* 0F 59 */ decode_invalid0F,
     /* 0F 5A */ decode_invalid0F,

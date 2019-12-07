@@ -41,7 +41,7 @@ int cpu_mmx_check(void)
 #define CHECK_SSE            \
     if (cpu_sse_exception()) \
     return 1
-#define CHECK_MMX           \
+#define CHECK_MMX        \
     if (cpu_mmx_check()) \
     return 1
 
@@ -501,19 +501,20 @@ int execute_0F28_2F(struct decoded_instruction* i)
         else
             result = float32_compare_quiet(*(uint32_t*)result_ptr, dest32[0], &status);
         int eflags = 0;
-        switch(result){
-            case float_relation_unordered:
-                eflags = EFLAGS_ZF | EFLAGS_PF | EFLAGS_CF;
-                break;
-            case float_relation_less:
-                eflags = EFLAGS_CF;
-                break;
-            case float_relation_equal:
-                eflags = EFLAGS_ZF;
-                break;
+        switch (result) {
+        case float_relation_unordered:
+            eflags = EFLAGS_ZF | EFLAGS_PF | EFLAGS_CF;
+            break;
+        case float_relation_less:
+            eflags = EFLAGS_CF;
+            break;
+        case float_relation_equal:
+            eflags = EFLAGS_ZF;
+            break;
         }
         cpu_set_eflags(eflags | (cpu.eflags & ~arith_flag_mask));
         fp_exception = cpu_sse_handle_exceptions();
+        break;
     }
     case UCOMISD_XGqXEq: {
         EX(get_sse_read_ptr(flags, i, 2, 1));
@@ -524,24 +525,162 @@ int execute_0F28_2F(struct decoded_instruction* i)
         else
             result = float64_compare_quiet(*(uint64_t*)result_ptr, *(uint64_t*)&dest32[0], &status);
         int eflags = 0;
-        switch(result){
-            case float_relation_unordered:
-                eflags = EFLAGS_ZF | EFLAGS_PF | EFLAGS_CF;
-                break;
-            case float_relation_less:
-                eflags = EFLAGS_CF;
-                break;
-            case float_relation_equal:
-                eflags = EFLAGS_ZF;
-                break;
+        switch (result) {
+        case float_relation_unordered:
+            eflags = EFLAGS_ZF | EFLAGS_PF | EFLAGS_CF;
+            break;
+        case float_relation_less:
+            eflags = EFLAGS_CF;
+            break;
+        case float_relation_equal:
+            eflags = EFLAGS_ZF;
+            break;
         }
         cpu_set_eflags(eflags | (cpu.eflags & ~arith_flag_mask));
         fp_exception = cpu_sse_handle_exceptions();
+        break;
     }
     }
     return fp_exception;
 }
-int cpu_emms(void){
+
+static const float32 float32_one = 0x3f800000;
+static float32 rsqrt(float32 a)
+{
+    //TODO: Use 11-bit approximation instead of this
+    return float32_div(float32_one, float32_sqrt(a, &status), &status);
+}
+static float32 rcp(float32 a)
+{
+    //TODO: Use 11-bit approximation instead of this
+    return float32_div(float32_one, a, &status);
+}
+
+int execute_0F50_57(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t *dest32, *src32, flags = i->flags;
+    int fp_exception = 0, result;
+    switch (i->imm8 & 15) {
+    case MOVMSKPS_GdXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        src32 = result_ptr;
+        result = 0;
+        result = src32[0] >> 31;
+        result |= src32[1] >> 30 & 2;
+        result |= src32[2] >> 29 & 4;
+        result |= src32[3] >> 28 & 8;
+        cpu.reg32[I_REG(flags)] = result;
+        break;
+    case MOVMSKPD_GdXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        src32 = result_ptr;
+        result = 0;
+        result = src32[0] >> 31;
+        result |= src32[2] >> 30 & 2;
+        cpu.reg32[I_REG(flags)] = result;
+        break;
+    case SQRTPS_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        src32 = result_ptr;
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float32_sqrt(src32[0], &status);
+        dest32[1] = float32_sqrt(src32[1], &status);
+        dest32[2] = float32_sqrt(src32[2], &status);
+        dest32[3] = float32_sqrt(src32[3], &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case SQRTSS_XGdXEd:
+        EX(get_sse_read_ptr(flags, i, 1, 1));
+        src32 = result_ptr;
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float32_sqrt(src32[0], &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case SQRTPD_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        src32 = result_ptr;
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        *(uint64_t*)&dest32[0] = float64_sqrt(*(uint64_t*)&src32[0], &status);
+        *(uint64_t*)&dest32[2] = float64_sqrt(*(uint64_t*)&src32[2], &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case SQRTSD_XGqXEq:
+        EX(get_sse_read_ptr(flags, i, 2, 1));
+        src32 = result_ptr;
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        *(uint64_t*)&dest32[0] = float64_sqrt(*(uint64_t*)&src32[0], &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case RSQRTSS_XGdXEd:
+        // XXX - According to https://stackoverflow.com/a/59186778, we are supposed to round to 11 bits.
+        // However, this would be too complicated, so we use the slower, less correct way
+        EX(get_sse_read_ptr(flags, i, 1, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = rsqrt(*(uint32_t*)result_ptr);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case RSQRTPS_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = rsqrt(*(uint32_t*)(result_ptr));
+        dest32[1] = rsqrt(*(uint32_t*)(result_ptr + 4));
+        dest32[2] = rsqrt(*(uint32_t*)(result_ptr + 8));
+        dest32[3] = rsqrt(*(uint32_t*)(result_ptr + 12));
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case RCPSS_XGdXEd:
+        EX(get_sse_read_ptr(flags, i, 1, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = rcp(*(uint32_t*)result_ptr);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case RCPPS_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = rcp(*(uint32_t*)(result_ptr));
+        dest32[1] = rcp(*(uint32_t*)(result_ptr + 4));
+        dest32[2] = rcp(*(uint32_t*)(result_ptr + 8));
+        dest32[3] = rcp(*(uint32_t*)(result_ptr + 12));
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case ANDPS_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] &= *(uint32_t*)(result_ptr);
+        dest32[1] &= *(uint32_t*)(result_ptr + 4);
+        dest32[2] &= *(uint32_t*)(result_ptr + 8);
+        dest32[3] &= *(uint32_t*)(result_ptr + 12);
+        break;
+    case ORPS_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] |= *(uint32_t*)(result_ptr);
+        dest32[1] |= *(uint32_t*)(result_ptr + 4);
+        dest32[2] |= *(uint32_t*)(result_ptr + 8);
+        dest32[3] |= *(uint32_t*)(result_ptr + 12);
+        break;
+    case ANDNPS_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = ~dest32[0] & *(uint32_t*)(result_ptr);
+        dest32[1] = ~dest32[1] & *(uint32_t*)(result_ptr + 4);
+        dest32[2] = ~dest32[2] & *(uint32_t*)(result_ptr + 8);
+        dest32[3] = ~dest32[3] & *(uint32_t*)(result_ptr + 12);
+        break;
+    case XORPS_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] ^= *(uint32_t*)(result_ptr);
+        dest32[1] ^= *(uint32_t*)(result_ptr + 4);
+        dest32[2] ^= *(uint32_t*)(result_ptr + 8);
+        dest32[3] ^= *(uint32_t*)(result_ptr + 12);
+        break;
+    }
+    return fp_exception;
+}
+int cpu_emms(void)
+{
     CHECK_MMX;
     fpu.tag_word = 0xFFFF;
     return 0;

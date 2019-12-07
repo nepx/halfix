@@ -59,6 +59,38 @@ enum {
     UCOMISD_XGqXEq
 };
 
+enum {
+    // 0F 50
+    MOVMSKPS_GdXEo,
+    MOVMSKPD_GdXEo,
+
+    // 0F 51
+    SQRTPS_XGoXEo,
+    SQRTSS_XGdXEd,
+    SQRTPD_XGoXEo,
+    SQRTSD_XGqXEq,
+    
+    // 0F 52
+    RSQRTPS_XGoXEo,
+    RSQRTSS_XGdXEd,
+
+    // 0F 53
+    RCPPS_XGoXEo,
+    RCPSS_XGdXEd,
+
+    // 0F 54
+    ANDPS_XGoXEo,
+
+    // 0F 55
+    ANDNPS_XGoXEo,
+
+    // 0F 56
+    ORPS_XGoXEo,
+
+    // 0F 57
+    XORPS_XGoXEo
+};
+
 int cpu_sse_exception(void);
 
 int cpu_emms(void);
