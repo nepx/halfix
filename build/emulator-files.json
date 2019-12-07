@@ -11,7 +11,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -28,7 +28,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -43,7 +43,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -67,7 +67,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -83,7 +83,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -100,7 +100,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -115,7 +115,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -132,7 +132,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -149,7 +149,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -164,7 +164,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -191,7 +191,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -208,7 +208,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -224,7 +224,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -242,7 +242,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -257,7 +257,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -274,7 +274,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -291,7 +291,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -312,7 +312,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -339,7 +339,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     },
@@ -366,7 +366,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ "@flags=!bochs"
+        "additional_flags": [ 
 
         ]
     }
