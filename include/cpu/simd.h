@@ -91,10 +91,41 @@ enum {
     XORPS_XGoXEo
 };
 
+enum {
+    // 0F 68
+    PUNPCKHBW_MGqMEq,
+    PUNPCKHBW_XGoXEo,
+    // 0F 69
+    PUNPCKHWD_MGqMEq,
+    PUNPCKHWD_XGoXEo,
+    // 0F 6A
+    PUNPCKHDQ_MGqMEq,
+    PUNPCKHDQ_XGoXEo,
+    // 0F 6B
+    PACKSSDW_MGqMEq,
+    PACKSSDW_XGoXEo,
+    // 66 0F 6C
+    PUNPCKLQDQ_XGoXEo,
+    // 66 0F 6D
+    PUNPCKHQDQ_XGoXEo,
+    // 0F 6E
+    MOVD_MGdEd,
+    MOVD_XGdEd,
+    // 0F 6F
+    MOVQ_MGqMEq,
+    MOVDQA_MGoMEo,
+    MOVDQU_MGoMEo,
+
+    // Bad opcodes
+    OP_68_6F_INVALID
+};
+
 int cpu_sse_exception(void);
 
 int cpu_emms(void);
 int execute_0F10_17(struct decoded_instruction* i);
 int execute_0F28_2F(struct decoded_instruction* i);
+int execute_0F50_57(struct decoded_instruction* i);
+int execute_0F68_6F(struct decoded_instruction* i);
 
 #endif

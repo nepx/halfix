@@ -6,6 +6,7 @@
 #include "cpu/cpu.h"
 #include "cpu/fpu.h"
 #include "io.h"
+#include <string.h>
 #define EXCEPTION_HANDLER return 1
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -231,6 +232,65 @@ static void* get_sse_reg_dest(int x)
 static void* get_reg_dest(int x)
 {
     return &cpu.reg32[x];
+}
+
+static void punpckh(void* dst, void* src, int size, int copysize)
+{
+    // XXX -- make this faster
+    // too many xors
+    uint8_t *dst8 = dst, *src8 = src, tmp[16];
+    int idx = 0, nidx = 0;
+    const int xormask = (size - 1) ^ (copysize - 1);
+    while (idx < size) {
+        for (int i = 0; i < copysize; i++)
+            tmp[idx++ ^ xormask] = src8[(nidx + i) ^ xormask]; // Copy source bytes
+        for (int i = 0; i < copysize; i++)
+            tmp[idx++ ^ xormask] = dst8[(nidx + i) ^ xormask]; // Copy destination bytes
+        nidx += copysize;
+    }
+    memcpy(dst, tmp, size);
+}
+static inline uint16_t pack_i32_to_i16(uint32_t x)
+{
+    //printf("i32 -> i16: %08x\n", x);
+    if (x >= 0x80000000) {
+        if (x >= 0xFFFF8000)
+            x &= 0xFFFF;
+        else
+            return 0x8000; // x <= -65536
+    } else {
+        // x <= 0x7FFFFFFF
+        if (x > 0x7FFF)
+            return 0x7FFF;
+    }
+    return x;
+}
+static void packssdw(void* dest, void* src, int dwordcount)
+{
+    uint16_t res[8];
+    uint32_t *dest32 = dest, *src32 = src;
+    for (int i = 0; i < dwordcount; i++) {
+        res[i] = pack_i32_to_i16(dest32[i]);
+        res[i | dwordcount] = pack_i32_to_i16(src32[i]);
+    }
+    memcpy(dest, res, dwordcount << 2);
+}
+static void punpckl(void* dst, void* src, int size, int copysize)
+{
+    // XXX -- make this faster
+    uint8_t *dst8 = dst, *src8 = src, tmp[16];
+    int idx = 0, nidx = 0, xor = copysize - 1;
+    UNUSED (xor);
+    const int xormask = (size - 1) ^ (copysize - 1);
+    UNUSED(xormask);
+    while (idx < size) {
+        for (int i = 0; i < copysize; i++)
+            tmp[idx++] = dst8[(nidx + i)]; // Copy destination bytes
+        for (int i = 0; i < copysize; i++)
+            tmp[idx++] = src8[(nidx + i)]; // Copy source bytes
+        nidx += copysize;
+    }
+    memcpy(dst, tmp, size);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -678,6 +738,103 @@ int execute_0F50_57(struct decoded_instruction* i)
         break;
     }
     return fp_exception;
+}
+
+int execute_0F68_6F(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t *dest32, flags = i->flags;
+    switch (i->imm8 & 15) {
+    case PUNPCKHBW_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        punpckh(dest32, result_ptr, 8, 1);
+        break;
+    case PUNPCKHBW_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        punpckh(dest32, result_ptr, 16, 1);
+        break;
+    case PUNPCKHWD_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        punpckh(dest32, result_ptr, 8, 2);
+        break;
+    case PUNPCKHWD_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        punpckh(dest32, result_ptr, 16, 2);
+        break;
+    case PUNPCKHDQ_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        punpckh(dest32, result_ptr, 8, 4);
+        break;
+    case PUNPCKHDQ_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        punpckh(dest32, result_ptr, 16, 4);
+        break;
+    case PACKSSDW_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        packssdw(dest32, result_ptr, 2);
+        break;
+    case PACKSSDW_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        packssdw(dest32, result_ptr, 4);
+        break;
+    case PUNPCKLQDQ_XGoXEo:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        punpckl(dest32, result_ptr, 16, 8);
+        break;
+    case PUNPCKHQDQ_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        punpckh(dest32, result_ptr, 16, 8);
+        break;
+    case MOVD_MGdEd:
+        EX(get_reg_read_ptr(flags, i));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        dest32[0] = *(uint32_t*)result_ptr;
+        dest32[1] = 0;
+        break;
+    case MOVD_XGdEd:
+        EX(get_reg_read_ptr(flags, i));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = *(uint32_t*)result_ptr;
+        dest32[1] = 0;
+        dest32[2] = 0;
+        dest32[3] = 0;
+        break;
+    case MOVQ_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        dest32[0] = *(uint32_t*)(result_ptr + 0);
+        dest32[1] = *(uint32_t*)(result_ptr + 4);
+        break;
+    case MOVDQA_MGoMEo:
+        EX(get_sse_read_ptr(flags, i, 2, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = *(uint32_t*)(result_ptr + 0);
+        dest32[1] = *(uint32_t*)(result_ptr + 4);
+        dest32[2] = *(uint32_t*)(result_ptr + 8);
+        dest32[3] = *(uint32_t*)(result_ptr + 12);
+        break;
+    case MOVDQU_MGoMEo:
+        EX(get_sse_read_ptr(flags, i, 2, 0)); // Note: Unaligned move
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = *(uint32_t*)(result_ptr + 0);
+        dest32[1] = *(uint32_t*)(result_ptr + 4);
+        dest32[2] = *(uint32_t*)(result_ptr + 8);
+        dest32[3] = *(uint32_t*)(result_ptr + 12);
+        break;
+    case OP_68_6F_INVALID:
+        EXCEPTION_UD();
+    }
+    return 0;
 }
 int cpu_emms(void)
 {
