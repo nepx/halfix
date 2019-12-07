@@ -3069,6 +3069,10 @@ OPTYPE op_sse_10_17(struct decoded_instruction* i){
     if(execute_0F10_17(i)) EXCEP();
     NEXT(i->flags);
 }
+OPTYPE op_sse_28_2F(struct decoded_instruction* i){
+    if(execute_0F28_2F(i)) EXCEP();
+    NEXT(i->flags);
+}
 
 #define CHECK_SSE if(cpu_sse_exception()) EXCEP()
 OPTYPE op_ldmxcsr(struct decoded_instruction* i)

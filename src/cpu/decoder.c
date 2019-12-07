@@ -2338,7 +2338,7 @@ static const int decode_sse28_2F_tbl[8 * 4] = {
 static int decode_sse28_2F(struct decoded_instruction* i){
     uint8_t opcode = rawp[-1] & 7, modrm = rb();
     int flags = parse_modrm(i, modrm, 6);
-    i->handler = op_sse_10_17;
+    i->handler = op_sse_28_2F;
     I_SET_OP(flags, modrm >= 0xC0);
     i->flags = flags;
     i->imm8 = decode_sse28_2F_tbl[opcode << 2 | sse_prefix] | ((opcode & 1) << 4);

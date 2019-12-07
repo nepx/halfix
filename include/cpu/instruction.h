@@ -31,7 +31,7 @@ typedef __insn_t* (*insn_handler_t)(__insn_t*);
 #define I_SCALE(i) i >> I_SCALE_SHIFT & 3
 #define I_SEG_BASE(i) i >> I_SEG_SHIFT & 7
 #define I_OP(i) i >> I_OP_SHIFT & 7
-#define I_OP2(i) i&(1 << I_OP_SHIFT)
+#define I_OP2(i) (i&(1 << I_OP_SHIFT))
 #define I_OP3(i) i >> I_OP_SHIFT & 15
 
 #define I_SET_ADDR16(i, j) i |= (j) << I_ADDR16_SHIFT

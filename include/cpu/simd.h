@@ -63,5 +63,6 @@ int cpu_sse_exception(void);
 
 int cpu_emms(void);
 int execute_0F10_17(struct decoded_instruction* i);
+int execute_0F28_2F(struct decoded_instruction* i);
 
 #endif

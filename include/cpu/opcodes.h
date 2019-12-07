@@ -467,6 +467,10 @@ OPTYPE op_fxsave(struct decoded_instruction* i);
 OPTYPE op_fxrstor(struct decoded_instruction* i);
 
 // SSE
+OPTYPE op_sse_10_17(struct decoded_instruction* i);
+OPTYPE op_sse_28_2F(struct decoded_instruction* i);
+
+// SSE
 OPTYPE op_ldmxcsr(struct decoded_instruction* i);
 OPTYPE op_stmxcsr(struct decoded_instruction* i);
 OPTYPE op_mfence(struct decoded_instruction* i);
@@ -501,6 +505,7 @@ OPTYPE op_sse_pand_x128v128(struct decoded_instruction* i);
 OPTYPE op_sse_psadbw_x128v128(struct decoded_instruction* i);
 OPTYPE op_sse_pcmpgt_x128v128(struct decoded_instruction* i);
 OPTYPE op_sse_shufp_x128v128(struct decoded_instruction* i);
+OPTYPE op_sse_cvttf2i(struct decoded_instruction* i);
 
 // MMX
 OPTYPE op_mov_v64r64(struct decoded_instruction* i);
