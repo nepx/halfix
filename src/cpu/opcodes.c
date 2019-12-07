@@ -3,6 +3,7 @@
 #include "cpu/fpu.h"
 #include "cpu/instrument.h"
 #include "cpu/ops.h"
+#include "cpu/simd.h"
 #include "cpuapi.h"
 #include "devices.h"
 
@@ -3063,6 +3064,58 @@ OPTYPE op_sysexit(struct decoded_instruction* i){
     UNUSED(i);
     if(sysexit()) EXCEP();
     STOP();
+}
+OPTYPE op_sse_10_17(struct decoded_instruction* i){
+    if(execute_0F10_17(i)) EXCEP();
+    NEXT(i->flags);
+}
+
+#define CHECK_SSE if(cpu_sse_exception()) EXCEP()
+OPTYPE op_ldmxcsr(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags, linaddr = cpu_get_linaddr(flags, i), mxcsr;
+    cpu_read32(linaddr, mxcsr, cpu.tlb_shift_read);
+    if (mxcsr & ~MXCSR_MASK)
+        EXCEPTION_GP(0);
+    cpu.mxcsr = mxcsr;
+    cpu_update_mxcsr();
+    NEXT(flags);
+}
+OPTYPE op_stmxcsr(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags, linaddr = cpu_get_linaddr(flags, i);
+    cpu_write32(linaddr, cpu.mxcsr, cpu.tlb_shift_read);
+    NEXT(flags);
+}
+
+OPTYPE op_mfence(struct decoded_instruction* i)
+{
+    // Does nothing at the moment
+    NEXT(i->flags);
+}
+OPTYPE op_fxsave(struct decoded_instruction* i)
+{
+    // Does nothing at the moment
+    uint32_t flags = i->flags, linaddr = cpu_get_linaddr(flags, i);
+    if (fpu_fxsave(linaddr))
+        EXCEP();
+    NEXT(flags);
+}
+OPTYPE op_fxrstor(struct decoded_instruction* i)
+{
+    // Does nothing at the moment
+    uint32_t flags = i->flags, linaddr = cpu_get_linaddr(flags, i);
+    if (fpu_fxrstor(linaddr))
+        EXCEP();
+    NEXT(flags);
+}
+OPTYPE op_emms(struct decoded_instruction* i)
+{
+    if(cpu_emms())
+        EXCEP();
+    NEXT2(i->flags);
 }
 
 // String operations

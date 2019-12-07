@@ -343,34 +343,7 @@
 
         ]
     },
-    "src/cpu/ops/sse.c": {
-        "tasks": [],
-        "rebuild_flags": [],
-        "dependencies": [
-            "include/cpu/cpu.h",
-            "include/cpu/instruction.h",
-            "include/util.h",
-            "include/cpu/fpu.h",
-            "include/cpu/instrument.h",
-            "include/devices.h",
-            "include/util.h",
-            "include/io.h",
-            "include/pc.h",
-            "include/drive.h",
-            "include/state.h",
-            "include/softfloat/softfloat.h",
-            "include/softfloat/softfloatx80.h",
-            "include/softfloat/softfloat.h",
-            "include/softfloat/softfloat-specialize.h"
-        ],
-        "include_paths": [
-            "include"
-        ],
-        "additional_flags": [ "@flags=!bochs"
-
-        ]
-    },
-    "src/cpu/ops/mmx.c": {
+    "src/cpu/ops/simd.c": {
         "tasks": [],
         "rebuild_flags": [],
         "dependencies": [
