@@ -169,6 +169,17 @@ enum {
 };
 
 enum {
+    // 0F 7E
+    MOVD_EdMGd,
+    MOVD_EdXGd,
+    MOVQ_XGqXEq,
+    // 0F 7F
+    MOVQ_MEqMGq,
+    MOVDQA_XEqXGq,
+    MOVDQU_XEqXGq
+};
+
+enum {
     PSHIFT_PSRLW,
     PSHIFT_PSRAW,
     PSHIFT_PSLLW,
@@ -271,6 +282,7 @@ int execute_0F50_57(struct decoded_instruction* i);
 int execute_0F60_67(struct decoded_instruction* i);
 int execute_0F68_6F(struct decoded_instruction* i);
 int execute_0F70_76(struct decoded_instruction* i);
+int execute_0F7E_7F(struct decoded_instruction* i);
 int execute_0FD0_D7(struct decoded_instruction* i);
 int execute_0FD8_DF(struct decoded_instruction* i);
 int execute_0FE8_EF(struct decoded_instruction* i);

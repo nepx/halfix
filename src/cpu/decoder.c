@@ -2584,13 +2584,14 @@ static int decode_sse70_76(struct decoded_instruction* i){
     i->flags = flags;
     // Get the opcode information from the table
     int op = decode_sse70_76_tbl[opcode << 2 | sse_prefix], combined_op = (modrm >> 3 & 7) | ((opcode - 1) & 3) << 3;
+    
+    // Get immediate, if necessary
+    if(op < PCMPEQB_MGqMEq) op |= rb() << 8;
     if(op == PSHIFT_MGqIb)
         op |= rm_table_pshift_mmx[combined_op] << 4;
     else if(op == PSHIFT_XEoIb)
         op |= rm_table_pshift_sse[combined_op] << 4;
-    
-    // Finally, get immediate, if necessary
-    if(op < PCMPEQB_MGqMEq) op |= rb() << 8;
+
     i->imm16 = op;
     return 0;
 }
@@ -2601,6 +2602,28 @@ static int decode_0F77(struct decoded_instruction* i)
     i->handler = op_emms;
     return 0;
 }
+
+static const int decode_7E_7F[2 * 4] = {
+    MOVD_EdMGd, // 0F 7E
+    MOVD_EdXGd, // 66 0F 7E
+    MOVD_EdMGd, // F2 0F 7E - invalid
+    MOVQ_XGqXEq, // F3 0F 7E
+
+    MOVQ_MEqMGq, // 0F 7F
+    MOVDQA_XEqXGq, // 66 0F 7F
+    MOVQ_MEqMGq, // F2 0F 7F - invalid
+    MOVDQU_XEqXGq // F3 0F 7F
+};
+static int decode_sse7E_7F(struct decoded_instruction* i){
+    uint8_t opcode = rawp[-1] & 1, modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    i->handler = op_sse_68_6F;
+    I_SET_OP(flags, modrm >= 0xC0);
+    i->flags = flags;
+    i->imm8 = decode_sse70_76_tbl[opcode << 2 | sse_prefix];
+    return 0;
+}
+
 static int decode_0FA0(struct decoded_instruction* i)
 {
     int flags = 0;
@@ -3603,8 +3626,8 @@ static const decode_handler_t table0F[256] = {
     /* 0F 7B */ decode_invalid0F,
     /* 0F 7C */ decode_invalid0F,
     /* 0F 7D */ decode_invalid0F,
-    /* 0F 7E */ decode_invalid0F,
-    /* 0F 7F */ decode_invalid0F,
+    /* 0F 7E */ decode_sse7E_7F,
+    /* 0F 7F */ decode_sse7E_7F,
     /* 0F 80 */ decode_jccv,
     /* 0F 81 */ decode_jccv,
     /* 0F 82 */ decode_jccv,
