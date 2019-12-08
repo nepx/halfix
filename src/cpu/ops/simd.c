@@ -265,9 +265,12 @@ static inline uint16_t pack_i32_to_i16(uint32_t x)
     }
     return x;
 }
-static uint16_t pack_u16_to_u8(uint16_t x){
-    if(x >= 0xFF) return 0xFF;
-    else return x;
+static uint16_t pack_u16_to_u8(uint16_t x)
+{
+    if (x >= 0xFF)
+        return 0xFF;
+    else
+        return x;
 }
 static inline uint8_t pack_i16_to_i8(uint16_t x)
 {
@@ -427,20 +430,20 @@ static void cpu_pslld(uint32_t* a, int shift, int mask, int wordcount)
 static void cpu_psrlq(uint64_t* a, int shift, int mask, int wordcount)
 {
     int qwordcount = wordcount >> 2;
-    for (int i = 0; i < qwordcount; i++){
-        if(mask)
-        a[i] = a[i] >> shift;
-        else 
-        a[i] = 0;
+    for (int i = 0; i < qwordcount; i++) {
+        if (mask)
+            a[i] = a[i] >> shift;
+        else
+            a[i] = 0;
     }
 }
 static void cpu_psllq(uint64_t* a, int shift, int mask, int qwordcount)
 {
     for (int i = 0; i < qwordcount; i++)
-        if(mask)
-        a[i] = a[i] << shift;
-        else 
-        a[i] = 0;
+        if (mask)
+            a[i] = a[i] << shift;
+        else
+            a[i] = 0;
 }
 static void cpu_pslldq(uint64_t* a, int shift, int mask)
 {
@@ -471,42 +474,48 @@ static void pcmpeqb(uint8_t* dest, uint8_t* src, int count)
     for (int i = 0; i < count; i++)
         if (src[i] == dest[i])
             dest[i] = 0xFF;
-        else dest[i] = 0;
+        else
+            dest[i] = 0;
 }
 static void pcmpeqw(uint16_t* dest, uint16_t* src, int count)
 {
     for (int i = 0; i < count; i++)
         if (src[i] == dest[i])
             dest[i] = 0xFFFF;
-        else dest[i] = 0;
+        else
+            dest[i] = 0;
 }
 static void pcmpeqd(uint32_t* dest, uint32_t* src, int count)
 {
     for (int i = 0; i < count; i++)
         if (src[i] == dest[i])
             dest[i] = 0xFFFFFFFF;
-        else dest[i] = 0;
+        else
+            dest[i] = 0;
 }
 static void pcmpgtb(int8_t* dest, int8_t* src, int count)
 {
     for (int i = 0; i < count; i++)
         if (dest[i] > src[i])
             dest[i] = 0xFF;
-        else dest[i] = 0;
+        else
+            dest[i] = 0;
 }
 static void pcmpgtw(int16_t* dest, int16_t* src, int count)
 {
     for (int i = 0; i < count; i++)
         if (dest[i] > src[i])
             dest[i] = 0xFFFF;
-        else dest[i] = 0;
+        else
+            dest[i] = 0;
 }
 static void pcmpgtd(int32_t* dest, int32_t* src, int count)
 {
     for (int i = 0; i < count; i++)
         if (dest[i] > src[i])
             dest[i] = 0xFFFFFFFF;
-        else dest[i] = 0;
+        else
+            dest[i] = 0;
 }
 static void packuswb(void* dest, void* src, int wordcount)
 {
@@ -1173,49 +1182,60 @@ int execute_0FE8_EF(struct decoded_instruction* i)
     return 0;
 }
 
-static void pshift(void* dest, int opcode, int wordcount, int imm){
+static void pshift(void* dest, int opcode, int wordcount, int imm)
+{
     int mask = -1;
-    switch(opcode){
-        case PSHIFT_PSRLW:
-            if(imm >= 16) mask = 0;
-            cpu_psrlw(dest, imm, mask, wordcount);
-            break;
-        case PSHIFT_PSRAW:
-            if(imm >= 16) mask = 0;
-            cpu_psraw(dest, imm, mask, wordcount);
-            break;
-        case PSHIFT_PSLLW:
-            if(imm >= 16) mask = 0;
-            cpu_psllw(dest, imm, mask, wordcount);
-            break;
-        case PSHIFT_PSRLD:
-            if(imm >= 32) mask = 0;
-            cpu_psrld(dest, imm, mask, wordcount);
-            break;
-        case PSHIFT_PSRAD:
-            if(imm >= 32) mask = 0;
-            cpu_psrad(dest, imm, mask, wordcount);
-            break;
-        case PSHIFT_PSLLD:
-            if(imm >= 32) mask = 0;
-            cpu_pslld(dest, imm, mask, wordcount);
-            break;
-        case PSHIFT_PSRLQ:
-            if(imm>=64)mask = 0;
-            cpu_psrlq(dest, imm, mask, wordcount);
-            break;
-        case PSHIFT_PSRLDQ: 
-            if(imm>=128)mask = 0;
-            cpu_psrldq(dest, imm, mask);
-            break;
-        case PSHIFT_PSLLQ: 
-            if(imm>=64)mask = 0;
-            cpu_psllq(dest, imm, mask, wordcount);
-            break;
-        case PSHIFT_PSLLDQ: 
-            if(imm>=128)mask = 0;
-            cpu_pslldq(dest, imm, mask);
-            break;
+    switch (opcode) {
+    case PSHIFT_PSRLW:
+        if (imm >= 16)
+            mask = 0;
+        cpu_psrlw(dest, imm, mask & 15, wordcount);
+        break;
+    case PSHIFT_PSRAW:
+        if (imm >= 16)
+            mask = 0;
+        cpu_psraw(dest, imm, mask & 15, wordcount);
+        break;
+    case PSHIFT_PSLLW:
+        if (imm >= 16)
+            mask = 0;
+        cpu_psllw(dest, imm, mask & 15, wordcount);
+        break;
+    case PSHIFT_PSRLD:
+        if (imm >= 32)
+            mask = 0;
+        cpu_psrld(dest, imm, mask & 31, wordcount);
+        break;
+    case PSHIFT_PSRAD:
+        if (imm >= 32)
+            mask = 0;
+        cpu_psrad(dest, imm, mask & 31, wordcount);
+        break;
+    case PSHIFT_PSLLD:
+        if (imm >= 32)
+            mask = 0;
+        cpu_pslld(dest, imm, mask & 31, wordcount);
+        break;
+    case PSHIFT_PSRLQ:
+        if (imm >= 64)
+            mask = 0;
+        cpu_psrlq(dest, imm, mask & 63, wordcount);
+        break;
+    case PSHIFT_PSRLDQ:
+        if (imm >= 128)
+            mask = 0;
+        cpu_psrldq(dest, imm, mask & 127);
+        break;
+    case PSHIFT_PSLLQ:
+        if (imm >= 64)
+            mask = 0;
+        cpu_psllq(dest, imm, mask & 63, wordcount);
+        break;
+    case PSHIFT_PSLLDQ:
+        if (imm >= 128)
+            mask = 0;
+        cpu_pslldq(dest, imm, mask & 127);
+        break;
     }
 }
 
@@ -1241,7 +1261,7 @@ int execute_0F70_76(struct decoded_instruction* i)
         dest32[0] = 0;
         dest32[1] = 0;
         imm = i->imm16 >> 8;
-        pshuf(dest32+2, result_ptr, imm, 1);
+        pshuf(dest32 + 2, result_ptr, imm, 1);
         break;
     case PSHUFLW_XGoXEoIb:
         EX(get_sse_read_ptr(flags, i, 4, 1));
@@ -1309,86 +1329,86 @@ int execute_0F60_67(struct decoded_instruction* i)
         CHECK_MMX;
     }
     switch (i->imm8 & 15) {
-        case PUNPCKLBW_MGqMEq:
-            EX(get_mmx_read_ptr(flags, i, 2));
-            dest32 = get_mmx_reg_dest(I_REG(flags));
-            punpckl(dest32, result_ptr, 8, 1);
-            break;
-        case PUNPCKLBW_XGoXEo:
-            EX(get_sse_read_ptr(flags, i, 4, 1));
-            dest32 = get_sse_reg_dest(I_REG(flags));
-            punpckl(dest32, result_ptr, 16, 1);
-            break;
-        case PUNPCKLWD_MGqMEq:
-            EX(get_mmx_read_ptr(flags, i, 2));
-            dest32 = get_mmx_reg_dest(I_REG(flags));
-            punpckl(dest32, result_ptr, 8, 2);
-            break;
-        case PUNPCKLWD_XGoXEo:
-            EX(get_sse_read_ptr(flags, i, 4, 1));
-            dest32 = get_sse_reg_dest(I_REG(flags));
-            punpckl(dest32, result_ptr, 16, 2);
-            break;
-        case PUNPCKLDQ_MGqMEq:
-            EX(get_mmx_read_ptr(flags, i, 2));
-            dest32 = get_mmx_reg_dest(I_REG(flags));
-            punpckl(dest32, result_ptr, 8, 4);
-            break;
-        case PUNPCKLDQ_XGoXEo:
-            EX(get_sse_read_ptr(flags, i, 4, 1));
-            dest32 = get_sse_reg_dest(I_REG(flags));
-            punpckl(dest32, result_ptr, 16, 8);
-            break;
-        case PACKSSWB_MGqMEq:
-            EX(get_mmx_read_ptr(flags, i, 2));
-            dest32 = get_mmx_reg_dest(I_REG(flags));
-            packsswb(dest32, result_ptr, 4);
-            break;
-        case PACKSSWB_XGoXEo:
-            EX(get_sse_read_ptr(flags, i, 4, 1));
-            dest32 = get_sse_reg_dest(I_REG(flags));
-            packsswb(dest32, result_ptr, 8);
-            break;
-        case PCMPGTB_MGqMEq:
-            EX(get_mmx_read_ptr(flags, i, 2));
-            dest32 = get_mmx_reg_dest(I_REG(flags));
-            pcmpgtb((int8_t*)dest32, result_ptr, 8);
-            break;
-        case PCMPGTB_XGoXEo:
-            EX(get_sse_read_ptr(flags, i, 4, 1));
-            dest32 = get_sse_reg_dest(I_REG(flags));
-            pcmpgtb((int8_t*)dest32, result_ptr, 16);
-            break;
-        case PCMPGTW_MGqMEq:
-            EX(get_mmx_read_ptr(flags, i, 2));
-            dest32 = get_mmx_reg_dest(I_REG(flags));
-            pcmpgtw((int16_t*)dest32, result_ptr, 4);
-            break;
-        case PCMPGTW_XGoXEo:
-            EX(get_sse_read_ptr(flags, i, 4, 1));
-            dest32 = get_sse_reg_dest(I_REG(flags));
-            pcmpgtw((int16_t*)dest32, result_ptr, 8);
-            break;
-        case PCMPGTD_MGqMEq:
-            EX(get_mmx_read_ptr(flags, i, 2));
-            dest32 = get_mmx_reg_dest(I_REG(flags));
-            pcmpgtd((int32_t*)dest32, result_ptr, 2);
-            break;
-        case PCMPGTD_XGoXEo:
-            EX(get_sse_read_ptr(flags, i, 4, 1));
-            dest32 = get_sse_reg_dest(I_REG(flags));
-            pcmpgtd((int32_t*)dest32, result_ptr, 4);
-            break;
-        case PACKUSWB_MGqMEq:
-            EX(get_mmx_read_ptr(flags, i, 2));
-            dest32 = get_mmx_reg_dest(I_REG(flags));
-            packuswb(dest32, result_ptr, 4);
-            break;
-        case PACKUSWB_XGoXEo:
-            EX(get_sse_read_ptr(flags, i, 4, 1));
-            dest32 = get_sse_reg_dest(I_REG(flags));
-            packuswb(dest32, result_ptr, 8);
-            break;
+    case PUNPCKLBW_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        punpckl(dest32, result_ptr, 8, 1);
+        break;
+    case PUNPCKLBW_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        punpckl(dest32, result_ptr, 16, 1);
+        break;
+    case PUNPCKLWD_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        punpckl(dest32, result_ptr, 8, 2);
+        break;
+    case PUNPCKLWD_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        punpckl(dest32, result_ptr, 16, 2);
+        break;
+    case PUNPCKLDQ_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        punpckl(dest32, result_ptr, 8, 4);
+        break;
+    case PUNPCKLDQ_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        punpckl(dest32, result_ptr, 16, 8);
+        break;
+    case PACKSSWB_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        packsswb(dest32, result_ptr, 4);
+        break;
+    case PACKSSWB_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        packsswb(dest32, result_ptr, 8);
+        break;
+    case PCMPGTB_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pcmpgtb((int8_t*)dest32, result_ptr, 8);
+        break;
+    case PCMPGTB_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pcmpgtb((int8_t*)dest32, result_ptr, 16);
+        break;
+    case PCMPGTW_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pcmpgtw((int16_t*)dest32, result_ptr, 4);
+        break;
+    case PCMPGTW_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pcmpgtw((int16_t*)dest32, result_ptr, 8);
+        break;
+    case PCMPGTD_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pcmpgtd((int32_t*)dest32, result_ptr, 2);
+        break;
+    case PCMPGTD_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pcmpgtd((int32_t*)dest32, result_ptr, 4);
+        break;
+    case PACKUSWB_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        packuswb(dest32, result_ptr, 4);
+        break;
+    case PACKUSWB_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        packuswb(dest32, result_ptr, 8);
+        break;
     }
     return 0;
 }
