@@ -204,6 +204,7 @@ void cpu_reset(void)
         cpu.apic_base = 0;
     
     cpu.mxcsr = 0x1F80;
+    cpu_update_mxcsr();
 
     // Reset TLB
     memset(cpu.tlb, 0, sizeof(void*) * (1 << 20));
