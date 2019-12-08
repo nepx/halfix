@@ -273,6 +273,31 @@ enum {
     PXOR_XGoXEo
 };
 
+enum {
+    // 0F F8
+    PSUBB_MGqMEq,
+    PSUBB_XGoXEo,
+    // 0F F9
+    PSUBW_MGqMEq,
+    PSUBW_XGoXEo,
+    // 0F FA
+    PSUBD_MGqMEq,
+    PSUBD_XGoXEo,
+    // 0F FB
+    PSUBQ_MGqMEq,
+    PSUBQ_XGoXEo,
+    // 0F FC
+    PADDB_MGqMEq,
+    PADDB_XGoXEo,
+    // 0F FD
+    PADDW_MGqMEq,
+    PADDW_XGoXEo,
+    // 0F FE
+    PADDD_MGqMEq,
+    PADDD_XGoXEo
+    // 0F FF is reserved because Windows 3.1/95/98 uses it. 
+};
+
 int cpu_sse_exception(void);
 
 int cpu_emms(void);
@@ -286,5 +311,6 @@ int execute_0F7E_7F(struct decoded_instruction* i);
 int execute_0FD0_D7(struct decoded_instruction* i);
 int execute_0FD8_DF(struct decoded_instruction* i);
 int execute_0FE8_EF(struct decoded_instruction* i);
+int execute_0FF8_FE(struct decoded_instruction* i);
 
 #endif

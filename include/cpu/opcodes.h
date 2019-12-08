@@ -477,6 +477,7 @@ OPTYPE op_sse_7E_7F(struct decoded_instruction* i);
 OPTYPE op_sse_D0_D7(struct decoded_instruction* i);
 OPTYPE op_sse_D8_DF(struct decoded_instruction* i);
 OPTYPE op_sse_E8_EF(struct decoded_instruction* i);
+OPTYPE op_sse_F8_FE(struct decoded_instruction* i);
 
 // SSE
 OPTYPE op_ldmxcsr(struct decoded_instruction* i);
@@ -484,65 +485,9 @@ OPTYPE op_stmxcsr(struct decoded_instruction* i);
 OPTYPE op_mfence(struct decoded_instruction* i);
 OPTYPE op_fxsave(struct decoded_instruction* i);
 OPTYPE op_fxrstor(struct decoded_instruction* i);
-OPTYPE op_mov_v128x128(struct decoded_instruction* i);
-OPTYPE op_mov_x128m128(struct decoded_instruction* i);
-OPTYPE op_mov_x128v128(struct decoded_instruction* i);
-OPTYPE op_movu_m128x128(struct decoded_instruction* i);
-OPTYPE op_movu_x128m128(struct decoded_instruction* i);
-OPTYPE op_mov_x128v32(struct decoded_instruction* i);
-OPTYPE op_mov_v32x128(struct decoded_instruction* i);
-OPTYPE op_xor_x128v128(struct decoded_instruction* i);
-OPTYPE op_sse_pshift_x128v128(struct decoded_instruction* i);
-OPTYPE op_sse_pshift_x128i8(struct decoded_instruction* i);
-OPTYPE op_sse_pshift128_x128i8(struct decoded_instruction* i);
-OPTYPE op_sse_punpckl_x128v128(struct decoded_instruction* i);
-OPTYPE op_sse_pmullw_x128v128(struct decoded_instruction* i);
-OPTYPE op_sse_pmulhw_x128v128(struct decoded_instruction* i);
-OPTYPE op_sse_paddsubs_x128v128(struct decoded_instruction* i);
-OPTYPE op_sse_punpckh_x128v128(struct decoded_instruction* i);
-OPTYPE op_sse_pack_x128v128(struct decoded_instruction* i);
-OPTYPE op_sse_pshufw_x128v128(struct decoded_instruction* i);
-OPTYPE op_sse_pmaddwd_x128v128(struct decoded_instruction* i);
-OPTYPE op_sse_padd_x128v128(struct decoded_instruction* i);
-OPTYPE op_sse_psub_x128v128(struct decoded_instruction* i);
-OPTYPE op_sse_mov_m64x128(struct decoded_instruction* i);
-OPTYPE op_mov_x128v64(struct decoded_instruction* i);
-OPTYPE op_mov_x128v32(struct decoded_instruction* i);
-OPTYPE op_sse_pandn_x128v128(struct decoded_instruction* i);
-OPTYPE op_sse_pand_x128v128(struct decoded_instruction* i);
-OPTYPE op_sse_psadbw_x128v128(struct decoded_instruction* i);
-OPTYPE op_sse_pcmpgt_x128v128(struct decoded_instruction* i);
-OPTYPE op_sse_shufp_x128v128(struct decoded_instruction* i);
-OPTYPE op_sse_cvttf2i(struct decoded_instruction* i);
 
 // MMX
-OPTYPE op_mov_v64r64(struct decoded_instruction* i);
-OPTYPE op_mov_r64m64(struct decoded_instruction* i);
-OPTYPE op_mov_r64v32(struct decoded_instruction* i);
-OPTYPE op_mov_v32r64(struct decoded_instruction* i);
-OPTYPE op_xor_r64v64(struct decoded_instruction* i);
-OPTYPE op_mmx_pshift_r64v64(struct decoded_instruction* i);
-OPTYPE op_mmx_pshift_r64i8(struct decoded_instruction* i);
-OPTYPE op_mmx_punpckl_r64v64(struct decoded_instruction* i);
-OPTYPE op_mmx_pmullw_r64v64(struct decoded_instruction* i);
-OPTYPE op_mmx_pmulhw_r64v64(struct decoded_instruction* i);
-OPTYPE op_mmx_paddsubs_r64v64(struct decoded_instruction* i);
-OPTYPE op_mmx_punpckh_r64v64(struct decoded_instruction* i);
-OPTYPE op_mmx_pack_r64v64(struct decoded_instruction* i);
 OPTYPE op_emms(struct decoded_instruction* i);
-OPTYPE op_mmx_pshufw_r64v64(struct decoded_instruction* i);
-OPTYPE op_mmx_pmaddwd_r64v64(struct decoded_instruction* i);
-OPTYPE op_mmx_padd_r64v64(struct decoded_instruction* i);
-OPTYPE op_mmx_psub_r64v64(struct decoded_instruction* i);
-OPTYPE op_mmx_pandn_r64v64(struct decoded_instruction* i);
-OPTYPE op_mmx_pand_r64v64(struct decoded_instruction* i);
-OPTYPE op_mmx_movq2dq(struct decoded_instruction* i);
-OPTYPE op_mmx_movdq2q(struct decoded_instruction* i);
-OPTYPE op_mmx_psadbw_r64v64(struct decoded_instruction* i);
-OPTYPE op_mmx_pcmpgt_r64v64(struct decoded_instruction* i);
-
-// Both MMX/SSE 
-OPTYPE op_cvttf2i(struct decoded_instruction* i);
 
 // <<< BEGIN AUTOGENERATE "string" >>>
 OPTYPE op_movsb16(struct decoded_instruction* i);

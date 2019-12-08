@@ -3144,6 +3144,38 @@ static int decode_sseE8_EF(struct decoded_instruction* i){
     i->imm8 = decode_sseE8_EF_tbl[opcode << 1 | (sse_prefix == SSE_PREFIX_66)];
     return 0;
 }
+static const int decode_sseF8_FE_tbl[7 * 2] = {
+    // 0F F8
+    PSUBB_MGqMEq,
+    PSUBB_XGoXEo,
+    // 0F F9
+    PSUBW_MGqMEq,
+    PSUBW_XGoXEo,
+    // 0F FA
+    PSUBD_MGqMEq,
+    PSUBD_XGoXEo,
+    // 0F FB
+    PSUBQ_MGqMEq,
+    PSUBQ_XGoXEo,
+    // 0F FC
+    PADDB_MGqMEq,
+    PADDB_XGoXEo,
+    // 0F FD
+    PADDW_MGqMEq,
+    PADDW_XGoXEo,
+    // 0F FE
+    PADDD_MGqMEq,
+    PADDD_XGoXEo
+};
+static int decode_sseF8_FE(struct decoded_instruction* i){
+    uint8_t opcode = rawp[-1] & 7, modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    i->handler = op_sse_F8_FE;
+    I_SET_OP(flags, modrm >= 0xC0);
+    i->flags = flags;
+    i->imm8 = decode_sseF8_FE_tbl[opcode << 1 | (sse_prefix == SSE_PREFIX_66)];
+    return 0;
+}
 
 static void set_smc(int length, uint32_t lin)
 {
@@ -3754,12 +3786,12 @@ static const decode_handler_t table0F[256] = {
     /* 0F F5 */ decode_invalid0F,
     /* 0F F6 */ decode_invalid0F,
     /* 0F F7 */ decode_invalid0F,
-    /* 0F F8 */ decode_invalid0F,
-    /* 0F F9 */ decode_invalid0F,
-    /* 0F FA */ decode_invalid0F,
-    /* 0F FB */ decode_invalid0F,
-    /* 0F FC */ decode_invalid0F,
-    /* 0F FD */ decode_invalid0F,
-    /* 0F FE */ decode_invalid0F,
+    /* 0F F8 */ decode_sseF8_FE,
+    /* 0F F9 */ decode_sseF8_FE,
+    /* 0F FA */ decode_sseF8_FE,
+    /* 0F FB */ decode_sseF8_FE,
+    /* 0F FC */ decode_sseF8_FE,
+    /* 0F FD */ decode_sseF8_FE,
+    /* 0F FE */ decode_sseF8_FE,
     /* 0F FF */ decode_ud // Windows 3.1 and Windows 95 use this opcode
 };
