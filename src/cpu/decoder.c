@@ -2472,6 +2472,92 @@ static int decode_sse68_6F(struct decoded_instruction* i){
     i->imm8 = decode_sse68_6F_tbl[opcode << 2 | sse_prefix] | ((opcode & 1) << 4);
     return 0;
 }
+static const int decode_sse70_76_tbl[7 * 4] = {
+    PSHUFW_MGqMEqIb, // 0F 70
+    PSHUFD_XGoXEoIb, // 66 0F 70
+    PSHUFLW_XGoXEoIb, // F2 0F 70
+    PSHUFHW_XGoXEoIb, // F3 0F 70
+
+    PSHIFT_MGqIb, // 0F 71
+    PSHIFT_XEoIb, // 66 0F 71
+    PSHIFT_MGqIb, // F2 0F 71 - invalid
+    PSHIFT_MGqIb, // F3 0F 71 - invalid
+
+    PSHIFT_MGqIb, // 0F 72
+    PSHIFT_XEoIb, // 66 0F 72
+    PSHIFT_MGqIb, // F2 0F 72 - invalid
+    PSHIFT_MGqIb, // F3 0F 72 - invalid
+
+    PSHIFT_MGqIb, // 0F 73
+    PSHIFT_XEoIb, // 66 0F 73
+    PSHIFT_MGqIb, // F2 0F 73 - invalid
+    PSHIFT_MGqIb, // F3 0F 73 - invalid
+
+    PCMPEQB_MGqMEq, // 0F 74
+    PCMPEQB_XGoXEo, // 66 0F 74
+    PCMPEQB_MGqMEq, // F2 0F 74 - invalid
+    PCMPEQB_MGqMEq, // F3 0F 74 - invalid
+
+    PCMPEQW_MGqMEq, // 0F 75
+    PCMPEQW_XGoXEo, // 66 0F 75
+    PCMPEQW_MGqMEq, // F2 0F 75 - invalid
+    PCMPEQW_MGqMEq, // F3 0F 75 - invalid
+
+    PCMPEQD_MGqMEq, // 0F 76
+    PCMPEQD_XGoXEo, // 66 0F 76
+    PCMPEQD_MGqMEq, // F2 0F 76 - invalid
+    PCMPEQD_MGqMEq // F3 0F 76 - invalid
+};
+static const int rm_table_pshift_mmx[24] = {
+    0, 0, // 0, 1
+    PSHIFT_PSRLW, 0, // 2, 3
+    PSHIFT_PSRAW, 0, // 4, 5
+    PSHIFT_PSLLW, 0, // 6, 7
+
+    0, 0, // 0, 1
+    PSHIFT_PSRLD, 0, // 2, 3
+    PSHIFT_PSRAD, 0, // 4, 5
+    PSHIFT_PSLLD, 0, // 6, 7
+
+    0, 0, // 0, 1
+    PSHIFT_PSRLQ, 0, // 2, 3
+    0, 0, // 4, 5
+    PSHIFT_PSLLQ, 0 // 6, 7
+};
+static const int rm_table_pshift_sse[24] = {
+    0, 0, // 0, 1
+    PSHIFT_PSRLW, 0, // 2, 3
+    PSHIFT_PSRAW, 0, // 4, 5
+    PSHIFT_PSLLW, 0, // 6, 7
+
+    0, 0, // 0, 1
+    PSHIFT_PSRLD, 0, // 2, 3
+    PSHIFT_PSRAD, 0, // 4, 5
+    PSHIFT_PSLLD, 0, // 6, 7
+
+    0, 0, // 0, 1
+    PSHIFT_PSRLQ, PSHIFT_PSRLDQ, // 2, 3
+    0, 0, // 4, 5
+    PSHIFT_PSLLQ, PSHIFT_PSLLDQ // 6, 7
+};
+static int decode_sse70_76(struct decoded_instruction* i){
+    uint8_t opcode = rawp[-1] & 7, modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    i->handler = op_sse_68_6F;
+    I_SET_OP(flags, modrm >= 0xC0);
+    i->flags = flags;
+    // Get the opcode information from the table
+    int op = decode_sse70_76_tbl[opcode << 2 | sse_prefix], combined_op = (modrm >> 3 & 7) | ((opcode - 1) & 3) << 3;
+    if(op == PSHIFT_MGqIb)
+        op |= rm_table_pshift_mmx[combined_op] << 4;
+    else if(op == PSHIFT_XEoIb)
+        op |= rm_table_pshift_sse[combined_op] << 4;
+    
+    // Finally, get immediate, if necessary
+    if(op < PCMPEQB_MGqMEq) op |= rb() << 8;
+    i->imm16 = op;
+    return 0;
+}
 
 static int decode_0F77(struct decoded_instruction* i)
 {
@@ -3391,13 +3477,13 @@ static const decode_handler_t table0F[256] = {
     /* 0F 6D */ decode_sse68_6F,
     /* 0F 6E */ decode_sse68_6F,
     /* 0F 6F */ decode_sse68_6F,
-    /* 0F 70 */ decode_invalid0F,
-    /* 0F 71 */ decode_invalid0F,
-    /* 0F 72 */ decode_invalid0F,
-    /* 0F 73 */ decode_invalid0F,
-    /* 0F 74 */ decode_invalid0F,
-    /* 0F 75 */ decode_invalid0F,
-    /* 0F 76 */ decode_invalid0F,
+    /* 0F 70 */ decode_sse70_76,
+    /* 0F 71 */ decode_sse70_76,
+    /* 0F 72 */ decode_sse70_76,
+    /* 0F 73 */ decode_sse70_76,
+    /* 0F 74 */ decode_sse70_76,
+    /* 0F 75 */ decode_sse70_76,
+    /* 0F 76 */ decode_sse70_76,
     /* 0F 77 */ decode_0F77,
     /* 0F 78 */ decode_invalid0F,
     /* 0F 79 */ decode_invalid0F,

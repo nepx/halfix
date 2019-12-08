@@ -315,13 +315,15 @@ static void psubsw(uint16_t* dest, uint16_t* src, int wordcount)
 }
 static void pminsw(int16_t* dest, int16_t* src, int wordcount)
 {
-    for (int i = 0; i < wordcount; i++) 
-        if(src[i] < dest[i]) dest[i] = src[i]; 
+    for (int i = 0; i < wordcount; i++)
+        if (src[i] < dest[i])
+            dest[i] = src[i];
 }
 static void pmaxsw(int16_t* dest, int16_t* src, int wordcount)
 {
-    for (int i = 0; i < wordcount; i++) 
-        if(src[i] > dest[i]) dest[i] = src[i]; 
+    for (int i = 0; i < wordcount; i++)
+        if (src[i] > dest[i])
+            dest[i] = src[i];
 }
 static void paddsb(uint8_t* dest, uint8_t* src, int bytecount)
 {
@@ -343,6 +345,129 @@ static void paddsw(uint16_t* dest, uint16_t* src, int wordcount)
             res = x;
         dest[i] = res;
     }
+}
+static void pshuf(void* dest, void* src, int imm, int shift)
+{
+    uint8_t* src8 = src;
+    uint8_t res[16];
+    int id = 0;
+    for (int i = 0; i < 4; i++) {
+        int index = imm & 3, index4 = index << shift;
+        if (shift == 2) { // Doubleword size
+            //printf("index: %d resid=%d %02x%02x%02x%02x\n", index, id, src8[index4 + 0], src8[index4 + 1], src8[index4 + 2], src8[index4 + 3]);
+            res[id + 0] = src8[index4 + 0];
+            res[id + 1] = src8[index4 + 1];
+            res[id + 2] = src8[index4 + 2];
+            res[id + 3] = src8[index4 + 3];
+            id += 4;
+        } else { // shift == 1: Word size
+            res[id + 0] = src8[index4 + 0];
+            res[id + 1] = src8[index4 + 1];
+            id += 2;
+        }
+        imm >>= 2;
+    }
+    memcpy(dest, res, 4 << shift);
+}
+
+static void cpu_psraw(uint16_t* a, int shift, int mask, int wordcount)
+{
+    // SAR but with MMX/SSE operands
+    for (int i = 0; i < wordcount; i++)
+        a[i] = (int16_t)a[i] >> shift & mask;
+}
+static void cpu_psrlw(uint16_t* a, int shift, int mask, int wordcount)
+{
+    // SHR but with MMX/SSE operands
+    for (int i = 0; i < wordcount; i++)
+        a[i] = a[i] >> shift & mask;
+}
+static void cpu_psllw(uint16_t* a, int shift, int mask, int wordcount)
+{
+    // SHL but with MMX/SSE operands
+    for (int i = 0; i < wordcount; i++)
+        a[i] = a[i] << shift & mask;
+}
+static void cpu_psrad(uint32_t* a, int shift, int mask, int wordcount)
+{
+    int dwordcount = wordcount >> 1;
+    for (int i = 0; i < dwordcount; i++)
+        a[i] = (int32_t)a[i] >> shift & mask;
+}
+static void cpu_psrld(uint32_t* a, int shift, int mask, int wordcount)
+{
+    int dwordcount = wordcount >> 1;
+    for (int i = 0; i < dwordcount; i++)
+        a[i] = a[i] >> shift & mask;
+}
+static void cpu_pslld(uint32_t* a, int shift, int mask, int wordcount)
+{
+    int dwordcount = wordcount >> 1;
+    for (int i = 0; i < dwordcount; i++)
+        a[i] = a[i] << shift & mask;
+}
+static void cpu_psrlq(uint64_t* a, int shift, int mask, int wordcount)
+{
+    int qwordcount = wordcount >> 2;
+    for (int i = 0; i < qwordcount; i++){
+        if(mask)
+        a[i] = a[i] >> shift;
+        else 
+        a[i] = 0;
+    }
+}
+static void cpu_psllq(uint64_t* a, int shift, int mask, int qwordcount)
+{
+    for (int i = 0; i < qwordcount; i++)
+        if(mask)
+        a[i] = a[i] << shift;
+        else 
+        a[i] = 0;
+}
+static void cpu_pslldq(uint64_t* a, int shift, int mask)
+{
+    if (mask == 0) {
+        a[0] = 0;
+        a[1] = 0;
+        return;
+    }
+    // This is a 128 bit SHL shift for xmm registers only
+    a[0] <<= shift; // Bottom bits should be 0
+    a[0] |= a[1] >> (64L - shift);
+    a[1] <<= shift;
+}
+static void cpu_psrldq(uint64_t* a, int shift, int mask)
+{
+    if (mask == 0) {
+        a[0] = 0;
+        a[1] = 0;
+        return;
+    }
+    // This is a 128 bit SHR shift for xmm registers only
+    a[1] >>= shift;
+    a[1] |= a[0] << (64L - shift);
+    a[0] >>= shift;
+}
+static void pcmpeqb(uint8_t* dest, uint8_t* src, int count)
+{
+    for (int i = 0; i < count; i++)
+        if (src[i] == dest[i])
+            dest[i] = 0xFF;
+        else dest[i] = 0;
+}
+static void pcmpeqw(uint16_t* dest, uint16_t* src, int count)
+{
+    for (int i = 0; i < count; i++)
+        if (src[i] == dest[i])
+            dest[i] = 0xFFFF;
+        else dest[i] = 0;
+}
+static void pcmpeqd(uint32_t* dest, uint32_t* src, int count)
+{
+    for (int i = 0; i < count; i++)
+        if (src[i] == dest[i])
+            dest[i] = 0xFFFFFFFF;
+        else dest[i] = 0;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -891,9 +1016,9 @@ int execute_0F68_6F(struct decoded_instruction* i)
 int execute_0FE8_EF(struct decoded_instruction* i)
 {
     uint32_t *dest32, flags = i->flags;
-    if (i->imm8 & 1){
+    if (i->imm8 & 1) {
         CHECK_SSE;
-    }else{
+    } else {
         CHECK_MMX;
     }
     switch (i->imm8 & 15) {
@@ -984,6 +1109,134 @@ int execute_0FE8_EF(struct decoded_instruction* i)
         dest32[1] ^= *(uint32_t*)(result_ptr + 4);
         dest32[2] ^= *(uint32_t*)(result_ptr + 8);
         dest32[3] ^= *(uint32_t*)(result_ptr + 12);
+        break;
+    }
+    return 0;
+}
+
+static void pshift(void* dest, int opcode, int wordcount, int imm){
+    int mask = -1;
+    switch(opcode){
+        case PSHIFT_PSRLW:
+            if(imm >= 16) mask = 0;
+            cpu_psrlw(dest, imm, mask, wordcount);
+            break;
+        case PSHIFT_PSRAW:
+            if(imm >= 16) mask = 0;
+            cpu_psraw(dest, imm, mask, wordcount);
+            break;
+        case PSHIFT_PSLLW:
+            if(imm >= 16) mask = 0;
+            cpu_psllw(dest, imm, mask, wordcount);
+            break;
+        case PSHIFT_PSRLD:
+            if(imm >= 32) mask = 0;
+            cpu_psrld(dest, imm, mask, wordcount);
+            break;
+        case PSHIFT_PSRAD:
+            if(imm >= 32) mask = 0;
+            cpu_psrad(dest, imm, mask, wordcount);
+            break;
+        case PSHIFT_PSLLD:
+            if(imm >= 32) mask = 0;
+            cpu_pslld(dest, imm, mask, wordcount);
+            break;
+        case PSHIFT_PSRLQ:
+            if(imm>=64)mask = 0;
+            cpu_psrlq(dest, imm, mask, wordcount);
+            break;
+        case PSHIFT_PSRLDQ: 
+            if(imm>=128)mask = 0;
+            cpu_psrldq(dest, imm, mask);
+            break;
+        case PSHIFT_PSLLQ: 
+            if(imm>=64)mask = 0;
+            cpu_psllq(dest, imm, mask, wordcount);
+            break;
+        case PSHIFT_PSLLDQ: 
+            if(imm>=128)mask = 0;
+            cpu_pslldq(dest, imm, mask);
+            break;
+    }
+}
+
+int execute_0F70_76(struct decoded_instruction* i)
+{
+    uint32_t *dest32, flags = i->flags;
+    if (i->imm8 & 1) {
+        CHECK_SSE;
+    } else {
+        CHECK_MMX;
+    }
+    int imm;
+    switch (i->imm8 & 15) {
+    case PSHUFW_MGqMEqIb:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        imm = i->imm16 >> 8;
+        pshuf(dest32, result_ptr, imm, 1);
+        break;
+    case PSHUFHW_XGoXEoIb:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = 0;
+        dest32[1] = 0;
+        imm = i->imm16 >> 8;
+        pshuf(dest32+2, result_ptr, imm, 1);
+        break;
+    case PSHUFLW_XGoXEoIb:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[2] = 0;
+        dest32[3] = 0;
+        imm = i->imm16 >> 8;
+        pshuf(dest32, result_ptr, imm, 1);
+        break;
+    case PSHUFD_XGoXEoIb:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        imm = i->imm16 >> 8;
+        pshuf(dest32, result_ptr, imm, 2);
+        break;
+    case PSHIFT_MGqIb:
+        dest32 = get_mmx_reg_dest(I_RM(flags)); // Note: R/M is dest, but RMW accesses are not allowed
+        imm = i->imm16 >> 8;
+        pshift(dest32, i->imm8 >> 4 & 15, 4, imm);
+        break;
+    case PSHIFT_XEoIb:
+        dest32 = get_sse_reg_dest(I_RM(flags));
+        imm = i->imm16 >> 8;
+        pshift(dest32, i->imm8 >> 4 & 15, 8, imm);
+        break;
+    case PCMPEQB_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pcmpeqb((uint8_t*)dest32, result_ptr, 8);
+        break;
+    case PCMPEQB_XGoXEo:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pcmpeqb((uint8_t*)dest32, result_ptr, 16);
+        break;
+    case PCMPEQW_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pcmpeqw((uint16_t*)dest32, result_ptr, 8);
+        break;
+    case PCMPEQW_XGoXEo:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pcmpeqw((uint16_t*)dest32, result_ptr, 16);
+        break;
+    case PCMPEQD_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pcmpeqd(dest32, result_ptr, 8);
+        break;
+    case PCMPEQD_XGoXEo:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pcmpeqd(dest32, result_ptr, 16);
         break;
     }
     return 0;
