@@ -334,6 +334,18 @@ static void psubsw(uint16_t* dest, uint16_t* src, int wordcount)
         dest[i] = res;
     }
 }
+static void pminub(uint8_t* dest, uint8_t* src, int bytecount)
+{
+    for (int i = 0; i < bytecount; i++)
+        if (src[i] < dest[i])
+            dest[i] = src[i];
+}
+static void pmaxub(uint8_t* dest, uint8_t* src, int bytecount)
+{
+    for (int i = 0; i < bytecount; i++)
+        if (dest[i] < src[i])
+            dest[i] = src[i];
+}
 static void pminsw(int16_t* dest, int16_t* src, int wordcount)
 {
     for (int i = 0; i < wordcount; i++)
@@ -551,6 +563,34 @@ static int pmovmskb(uint8_t* src, int bytecount)
         dest |= (src[i] >> 7) << i;
     }
     return dest;
+}
+static void psubusb(uint8_t* dest, uint8_t* src, int bytecount)
+{
+    for (int i = 0; i < bytecount; i++) {
+        uint8_t result = dest[i] - src[i];
+        dest[i] = -(result <= dest[i]) & result;
+    }
+}
+static void psubusw(uint16_t* dest, uint16_t* src, int wordcount)
+{
+    for (int i = 0; i < wordcount; i++) {
+        uint16_t result = dest[i] - src[i];
+        dest[i] = -(result <= dest[i]) & result;
+    }
+}
+static void paddusb(uint8_t* dest, uint8_t* src, int bytecount)
+{
+    for (int i = 0; i < bytecount; i++) {
+        uint8_t result = dest[i] + src[i];
+        dest[i] = -(result < dest[i]) | result;
+    }
+}
+static void paddusw(uint16_t* dest, uint16_t* src, int wordcount)
+{
+    for (int i = 0; i < wordcount; i++) {
+        uint16_t result = dest[i] + src[i];
+        dest[i] = -(result < dest[i]) | result;
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1541,6 +1581,105 @@ int execute_0FD0_D7(struct decoded_instruction* i)
         CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         cpu.reg32[I_REG(flags)] = pmovmskb(result_ptr, 16);
+        break;
+    }
+    return 0;
+}
+
+int execute_0FD8_DF(struct decoded_instruction* i)
+{
+    uint32_t *dest32, flags = i->flags;
+    if (i->imm8 & 1) {
+        CHECK_SSE;
+    } else {
+        CHECK_MMX;
+    }
+    switch (i->imm8 & 15) {
+        case PSUBUSB_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        psubusb((uint8_t*)dest32, result_ptr, 8);
+        break;
+        case PSUBUSB_XGoXEo:
+        EX(get_sse_write_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        psubusb((uint8_t*)dest32, result_ptr, 16);
+        break;
+        case PSUBUSW_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        psubusw((uint16_t*)dest32, result_ptr, 4);
+        break;
+        case PSUBUSW_XGoXEo:
+        EX(get_sse_write_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        psubusw((uint16_t*)dest32, result_ptr, 8);
+        break;
+    case PMINUB_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pminub((uint8_t*)dest32, result_ptr, 8);
+    case PMINUB_XGoXEo:
+        EX(get_sse_write_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pminub((uint8_t*)dest32, result_ptr, 16);
+        break;
+    case PAND_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        dest32[0] &= *(uint32_t*)result_ptr;
+        dest32[1] &= *(uint32_t*)(result_ptr + 4);
+        break;
+    case PAND_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] &= *(uint32_t*)result_ptr;
+        dest32[1] &= *(uint32_t*)(result_ptr + 4);
+        dest32[2] &= *(uint32_t*)(result_ptr + 8);
+        dest32[3] &= *(uint32_t*)(result_ptr + 12);
+        break;
+        case PADDUSB_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        paddusb((uint8_t*)dest32, result_ptr, 8);
+        break;
+        case PADDUSB_XGoXEo:
+        EX(get_sse_write_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        paddusb((uint8_t*)dest32, result_ptr, 16);
+        break;
+        case PADDUSW_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        paddusw((uint16_t*)dest32, result_ptr, 4);
+        break;
+        case PADDUSW_XGoXEo:
+        EX(get_sse_write_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        paddusw((uint16_t*)dest32, result_ptr, 8);
+        break;
+    case PMAXUB_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pmaxub((uint8_t*)dest32, result_ptr, 8);
+    case PMAXUB_XGoXEo:
+        EX(get_sse_write_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pmaxub((uint8_t*)dest32, result_ptr, 16);
+        break;
+    case PANDN_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        dest32[0] = ~dest32[0] & *(uint32_t*)result_ptr;
+        dest32[1] = ~dest32[1] & *(uint32_t*)(result_ptr + 4);
+        break;
+    case PANDN_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = ~dest32[0] & *(uint32_t*)result_ptr;
+        dest32[1] = ~dest32[1] & *(uint32_t*)(result_ptr + 4);
+        dest32[2] = ~dest32[2] & *(uint32_t*)(result_ptr + 8);
+        dest32[3] = ~dest32[3] & *(uint32_t*)(result_ptr + 12);
         break;
     }
     return 0;

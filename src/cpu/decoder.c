@@ -3044,6 +3044,41 @@ static int decode_sseD0_D7(struct decoded_instruction* i){
     i->imm8 = decode_sseD0_D7_tbl[opcode << 2 | sse_prefix];
     return 0;
 }
+static const int decode_sseD8_DF_tbl[8 * 2] = {
+    // 0F D8
+    PSUBUSB_MGqMEq,
+    PSUBUSB_XGoXEo,
+    // 0F D9
+    PSUBUSW_MGqMEq,
+    PSUBUSW_XGoXEo,
+    // 0F DA
+    PMINUB_MGqMEq,
+    PMINUB_XGoXEo,
+    // 0F DB
+    PAND_MGqMEq,
+    PAND_XGoXEo,
+    // 0F DC
+    PADDUSB_MGqMEq,
+    PADDUSB_XGoXEo,
+    // 0F DD
+    PADDUSW_MGqMEq,
+    PADDUSW_XGoXEo,
+    // 0F DE
+    PMAXUB_MGqMEq,
+    PMAXUB_XGoXEo,
+    // 0F DF
+    PANDN_MGqMEq,
+    PANDN_XGoXEo
+};
+static int decode_sseD8_DF(struct decoded_instruction* i){
+    uint8_t opcode = rawp[-1] & 7, modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    i->handler = op_sse_D8_DF;
+    I_SET_OP(flags, modrm >= 0xC0);
+    i->flags = flags;
+    i->imm8 = decode_sseD8_DF_tbl[opcode << 1 | (sse_prefix == SSE_PREFIX_66)];
+    return 0;
+}
 
 static const int decode_sseE8_EF_tbl[8 * 2] = {
     // 0F E8
@@ -3658,14 +3693,14 @@ static const decode_handler_t table0F[256] = {
     /* 0F D5 */ decode_sseD0_D7,
     /* 0F D6 */ decode_sseD0_D7,
     /* 0F D7 */ decode_sseD0_D7,
-    /* 0F D8 */ decode_invalid0F,
-    /* 0F D9 */ decode_invalid0F,
-    /* 0F DA */ decode_invalid0F,
-    /* 0F DB */ decode_invalid0F,
-    /* 0F DC */ decode_invalid0F,
-    /* 0F DD */ decode_invalid0F,
-    /* 0F DE */ decode_invalid0F,
-    /* 0F DF */ decode_invalid0F,
+    /* 0F D8 */ decode_sseD8_DF,
+    /* 0F D9 */ decode_sseD8_DF,
+    /* 0F DA */ decode_sseD8_DF,
+    /* 0F DB */ decode_sseD8_DF,
+    /* 0F DC */ decode_sseD8_DF,
+    /* 0F DD */ decode_sseD8_DF,
+    /* 0F DE */ decode_sseD8_DF,
+    /* 0F DF */ decode_sseD8_DF,
     /* 0F E0 */ decode_invalid0F,
     /* 0F E1 */ decode_invalid0F,
     /* 0F E2 */ decode_invalid0F,

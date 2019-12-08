@@ -227,10 +227,10 @@ enum {
     // 0F DD
     PADDUSW_MGqMEq,
     PADDUSW_XGoXEo,
-    // 0F DA
+    // 0F DE
     PMAXUB_MGqMEq,
     PMAXUB_XGoXEo,
-    // 0F DB
+    // 0F DF
     PANDN_MGqMEq,
     PANDN_XGoXEo
 };
@@ -272,6 +272,7 @@ int execute_0F60_67(struct decoded_instruction* i);
 int execute_0F68_6F(struct decoded_instruction* i);
 int execute_0F70_76(struct decoded_instruction* i);
 int execute_0FD0_D7(struct decoded_instruction* i);
+int execute_0FD8_DF(struct decoded_instruction* i);
 int execute_0FE8_EF(struct decoded_instruction* i);
 
 #endif
