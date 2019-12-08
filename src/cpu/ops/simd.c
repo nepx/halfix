@@ -537,6 +537,21 @@ static void packsswb(void* dest, void* src, int wordcount)
     }
     memcpy(dest, res, wordcount << 1);
 }
+static void pmullw(uint16_t* dest, uint16_t* src, int wordcount, int shift)
+{
+    for (int i = 0; i < wordcount; i++) {
+        uint32_t result = (uint32_t)(int16_t)dest[i] * (uint32_t)(int16_t)src[i];
+        dest[i] = result >> shift;
+    }
+}
+static int pmovmskb(uint8_t* src, int bytecount)
+{
+    int dest = 0;
+    for (int i = 0; i < bytecount; i++) {
+        dest |= (src[i] >> 7) << i;
+    }
+    return dest;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Actual operations
@@ -1408,6 +1423,124 @@ int execute_0F60_67(struct decoded_instruction* i)
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         packuswb(dest32, result_ptr, 8);
+        break;
+    }
+    return 0;
+}
+
+// Packed shifts return 0 if their operands are too large.
+// All shifts should fit in one byte. A non-zero value in any other byte signifies that the value is > 16
+static uint32_t get_shift(void* x, int bytes)
+{
+    uint32_t res = *(uint8_t*)x; // This is the byte we care about
+    for (int i = 1; i < bytes; i++)
+        res |= *(uint8_t*)(x + i) << 8; // If any other byte is non-zero, res will have some of bits 8...15 set.
+    return res;
+}
+int execute_0FD0_D7(struct decoded_instruction* i)
+{
+    uint32_t *dest32, *src32, flags = i->flags;
+    switch (i->imm8 & 15) {
+    case PSRLW_MGqMEq:
+        CHECK_MMX;
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pshift(dest32, PSHIFT_PSRLW, 4, get_shift(result_ptr, 8));
+        break;
+    case PSRLW_XGoXEo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pshift(dest32, PSHIFT_PSRLW, 8, get_shift(result_ptr, 16));
+        break;
+    case PSRLD_MGqMEq:
+        CHECK_MMX;
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pshift(dest32, PSHIFT_PSRLD, 4, get_shift(result_ptr, 8));
+        break;
+    case PSRLD_XGoXEo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pshift(dest32, PSHIFT_PSRLD, 8, get_shift(result_ptr, 16));
+        break;
+    case PSRLQ_MGqMEq:
+        CHECK_MMX;
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pshift(dest32, PSHIFT_PSRLQ, 4, get_shift(result_ptr, 8));
+        break;
+    case PSRLQ_XGoXEo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pshift(dest32, PSHIFT_PSRLQ, 8, get_shift(result_ptr, 16));
+        break;
+    case PADDQ_MGqMEq:
+        CHECK_MMX;
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        *((uint64_t*)dest32) += *(uint64_t*)result_ptr;
+        break;
+    case PADDQ_XGoXEo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        *((uint64_t*)(dest32)) += *(uint64_t*)(result_ptr);
+        *((uint64_t*)(dest32 + 4)) += *(uint64_t*)(result_ptr + 4);
+        break;
+    case PMULLW_MGqMEq:
+        CHECK_MMX;
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pmullw((uint16_t*)dest32, result_ptr, 4, 0);
+        break;
+    case PMULLW_XGoXEo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pmullw((uint16_t*)dest32, result_ptr, 8, 0);
+        break;
+    case MOVQ_XEqXGq:
+        CHECK_SSE;
+        EX(get_sse_write_ptr(flags, i, 2, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        *(uint32_t*)result_ptr = dest32[0];
+        *(uint32_t*)(result_ptr + 4) = dest32[1];
+        if (I_OP2(flags)) {
+            // Register destination -- clear upper bits
+            *(uint32_t*)(result_ptr + 8) = 0;
+            *(uint32_t*)(result_ptr + 12) = 0;
+        }
+        break;
+    case MOVQ2DQ_XGoMEq:
+        CHECK_MMX;
+        CHECK_SSE;
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        src32 = get_mmx_reg_dest(I_REG(flags));
+        dest32[0] = src32[0];
+        dest32[1] = src32[1];
+        dest32[2] = 0;
+        dest32[3] = 0;
+        break;
+    case MOVDQ2Q_MGqXEo:
+        CHECK_MMX;
+        CHECK_SSE;
+        src32 = get_sse_reg_dest(I_REG(flags));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        dest32[0] = src32[0];
+        dest32[1] = src32[1];
+        break;
+    case PMOVMSKB_GdMEq:
+        CHECK_MMX;
+        EX(get_mmx_read_ptr(flags, i, 2));
+        cpu.reg32[I_REG(flags)] = pmovmskb(result_ptr, 8);
+        break;
+    case PMOVMSKB_GdXEo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        cpu.reg32[I_REG(flags)] = pmovmskb(result_ptr, 16);
         break;
     }
     return 0;

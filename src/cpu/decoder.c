@@ -3004,6 +3004,47 @@ static int decode_0FC7(struct decoded_instruction* i)
         return 0;
     }
 }
+static const int decode_sseD0_D7_tbl[8 * 4] = {
+    PSRLW_MGqMEq, // 0F D1
+    PSRLW_XGoXEo, // 66 0F D1
+    PSRLW_MGqMEq, // F2 0F D1 - invalid
+    PSRLW_MGqMEq, // F3 0F D1 - invalid
+    
+    PSRLD_MGqMEq, // 0F D2
+    PSRLD_XGoXEo, // 66 0F D2
+    PSRLD_MGqMEq, // F2 0F D2 - invalid
+    PSRLD_MGqMEq, // F3 0F D2 - invalid
+    
+    PSRLQ_MGqMEq, // 0F D3
+    PSRLQ_XGoXEo, // 66 0F D3
+    PSRLQ_MGqMEq, // F2 0F D3 - invalid
+    PSRLQ_MGqMEq, // F3 0F D3 - invalid
+    
+    PADDQ_MGqMEq, // 0F D4
+    PADDQ_XGoXEo, // 66 0F D4
+    PADDQ_MGqMEq, // F2 0F D4 - invalid
+    PADDQ_MGqMEq, // F3 0F D4 - invalid
+    
+    MOVQ_XEqXGq, // 0F D6 - invalid
+    MOVQ_XEqXGq, // 66 0F D6
+    MOVDQ2Q_MGqXEo, // F2 0F D6
+    MOVQ2DQ_XGoMEq, // F3 0F D6
+    
+    PMOVMSKB_GdMEq, // 0F D7
+    PMOVMSKB_GdXEo, // 66 0F D7
+    PMOVMSKB_GdMEq, // F2 0F D7 - invalid
+    PMOVMSKB_GdMEq // F3 0F D7 - invalid
+};
+static int decode_sseD0_D7(struct decoded_instruction* i){
+    uint8_t opcode = rawp[-1] & 7, modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    i->handler = op_sse_D0_D7;
+    I_SET_OP(flags, modrm >= 0xC0);
+    i->flags = flags;
+    i->imm8 = decode_sseD0_D7_tbl[opcode << 2 | sse_prefix];
+    return 0;
+}
+
 static const int decode_sseE8_EF_tbl[8 * 2] = {
     // 0F E8
     PSUBSB_MGqMEq,
@@ -3609,14 +3650,14 @@ static const decode_handler_t table0F[256] = {
     /* 0F CD */ decode_bswap,
     /* 0F CE */ decode_bswap,
     /* 0F CF */ decode_bswap,
-    /* 0F D0 */ decode_invalid0F,
-    /* 0F D1 */ decode_invalid0F,
-    /* 0F D2 */ decode_invalid0F,
-    /* 0F D3 */ decode_invalid0F,
-    /* 0F D4 */ decode_invalid0F,
-    /* 0F D5 */ decode_invalid0F,
-    /* 0F D6 */ decode_invalid0F,
-    /* 0F D7 */ decode_invalid0F,
+    /* 0F D0 */ decode_sseD0_D7,
+    /* 0F D1 */ decode_sseD0_D7,
+    /* 0F D2 */ decode_sseD0_D7,
+    /* 0F D3 */ decode_sseD0_D7,
+    /* 0F D4 */ decode_sseD0_D7,
+    /* 0F D5 */ decode_sseD0_D7,
+    /* 0F D6 */ decode_sseD0_D7,
+    /* 0F D7 */ decode_sseD0_D7,
     /* 0F D8 */ decode_invalid0F,
     /* 0F D9 */ decode_invalid0F,
     /* 0F DA */ decode_invalid0F,

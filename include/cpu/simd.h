@@ -184,6 +184,58 @@ enum {
 };
 
 enum {
+    // 0F D1
+    PSRLW_MGqMEq,
+    PSRLW_XGoXEo,
+    // 0F D2
+    PSRLD_MGqMEq,
+    PSRLD_XGoXEo,
+    // 0F D3
+    PSRLQ_MGqMEq,
+    PSRLQ_XGoXEo,
+    // 0F D4
+    PADDQ_MGqMEq,
+    PADDQ_XGoXEo,
+    // 0F D5
+    PMULLW_MGqMEq,
+    PMULLW_XGoXEo,
+    // 0F D6
+    MOVQ_XEqXGq,
+    MOVQ2DQ_XGoMEq,
+    MOVDQ2Q_MGqXEo,
+    // 0F D7
+    PMOVMSKB_GdMEq,
+    PMOVMSKB_GdXEo
+};
+
+enum {
+    // 0F D8
+    PSUBUSB_MGqMEq,
+    PSUBUSB_XGoXEo,
+    // 0F D9
+    PSUBUSW_MGqMEq,
+    PSUBUSW_XGoXEo,
+    // 0F DA
+    PMINUB_MGqMEq,
+    PMINUB_XGoXEo,
+    // 0F DB
+    PAND_MGqMEq,
+    PAND_XGoXEo,
+    // 0F DC
+    PADDUSB_MGqMEq,
+    PADDUSB_XGoXEo,
+    // 0F DD
+    PADDUSW_MGqMEq,
+    PADDUSW_XGoXEo,
+    // 0F DA
+    PMAXUB_MGqMEq,
+    PMAXUB_XGoXEo,
+    // 0F DB
+    PANDN_MGqMEq,
+    PANDN_XGoXEo
+};
+
+enum {
     // 0F E8
     PSUBSB_MGqMEq,
     PSUBSB_XGoXEo,
@@ -219,6 +271,7 @@ int execute_0F50_57(struct decoded_instruction* i);
 int execute_0F60_67(struct decoded_instruction* i);
 int execute_0F68_6F(struct decoded_instruction* i);
 int execute_0F70_76(struct decoded_instruction* i);
+int execute_0FD0_D7(struct decoded_instruction* i);
 int execute_0FE8_EF(struct decoded_instruction* i);
 
 #endif
