@@ -92,6 +92,33 @@ enum {
 };
 
 enum {
+    // 0F 60
+    PUNPCKLBW_MGqMEq,
+    PUNPCKLBW_XGoXEo,
+    // 0F 61
+    PUNPCKLWD_MGqMEq,
+    PUNPCKLWD_XGoXEo,
+    // 0F 62
+    PUNPCKLDQ_MGqMEq,
+    PUNPCKLDQ_XGoXEo,
+    // 0F 63
+    PACKSSWB_MGqMEq,
+    PACKSSWB_XGoXEo,
+    // 0F 64
+    PCMPGTB_MGqMEq,
+    PCMPGTB_XGoXEo,
+    // 0F 65
+    PCMPGTW_MGqMEq,
+    PCMPGTW_XGoXEo,
+    // 0F 66
+    PCMPGTD_MGqMEq,
+    PCMPGTD_XGoXEo,
+    // 0F 67
+    PACKUSWB_MGqMEq,
+    PACKUSWB_XGoXEo
+};
+
+enum {
     // 0F 68
     PUNPCKHBW_MGqMEq,
     PUNPCKHBW_XGoXEo,
@@ -189,6 +216,7 @@ int cpu_emms(void);
 int execute_0F10_17(struct decoded_instruction* i);
 int execute_0F28_2F(struct decoded_instruction* i);
 int execute_0F50_57(struct decoded_instruction* i);
+int execute_0F60_67(struct decoded_instruction* i);
 int execute_0F68_6F(struct decoded_instruction* i);
 int execute_0F70_76(struct decoded_instruction* i);
 int execute_0FE8_EF(struct decoded_instruction* i);
