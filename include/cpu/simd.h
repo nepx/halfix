@@ -180,6 +180,25 @@ enum {
 };
 
 enum {
+    // 0F C2
+    CMPPS_XGoXEoIb,
+    CMPSS_XGdXEdIb,
+    CMPPD_XGoXEoIb,
+    CMPSD_XGqXEqIb,
+    // 0F C3
+    MOVNTI_EdGd,
+    // 0F C4
+    PINSRW_MGqEdIb,
+    PINSRW_XGoEdIb,
+    // 0F C5
+    PEXTRW_GdMEqIb,
+    PEXTRW_GdXEoIb,
+    // 0F C6
+    SHUFPS_XGoXEoIb,
+    SHUFPD_XGoXEoIb
+};
+
+enum {
     PSHIFT_PSRLW,
     PSHIFT_PSRAW,
     PSHIFT_PSLLW,
@@ -308,6 +327,7 @@ int execute_0F60_67(struct decoded_instruction* i);
 int execute_0F68_6F(struct decoded_instruction* i);
 int execute_0F70_76(struct decoded_instruction* i);
 int execute_0F7E_7F(struct decoded_instruction* i);
+int execute_0FC2_C6(struct decoded_instruction* i);
 int execute_0FD0_D7(struct decoded_instruction* i);
 int execute_0FD8_DF(struct decoded_instruction* i);
 int execute_0FE8_EF(struct decoded_instruction* i);

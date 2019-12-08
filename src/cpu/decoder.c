@@ -3027,6 +3027,44 @@ static int decode_0FC7(struct decoded_instruction* i)
         return 0;
     }
 }
+static const int decode_sseC2_C6_tbl[5 * 4] = {
+    CMPPS_XGoXEoIb, // 0F C2
+    CMPPD_XGoXEoIb, // 66 0F C2
+    CMPSD_XGqXEqIb, // F2 0F C2
+    CMPSS_XGdXEdIb, // F3 0F C2
+
+    MOVNTI_EdGd, // 0F C3
+    MOVNTI_EdGd, // 66 0F C3
+    MOVNTI_EdGd, // F2 0F C3 - invalid
+    MOVNTI_EdGd, // F3 0F C3 - invalid
+
+    PINSRW_MGqEdIb, // 0F C4
+    PINSRW_XGoEdIb, // 66 0F C4
+    PINSRW_MGqEdIb, // F2 0F C4 - invalid
+    PINSRW_MGqEdIb, // F3 0F C4 - invalid
+
+    PEXTRW_GdMEqIb, // 0F C5
+    PEXTRW_GdXEoIb, // 66 0F C5
+    PEXTRW_GdMEqIb, // F2 0F C5 - invalid
+    PEXTRW_GdMEqIb, // F3 0F C5 - invalid
+
+    SHUFPS_XGoXEoIb, // 0F C6
+    SHUFPD_XGoXEoIb, // 66 0F C6
+    SHUFPS_XGoXEoIb, // F2 0F C6
+    SHUFPS_XGoXEoIb // F3 0F C6
+};
+static int decode_sseC2_C6(struct decoded_instruction* i){
+    uint8_t opcode = rawp[-1] & 7, modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    i->handler = op_sse_C2_C6;
+    I_SET_OP(flags, modrm >= 0xC0);
+    i->flags = flags;
+    opcode -= 2; // C2 --> C0 for easy lookup
+    int op = decode_sseC2_C6_tbl[opcode << 2 | sse_prefix];
+    if(op != MOVNTI_EdGd) op |= rb() << 8;
+    i->imm16 = op;
+    return 0;
+} 
 static const int decode_sseD0_D7_tbl[8 * 4] = {
     PSRLW_MGqMEq, // 0F D1
     PSRLW_XGoXEo, // 66 0F D1
@@ -3732,11 +3770,11 @@ static const decode_handler_t table0F[256] = {
     /* 0F BF */ decode_0FBF,
     /* 0F C0 */ decode_0FC0,
     /* 0F C1 */ decode_0FC1,
-    /* 0F C2 */ decode_invalid0F,
-    /* 0F C3 */ decode_invalid0F,
-    /* 0F C4 */ decode_invalid0F,
-    /* 0F C5 */ decode_invalid0F,
-    /* 0F C6 */ decode_invalid0F,
+    /* 0F C2 */ decode_sseC2_C6,
+    /* 0F C3 */ decode_sseC2_C6,
+    /* 0F C4 */ decode_sseC2_C6,
+    /* 0F C5 */ decode_sseC2_C6,
+    /* 0F C6 */ decode_sseC2_C6,
     /* 0F C7 */ decode_0FC7,
     /* 0F C8 */ decode_bswap,
     /* 0F C9 */ decode_bswap,

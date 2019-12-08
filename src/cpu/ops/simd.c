@@ -13,6 +13,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 // Floating point routines
 ///////////////////////////////////////////////////////////////////////////////
+#include "softfloat/softfloat-compare.h"
 #include "softfloat/softfloat.h"
 static float_status_t status;
 
@@ -668,6 +669,79 @@ static void psubq(uint64_t* dest, uint64_t* src, int qwordcount)
     else
         for (int i = 0; i < qwordcount; i++)
             dest[i] -= src[i];
+}
+static uint32_t cmpps(float32 dest, float32 src, int cmp)
+{
+    // Idea:
+    // switch(cmp & 3) { return -(float32_eq_ordered_quiet(dest, src, &status) ^ (cmp >> 2)); }
+    switch (cmp & 7) {
+    // https://www.felixcloutier.com/x86/cmpps
+    // Note that some compares are quiet and some are signalling
+    case 0:
+        return -float32_eq_ordered_quiet(dest, src, &status);
+    case 1:
+        return -float32_lt_ordered_signalling(dest, src, &status);
+    case 2:
+        return -float32_le_ordered_signalling(dest, src, &status);
+    case 3:
+        return -float32_unordered_quiet(dest, src, &status);
+    case 4:
+        return -float32_neq_ordered_quiet(dest, src, &status);
+    case 5:
+        return -float32_nlt_unordered_signalling(dest, src, &status);
+    case 6:
+        return -float32_nle_unordered_signalling(dest, src, &status);
+    case 7:
+        return -float32_ordered_quiet(dest, src, &status);
+    }
+    abort();
+}
+static uint64_t cmppd(float64 dest, float64 src, int cmp)
+{
+    switch (cmp & 7) {
+    case 0:
+        return -float64_eq_ordered_quiet(dest, src, &status);
+    case 1:
+        return -float64_lt_ordered_signalling(dest, src, &status);
+    case 2:
+        return -float64_le_ordered_signalling(dest, src, &status);
+    case 3:
+        return -float64_unordered_quiet(dest, src, &status);
+    case 4:
+        return -float64_neq_ordered_quiet(dest, src, &status);
+    case 5:
+        return -float64_nlt_unordered_signalling(dest, src, &status);
+    case 6:
+        return -float64_nle_unordered_signalling(dest, src, &status);
+    case 7:
+        return -float64_ordered_quiet(dest, src, &status);
+    }
+    abort();
+}
+static void shufps(void* dest, void* src, int imm)
+{
+    uint32_t *src32 = src, *dest32 = dest;
+    uint32_t res[4];
+    res[0] = dest32[imm >> 0 & 3];
+    res[1] = dest32[imm >> 2 & 3];
+    res[2] = src32[imm >> 4 & 3];
+    res[3] = src32[imm >> 6 & 3];
+    memcpy(dest32, res, 16);
+}
+static void shufpd(void* dest, void* src, int imm)
+{
+    uint32_t *src32 = src, *dest32 = dest;
+    if (imm & 1) {
+        dest32[0] = dest32[2];
+        dest32[1] = dest32[3];
+    }
+    if (imm & 2) {
+        dest32[0] = src32[0];
+        dest32[1] = src32[1];
+    } else {
+        dest32[0] = dest32[2];
+        dest32[1] = dest32[3];
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1331,7 +1405,6 @@ int execute_0FE8_EF(struct decoded_instruction* i)
 static void pshift(void* dest, int opcode, int wordcount, int imm)
 {
     int mask = -1;
-    printf("Pshift: @ %08x = %d\n", cpu.phys_eip, opcode);
     switch (opcode) {
     case PSHIFT_PSRLW:
         if (imm >= 16)
@@ -1924,6 +1997,91 @@ int execute_0FF8_FE(struct decoded_instruction* i)
         break;
     }
     return 0;
+}
+int execute_0FC2_C6(struct decoded_instruction* i)
+{
+    uint32_t flags = i->flags, *dest32;
+    uint16_t op, *dest16;
+    int imm = i->imm16 >> 8, fp_exception = 0;
+    switch (i->imm8 & 15) {
+    case CMPPS_XGoXEoIb:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = cmpps(dest32[0], *(float32*)(result_ptr), imm);
+        dest32[1] = cmpps(dest32[1], *(float32*)(result_ptr + 4), imm);
+        dest32[2] = cmpps(dest32[2], *(float32*)(result_ptr + 8), imm);
+        dest32[3] = cmpps(dest32[3], *(float32*)(result_ptr + 12), imm);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case CMPSS_XGdXEdIb:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 1, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = cmpps(dest32[0], *(float32*)(result_ptr), imm);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case CMPPD_XGoXEoIb:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = dest32[1] = cmppd(*(float64*)(&dest32[0]), *(float64*)(result_ptr), imm);
+        dest32[2] = dest32[3] = cmppd(*(float64*)(&dest32[2]), *(float64*)(result_ptr + 8), imm);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case CMPSD_XGqXEqIb:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 2, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = dest32[1] = cmppd(*(float64*)(&dest32[0]), *(float64*)(result_ptr), imm);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case MOVNTI_EdGd:
+        EX(get_reg_write_ptr(flags, i));
+        dest32 = get_reg_dest(I_REG(flags));
+        *(uint32_t*)result_ptr = *dest32;
+        WRITE_BACK();
+        break;
+    case PINSRW_MGqEdIb:
+        CHECK_SSE;
+        if (I_OP2(flags))
+            op = cpu.reg32[I_RM(flags)];
+        else
+            cpu_read16(cpu_get_linaddr(flags, i), op, cpu.tlb_shift_read);
+        dest16 = get_mmx_reg_dest(I_REG(flags));
+        dest16[imm & 3] = op;
+        break;
+    case PINSRW_XGoEdIb:
+        CHECK_SSE;
+        if (I_OP2(flags))
+            op = cpu.reg32[I_RM(flags)];
+        else
+            cpu_read16(cpu_get_linaddr(flags, i), op, cpu.tlb_shift_read);
+        dest16 = get_sse_reg_dest(I_REG(flags));
+        dest16[imm & 7] = op;
+        break;
+    case PEXTRW_GdMEqIb:
+        CHECK_MMX;
+        dest16 = get_mmx_reg_dest(I_RM(flags));
+        cpu.reg32[I_REG(flags)] = dest16[imm & 3]; // Zero-extend to 32-bits
+        break;
+    case PEXTRW_GdXEoIb:
+        CHECK_SSE;
+        dest16 = get_sse_reg_dest(I_RM(flags));
+        cpu.reg32[I_REG(flags)] = dest16[imm & 7]; // Zero-extend to 32-bits
+        break;
+    case SHUFPS_XGoXEoIb:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        shufps(dest32, result_ptr, imm);
+        break;
+    case SHUFPD_XGoXEoIb:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        shufpd(dest32, result_ptr, imm);
+        break;
+    }
+    return fp_exception;
 }
 int cpu_emms(void)
 {
