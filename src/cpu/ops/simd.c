@@ -292,6 +292,58 @@ static void punpckl(void* dst, void* src, int size, int copysize)
     }
     memcpy(dst, tmp, size);
 }
+static void psubsb(uint8_t* dest, uint8_t* src, int bytecount)
+{
+    for (int i = 0; i < bytecount; i++) {
+        uint8_t x = dest[i], y = src[i], res = x - y;
+        x = (x >> 7) + 0x7F;
+        if ((int8_t)((x ^ y) & (x ^ res)) < 0)
+            res = x;
+        dest[i] = res;
+    }
+}
+static void psubsw(uint16_t* dest, uint16_t* src, int wordcount)
+{
+    for (int i = 0; i < wordcount; i++) {
+        uint16_t x = dest[i], y = src[i], res = x - y;
+        //printf("%x - %x = %x\n", x, y, res);
+        x = (x >> 15) + 0x7FFF;
+        if ((int16_t)((x ^ y) & (x ^ res)) < 0)
+            res = x;
+        dest[i] = res;
+    }
+}
+static void pminsw(int16_t* dest, int16_t* src, int wordcount)
+{
+    for (int i = 0; i < wordcount; i++) 
+        if(src[i] < dest[i]) dest[i] = src[i]; 
+}
+static void pmaxsw(int16_t* dest, int16_t* src, int wordcount)
+{
+    for (int i = 0; i < wordcount; i++) 
+        if(src[i] > dest[i]) dest[i] = src[i]; 
+}
+static void paddsb(uint8_t* dest, uint8_t* src, int bytecount)
+{
+    // https://locklessinc.com/articles/sat_arithmetic/
+    for (int i = 0; i < bytecount; i++) {
+        uint8_t x = dest[i], y = src[i], res = x + y;
+        x = (x >> 7) + 0x7F;
+        if ((int8_t)((x ^ y) | ~(y ^ res)) >= 0)
+            res = x;
+        dest[i] = res;
+    }
+}
+static void paddsw(uint16_t* dest, uint16_t* src, int wordcount)
+{
+    for (int i = 0; i < wordcount; i++) {
+        uint16_t x = dest[i], y = src[i], res = x + y;
+        x = (x >> 15) + 0x7FFF;
+        if ((int16_t)((x ^ y) | ~(y ^ res)) >= 0)
+            res = x;
+        dest[i] = res;
+    }
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Actual operations
@@ -815,7 +867,7 @@ int execute_0F68_6F(struct decoded_instruction* i)
         dest32[0] = *(uint32_t*)(result_ptr + 0);
         dest32[1] = *(uint32_t*)(result_ptr + 4);
         break;
-    case MOVDQA_MGoMEo:
+    case MOVDQA_XGoXEo:
         EX(get_sse_read_ptr(flags, i, 2, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = *(uint32_t*)(result_ptr + 0);
@@ -823,7 +875,7 @@ int execute_0F68_6F(struct decoded_instruction* i)
         dest32[2] = *(uint32_t*)(result_ptr + 8);
         dest32[3] = *(uint32_t*)(result_ptr + 12);
         break;
-    case MOVDQU_MGoMEo:
+    case MOVDQU_XGoXEo:
         EX(get_sse_read_ptr(flags, i, 2, 0)); // Note: Unaligned move
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = *(uint32_t*)(result_ptr + 0);
@@ -833,6 +885,106 @@ int execute_0F68_6F(struct decoded_instruction* i)
         break;
     case OP_68_6F_INVALID:
         EXCEPTION_UD();
+    }
+    return 0;
+}
+int execute_0FE8_EF(struct decoded_instruction* i)
+{
+    uint32_t *dest32, flags = i->flags;
+    if (i->imm8 & 1){
+        CHECK_SSE;
+    }else{
+        CHECK_MMX;
+    }
+    switch (i->imm8 & 15) {
+    case PSUBSB_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        psubsb((uint8_t*)dest32, result_ptr, 8);
+        break;
+    case PSUBSB_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        psubsb((uint8_t*)dest32, result_ptr, 16);
+        break;
+    case PSUBSW_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        psubsw((uint16_t*)dest32, result_ptr, 4);
+        break;
+    case PSUBSW_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        psubsw((uint16_t*)dest32, result_ptr, 8);
+        break;
+    case PMINSW_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pminsw((int16_t*)dest32, result_ptr, 4);
+        break;
+    case PMINSW_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pminsw((int16_t*)dest32, result_ptr, 8);
+        break;
+    case POR_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        dest32[0] |= *(uint32_t*)result_ptr;
+        dest32[1] |= *(uint32_t*)(result_ptr + 4);
+        break;
+    case POR_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] |= *(uint32_t*)result_ptr;
+        dest32[1] |= *(uint32_t*)(result_ptr + 4);
+        dest32[2] |= *(uint32_t*)(result_ptr + 8);
+        dest32[3] |= *(uint32_t*)(result_ptr + 12);
+        break;
+    case PADDSB_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        paddsb((uint8_t*)dest32, result_ptr, 8);
+        break;
+    case PADDSB_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        paddsb((uint8_t*)dest32, result_ptr, 16);
+        break;
+    case PADDSW_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        paddsw((uint16_t*)dest32, result_ptr, 4);
+        break;
+    case PADDSW_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        paddsw((uint16_t*)dest32, result_ptr, 8);
+        break;
+    case PMAXSW_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pmaxsw((int16_t*)dest32, result_ptr, 4);
+        break;
+    case PMAXSW_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pmaxsw((int16_t*)dest32, result_ptr, 8);
+        break;
+    case PXOR_MGqMEq:
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        dest32[0] ^= *(uint32_t*)result_ptr;
+        dest32[1] ^= *(uint32_t*)(result_ptr + 4);
+        break;
+    case PXOR_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] ^= *(uint32_t*)result_ptr;
+        dest32[1] ^= *(uint32_t*)(result_ptr + 4);
+        dest32[2] ^= *(uint32_t*)(result_ptr + 8);
+        dest32[3] ^= *(uint32_t*)(result_ptr + 12);
+        break;
     }
     return 0;
 }

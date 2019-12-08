@@ -113,11 +113,38 @@ enum {
     MOVD_XGdEd,
     // 0F 6F
     MOVQ_MGqMEq,
-    MOVDQA_MGoMEo,
-    MOVDQU_MGoMEo,
+    MOVDQA_XGoXEo,
+    MOVDQU_XGoXEo,
 
     // Bad opcodes
     OP_68_6F_INVALID
+};
+
+enum {
+    // 0F E8
+    PSUBSB_MGqMEq,
+    PSUBSB_XGoXEo,
+    // 0F E9
+    PSUBSW_MGqMEq,
+    PSUBSW_XGoXEo,
+    // 0F EA
+    PMINSW_MGqMEq,
+    PMINSW_XGoXEo,
+    // 0F EB
+    POR_MGqMEq,
+    POR_XGoXEo,
+    // 0F EC
+    PADDSB_MGqMEq,
+    PADDSB_XGoXEo,
+    // 0F ED
+    PADDSW_MGqMEq,
+    PADDSW_XGoXEo,
+    // 0F EE
+    PMAXSW_MGqMEq,
+    PMAXSW_XGoXEo,
+    // 0F EF
+    PXOR_MGqMEq,
+    PXOR_XGoXEo
 };
 
 int cpu_sse_exception(void);
@@ -127,5 +154,6 @@ int execute_0F10_17(struct decoded_instruction* i);
 int execute_0F28_2F(struct decoded_instruction* i);
 int execute_0F50_57(struct decoded_instruction* i);
 int execute_0F68_6F(struct decoded_instruction* i);
+int execute_0FE8_EF(struct decoded_instruction* i);
 
 #endif

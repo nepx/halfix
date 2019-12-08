@@ -2459,9 +2459,9 @@ static const int decode_sse68_6F_tbl[8 * 4] = {
     MOVD_MGdEd, // F3 0F 6E - invalid
 
     MOVQ_MGqMEq, // 0F 6E
-    MOVDQA_MGoMEo, // 66 0F 6E
+    MOVDQA_XGoXEo, // 66 0F 6E
     MOVQ_MGqMEq, // F2 0F 6E - invalid
-    MOVDQU_MGoMEo // F3 0F 6E
+    MOVDQU_XGoXEo // F3 0F 6E
 };
 static int decode_sse68_6F(struct decoded_instruction* i){
     uint8_t opcode = rawp[-1] & 7, modrm = rb();
@@ -2881,6 +2881,41 @@ static int decode_0FC7(struct decoded_instruction* i)
         i->handler = op_cmpxchg8b_e32;
         return 0;
     }
+}
+static const int decode_sseE8_EF_tbl[8 * 2] = {
+    // 0F E8
+    PSUBSB_MGqMEq,
+    PSUBSB_XGoXEo,
+    // 0F E9
+    PSUBSW_MGqMEq,
+    PSUBSW_XGoXEo,
+    // 0F EA
+    PMINSW_MGqMEq,
+    PMINSW_XGoXEo,
+    // 0F EB
+    POR_MGqMEq,
+    POR_XGoXEo,
+    // 0F EC
+    PADDSB_MGqMEq,
+    PADDSB_XGoXEo,
+    // 0F ED
+    PADDSW_MGqMEq,
+    PADDSW_XGoXEo,
+    // 0F EE
+    PMAXSW_MGqMEq,
+    PMAXSW_XGoXEo,
+    // 0F EF
+    PXOR_MGqMEq,
+    PXOR_XGoXEo
+};
+static int decode_sseE8_EF(struct decoded_instruction* i){
+    uint8_t opcode = rawp[-1] & 7, modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    i->handler = op_sse_E8_EF;
+    I_SET_OP(flags, modrm >= 0xC0);
+    i->flags = flags;
+    i->imm8 = decode_sseE8_EF_tbl[opcode << 1 | (sse_prefix == SSE_PREFIX_66)];
+    return 0;
 }
 
 static void set_smc(int length, uint32_t lin)
@@ -3476,14 +3511,14 @@ static const decode_handler_t table0F[256] = {
     /* 0F E5 */ decode_invalid0F,
     /* 0F E6 */ decode_invalid0F,
     /* 0F E7 */ decode_invalid0F,
-    /* 0F E8 */ decode_invalid0F,
-    /* 0F E9 */ decode_invalid0F,
-    /* 0F EA */ decode_invalid0F,
-    /* 0F EB */ decode_invalid0F,
-    /* 0F EC */ decode_invalid0F,
-    /* 0F ED */ decode_invalid0F,
-    /* 0F EE */ decode_invalid0F,
-    /* 0F EF */ decode_invalid0F,
+    /* 0F E8 */ decode_sseE8_EF,
+    /* 0F E9 */ decode_sseE8_EF,
+    /* 0F EA */ decode_sseE8_EF,
+    /* 0F EB */ decode_sseE8_EF,
+    /* 0F EC */ decode_sseE8_EF,
+    /* 0F ED */ decode_sseE8_EF,
+    /* 0F EE */ decode_sseE8_EF,
+    /* 0F EF */ decode_sseE8_EF,
     /* 0F F0 */ decode_invalid0F,
     /* 0F F1 */ decode_invalid0F,
     /* 0F F2 */ decode_invalid0F,
