@@ -2587,9 +2587,9 @@ static int decode_sse70_76(struct decoded_instruction* i){
     
     // Get immediate, if necessary
     if(op < PCMPEQB_MGqMEq) op |= rb() << 8;
-    if(op == PSHIFT_MGqIb)
+    if((op & 15) == PSHIFT_MGqIb)
         op |= rm_table_pshift_mmx[combined_op] << 4;
-    else if(op == PSHIFT_XEoIb)
+    else if((op & 15) == PSHIFT_XEoIb)
         op |= rm_table_pshift_sse[combined_op] << 4;
 
     i->imm16 = op;
@@ -2617,10 +2617,10 @@ static const int decode_7E_7F[2 * 4] = {
 static int decode_sse7E_7F(struct decoded_instruction* i){
     uint8_t opcode = rawp[-1] & 1, modrm = rb();
     int flags = parse_modrm(i, modrm, 6);
-    i->handler = op_sse_68_6F;
+    i->handler = op_sse_7E_7F;
     I_SET_OP(flags, modrm >= 0xC0);
     i->flags = flags;
-    i->imm8 = decode_sse70_76_tbl[opcode << 2 | sse_prefix];
+    i->imm8 = decode_7E_7F[opcode << 2 | sse_prefix];
     return 0;
 }
 
