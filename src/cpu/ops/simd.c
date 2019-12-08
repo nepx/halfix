@@ -5,6 +5,7 @@
 #include "cpu/simd.h"
 #include "cpu/cpu.h"
 #include "cpu/fpu.h"
+#include "cpu/instrument.h"
 #include "io.h"
 #include <string.h>
 #define EXCEPTION_HANDLER return 1
@@ -39,10 +40,16 @@ int cpu_mmx_check(void)
 
     return 0;
 }
+#ifdef INSTRUMENT
+#define INSTRUMENT_MMX cpu_instrument_pre_fpu()
+#else
+#define INSTRUMENT_MMX NOP()
+#endif
 #define CHECK_SSE            \
     if (cpu_sse_exception()) \
     return 1
 #define CHECK_MMX        \
+    INSTRUMENT_MMX;    \
     if (cpu_mmx_check()) \
     return 1
 
@@ -1049,66 +1056,77 @@ int execute_0F50_57(struct decoded_instruction* i)
 
 int execute_0F68_6F(struct decoded_instruction* i)
 {
-    CHECK_SSE;
     uint32_t *dest32, flags = i->flags;
     switch (i->imm8 & 15) {
     case PUNPCKHBW_MGqMEq:
+        CHECK_MMX;
         EX(get_mmx_read_ptr(flags, i, 2));
         dest32 = get_mmx_reg_dest(I_REG(flags));
         punpckh(dest32, result_ptr, 8, 1);
         break;
     case PUNPCKHBW_XGoXEo:
+        CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         punpckh(dest32, result_ptr, 16, 1);
         break;
     case PUNPCKHWD_MGqMEq:
+        CHECK_MMX;
         EX(get_mmx_read_ptr(flags, i, 2));
         dest32 = get_mmx_reg_dest(I_REG(flags));
         punpckh(dest32, result_ptr, 8, 2);
         break;
     case PUNPCKHWD_XGoXEo:
+        CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         punpckh(dest32, result_ptr, 16, 2);
         break;
     case PUNPCKHDQ_MGqMEq:
+        CHECK_MMX;
         EX(get_mmx_read_ptr(flags, i, 2));
         dest32 = get_mmx_reg_dest(I_REG(flags));
         punpckh(dest32, result_ptr, 8, 4);
         break;
     case PUNPCKHDQ_XGoXEo:
+        CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         punpckh(dest32, result_ptr, 16, 4);
         break;
     case PACKSSDW_MGqMEq:
+        CHECK_MMX;
         EX(get_mmx_read_ptr(flags, i, 2));
         dest32 = get_mmx_reg_dest(I_REG(flags));
         packssdw(dest32, result_ptr, 2);
         break;
     case PACKSSDW_XGoXEo:
+        CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         packssdw(dest32, result_ptr, 4);
         break;
     case PUNPCKLQDQ_XGoXEo:
+        CHECK_SSE;
         EX(get_mmx_read_ptr(flags, i, 2));
         dest32 = get_mmx_reg_dest(I_REG(flags));
         punpckl(dest32, result_ptr, 16, 8);
         break;
     case PUNPCKHQDQ_XGoXEo:
+        CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         punpckh(dest32, result_ptr, 16, 8);
         break;
     case MOVD_MGdEd:
+        CHECK_MMX;
         EX(get_reg_read_ptr(flags, i));
         dest32 = get_mmx_reg_dest(I_REG(flags));
         dest32[0] = *(uint32_t*)result_ptr;
         dest32[1] = 0;
         break;
     case MOVD_XGdEd:
+        CHECK_SSE;
         EX(get_reg_read_ptr(flags, i));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = *(uint32_t*)result_ptr;
@@ -1117,12 +1135,14 @@ int execute_0F68_6F(struct decoded_instruction* i)
         dest32[3] = 0;
         break;
     case MOVQ_MGqMEq:
+        CHECK_MMX;
         EX(get_mmx_read_ptr(flags, i, 2));
         dest32 = get_mmx_reg_dest(I_REG(flags));
         dest32[0] = *(uint32_t*)(result_ptr + 0);
         dest32[1] = *(uint32_t*)(result_ptr + 4);
         break;
     case MOVDQA_XGoXEo:
+        CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 2, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = *(uint32_t*)(result_ptr + 0);
@@ -1131,6 +1151,7 @@ int execute_0F68_6F(struct decoded_instruction* i)
         dest32[3] = *(uint32_t*)(result_ptr + 12);
         break;
     case MOVDQU_XGoXEo:
+        CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 2, 0)); // Note: Unaligned move
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = *(uint32_t*)(result_ptr + 0);
@@ -1247,56 +1268,57 @@ int execute_0FE8_EF(struct decoded_instruction* i)
 static void pshift(void* dest, int opcode, int wordcount, int imm)
 {
     int mask = -1;
+    printf("Pshift: @ %08x = %d\n", cpu.phys_eip, opcode);
     switch (opcode) {
     case PSHIFT_PSRLW:
         if (imm >= 16)
             mask = 0;
-        cpu_psrlw(dest, imm, mask & 15, wordcount);
+        cpu_psrlw(dest, imm & 15, mask, wordcount);
         break;
     case PSHIFT_PSRAW:
         if (imm >= 16)
             mask = 0;
-        cpu_psraw(dest, imm, mask & 15, wordcount);
+        cpu_psraw(dest, imm & 15, mask, wordcount);
         break;
     case PSHIFT_PSLLW:
         if (imm >= 16)
             mask = 0;
-        cpu_psllw(dest, imm, mask & 15, wordcount);
+        cpu_psllw(dest, imm & 15, mask, wordcount);
         break;
     case PSHIFT_PSRLD:
         if (imm >= 32)
             mask = 0;
-        cpu_psrld(dest, imm, mask & 31, wordcount);
+        cpu_psrld(dest, imm & 31, mask, wordcount);
         break;
     case PSHIFT_PSRAD:
         if (imm >= 32)
             mask = 0;
-        cpu_psrad(dest, imm, mask & 31, wordcount);
+        cpu_psrad(dest, imm & 31, mask, wordcount);
         break;
     case PSHIFT_PSLLD:
         if (imm >= 32)
             mask = 0;
-        cpu_pslld(dest, imm, mask & 31, wordcount);
+        cpu_pslld(dest, imm & 31, mask, wordcount);
         break;
     case PSHIFT_PSRLQ:
         if (imm >= 64)
             mask = 0;
-        cpu_psrlq(dest, imm, mask & 63, wordcount);
+        cpu_psrlq(dest, imm & 63, mask, wordcount);
         break;
     case PSHIFT_PSRLDQ:
         if (imm >= 128)
             mask = 0;
-        cpu_psrldq(dest, imm, mask & 127);
+        cpu_psrldq(dest, imm & 127, mask);
         break;
     case PSHIFT_PSLLQ:
         if (imm >= 64)
             mask = 0;
-        cpu_psllq(dest, imm, mask & 63, wordcount);
+        cpu_psllq(dest, imm & 63, mask, wordcount);
         break;
     case PSHIFT_PSLLDQ:
         if (imm >= 128)
             mask = 0;
-        cpu_pslldq(dest, imm, mask & 127);
+        cpu_pslldq(dest, imm & 127, mask);
         break;
     }
 }
