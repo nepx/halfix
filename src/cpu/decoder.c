@@ -2579,7 +2579,7 @@ static const int rm_table_pshift_sse[24] = {
 static int decode_sse70_76(struct decoded_instruction* i){
     uint8_t opcode = rawp[-1] & 7, modrm = rb();
     int flags = parse_modrm(i, modrm, 6);
-    i->handler = op_sse_68_6F;
+    i->handler = op_sse_70_76;
     I_SET_OP(flags, modrm >= 0xC0);
     i->flags = flags;
     // Get the opcode information from the table
@@ -3047,6 +3047,11 @@ static const int decode_sseD0_D7_tbl[8 * 4] = {
     PADDQ_XGoXEo, // 66 0F D4
     PADDQ_MGqMEq, // F2 0F D4 - invalid
     PADDQ_MGqMEq, // F3 0F D4 - invalid
+
+    PMULLW_MGqMEq, // 0F D5
+    PMULLW_XGoXEo, // 66 0F D5
+    PMULLW_MGqMEq, // F2 0F D5 - invalid
+    PMULLW_MGqMEq, // F3 0F D5 - invalid
     
     MOVQ_XEqXGq, // 0F D6 - invalid
     MOVQ_XEqXGq, // 66 0F D6
@@ -3064,6 +3069,7 @@ static int decode_sseD0_D7(struct decoded_instruction* i){
     i->handler = op_sse_D0_D7;
     I_SET_OP(flags, modrm >= 0xC0);
     i->flags = flags;
+    opcode--; // 71 --> 70
     i->imm8 = decode_sseD0_D7_tbl[opcode << 2 | sse_prefix];
     return 0;
 }
