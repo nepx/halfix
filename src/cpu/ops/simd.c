@@ -39,6 +39,9 @@ int cpu_mmx_check(void)
     if (fpu_fwait())
         EXCEPTION_HANDLER;
 
+    // MMX transitions clear the tag word and reset the stack
+    fpu.ftop = 0;
+    fpu.tag_word = 0;
     return 0;
 }
 #ifdef INSTRUMENT
@@ -212,7 +215,9 @@ static int get_mmx_read_ptr(uint32_t flags, struct decoded_instruction* i, int d
 static int get_mmx_write_ptr(uint32_t flags, struct decoded_instruction* i, int dwords)
 {
     if (I_OP2(flags)) {
-        result_ptr = &MM32(I_RM(flags));
+        int reg = I_RM(flags);
+        result_ptr = &MM32(reg);
+        fpu.mm[reg].dummy = 0xFFFF;
         write_back = 0;
         return 0;
     } else
@@ -1503,6 +1508,7 @@ static void pshift(void* dest, int opcode, int wordcount, int imm)
         cpu_psrlq(dest, imm & 63, mask, wordcount);
         break;
     case PSHIFT_PSRLDQ:
+        imm <<= 3;
         if (imm >= 128)
             mask = 0;
         cpu_psrldq(dest, imm & 127, mask);
@@ -1513,6 +1519,7 @@ static void pshift(void* dest, int opcode, int wordcount, int imm)
         cpu_psllq(dest, imm & 63, mask, wordcount);
         break;
     case PSHIFT_PSLLDQ:
+        imm <<= 3;
         if (imm >= 128)
             mask = 0;
         cpu_pslldq(dest, imm & 127, mask);
