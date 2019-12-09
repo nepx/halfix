@@ -759,7 +759,7 @@ int execute_0F10_17(struct decoded_instruction* i)
     switch (i->imm8 & 15) {
     case MOVUPS_XGoXEo:
         // xmm128 <<== r/m128
-        EX(get_sse_read_ptr(flags, i, 4, 1));
+        EX(get_sse_read_ptr(flags, i, 4, 0));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = *(uint32_t*)(result_ptr);
         dest32[1] = *(uint32_t*)(result_ptr + 4);
@@ -794,7 +794,7 @@ int execute_0F10_17(struct decoded_instruction* i)
         break;
     case MOVUPS_XEoXGo:
         // r/m128 <<== xmm128
-        EX(get_sse_write_ptr(flags, i, 4, 1));
+        EX(get_sse_write_ptr(flags, i, 4, 0));
         dest32 = get_sse_reg_dest(I_REG(flags));
         *(uint32_t*)(result_ptr) = dest32[0];
         *(uint32_t*)(result_ptr + 4) = dest32[1];
