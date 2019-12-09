@@ -1761,7 +1761,7 @@ int execute_0FD0_D7(struct decoded_instruction* i)
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         *((uint64_t*)(dest32)) += *(uint64_t*)(result_ptr);
-        *((uint64_t*)(dest32 + 4)) += *(uint64_t*)(result_ptr + 4);
+        *((uint64_t*)(&dest32[2])) += *(uint64_t*)(result_ptr + 8);
         break;
     case PMULLW_MGqMEq:
         CHECK_MMX;
