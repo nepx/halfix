@@ -3157,7 +3157,6 @@ static int decode_sseD0_D7(struct decoded_instruction* i){
     i->handler = op_sse_D0_D7;
     I_SET_OP(flags, modrm >= 0xC0);
     i->flags = flags;
-    opcode--; // 71 --> 70
     i->imm8 = decode_sseD0_D7_tbl[opcode << 2 | sse_prefix];
     return 0;
 }
