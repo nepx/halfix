@@ -763,11 +763,11 @@ static void shufpd(void* dest, void* src, int imm)
         dest32[1] = dest32[3];
     }
     if (imm & 2) {
-        dest32[0] = src32[0];
-        dest32[1] = src32[1];
+        dest32[2] = src32[2];
+        dest32[3] = src32[3];
     } else {
-        dest32[0] = dest32[2];
-        dest32[1] = dest32[3];
+        dest32[2] = dest32[0];
+        dest32[3] = dest32[1];
     }
 }
 static void pavgb(void* dest, void* src, int bytecount)
@@ -932,6 +932,17 @@ int execute_0F10_17(struct decoded_instruction* i)
         dest32[0] = dest32[2];
         dest32[2] = dest32[3];
         dest32[1] = *(uint32_t*)(result_ptr + 8);
+        dest32[3] = *(uint32_t*)(result_ptr + 12);
+        break;
+    case UNPCKHPD_XGoXEo:
+        // DEST[00...3F] = DEST[40...7F]
+        // DEST[40...7F] = SRC[40...7F]
+        EX(get_sse_read_ptr(flags, i, 2, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        // Do the dest <-- dest moves before we destroy the data in dest
+        dest32[0] = dest32[2];
+        dest32[1] = dest32[3];
+        dest32[2] = *(uint32_t*)(result_ptr + 8);
         dest32[3] = *(uint32_t*)(result_ptr + 12);
         break;
     case MOVLHPS_XGqXEq:
