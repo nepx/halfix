@@ -1347,7 +1347,7 @@ int execute_0F68_6F(struct decoded_instruction* i)
         break;
     case MOVDQA_XGoXEo:
         CHECK_SSE;
-        EX(get_sse_read_ptr(flags, i, 2, 1));
+        EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = *(uint32_t*)(result_ptr + 0);
         dest32[1] = *(uint32_t*)(result_ptr + 4);
@@ -1356,7 +1356,7 @@ int execute_0F68_6F(struct decoded_instruction* i)
         break;
     case MOVDQU_XGoXEo:
         CHECK_SSE;
-        EX(get_sse_read_ptr(flags, i, 2, 0)); // Note: Unaligned move
+        EX(get_sse_read_ptr(flags, i, 4, 0)); // Note: Unaligned move
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = *(uint32_t*)(result_ptr + 0);
         dest32[1] = *(uint32_t*)(result_ptr + 4);
@@ -2490,7 +2490,7 @@ int execute_0FE0_E7(struct decoded_instruction* i)
         break;
     case MOVNTDQ_XEoXGo:
         CHECK_SSE;
-        EX(get_sse_read_ptr(flags, i, 4, 1));
+        EX(get_sse_write_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         *(uint32_t*)(result_ptr) = dest32[0];
         *(uint32_t*)(result_ptr + 4) = dest32[1];
