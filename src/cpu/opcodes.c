@@ -3117,6 +3117,10 @@ OPTYPE op_sse_E8_EF(struct decoded_instruction* i){
     if(execute_0FE8_EF(i)) EXCEP();
     NEXT(i->flags);
 }
+OPTYPE op_sse_F1_F7(struct decoded_instruction* i){
+    if(execute_0FF1_F7(i)) EXCEP();
+    NEXT(i->flags);
+}
 OPTYPE op_sse_F8_FE(struct decoded_instruction* i){
     if(execute_0FF8_FE(i)) EXCEP();
     NEXT(i->flags);

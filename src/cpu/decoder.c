@@ -3282,6 +3282,40 @@ static int decode_sseE8_EF(struct decoded_instruction* i){
     i->imm8 = decode_sseE8_EF_tbl[opcode << 1 | (sse_prefix == SSE_PREFIX_66)];
     return 0;
 }
+static const int decode_sseF1_F7_tbl[7 * 2] = {
+    // 0F F1
+    PSLLW_MGqMEq,
+    PSLLW_XGoXEo,
+    // 0F F2
+    PSLLD_MGqMEq,
+    PSLLD_XGoXEo,
+    // 0F F3
+    PSLLQ_MGqMEq,
+    PSLLQ_XGoXEo,
+    // 0F F4
+    PMULLUDQ_MGqMEq,
+    PMULLUDQ_XGoXEo,
+    // 0F F5
+    PMADDWD_MGqMEq,
+    PMADDWD_XGoXEo,
+    // 0F F6
+    PSADBW_MGqMEq,
+    PSADBW_XGoXEo,
+    // 0F F7
+    MASKMOVQ_MEqMGq,
+    MASKMOVDQ_XEoXGo
+};
+static int decode_sseF1_F7(struct decoded_instruction* i){
+    uint8_t opcode = rawp[-1] & 7, modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    i->handler = op_sse_F1_F7;
+    I_SET_OP(flags, modrm >= 0xC0);
+    i->flags = flags;
+    opcode--;
+    i->imm8 = decode_sseF1_F7_tbl[opcode << 1 | (sse_prefix == SSE_PREFIX_66)];
+    return 0;
+}
+
 static const int decode_sseF8_FE_tbl[7 * 2] = {
     // 0F F8
     PSUBB_MGqMEq,
@@ -3917,13 +3951,13 @@ static const decode_handler_t table0F[256] = {
     /* 0F EE */ decode_sseE8_EF,
     /* 0F EF */ decode_sseE8_EF,
     /* 0F F0 */ decode_invalid0F,
-    /* 0F F1 */ decode_invalid0F,
-    /* 0F F2 */ decode_invalid0F,
-    /* 0F F3 */ decode_invalid0F,
-    /* 0F F4 */ decode_invalid0F,
-    /* 0F F5 */ decode_invalid0F,
-    /* 0F F6 */ decode_invalid0F,
-    /* 0F F7 */ decode_invalid0F,
+    /* 0F F1 */ decode_sseF1_F7,
+    /* 0F F2 */ decode_sseF1_F7,
+    /* 0F F3 */ decode_sseF1_F7,
+    /* 0F F4 */ decode_sseF1_F7,
+    /* 0F F5 */ decode_sseF1_F7,
+    /* 0F F6 */ decode_sseF1_F7,
+    /* 0F F7 */ decode_sseF1_F7,
     /* 0F F8 */ decode_sseF8_FE,
     /* 0F F9 */ decode_sseF8_FE,
     /* 0F FA */ decode_sseF8_FE,
