@@ -308,6 +308,34 @@ enum {
 };
 
 enum {
+    // 0F E0
+    PAVGB_MGqMEq,
+    PAVGB_XGoXEo,
+    // 0F E1
+    PSRAW_MGqMEq,
+    PSRAW_XGoXEo,
+    // 0F E2
+    PSRAD_MGqMEq,
+    PSRAD_XGoXEo,
+    // 0F E3
+    PAVGW_MGqMEq,
+    PAVGW_XGoXEo,
+    // 0F E4
+    PMULHUW_MGqMEq,
+    PMULHUW_XGoXEo,
+    // 0F E5
+    PMULHW_MGqMEq,
+    PMULHW_XGoXEo,
+    // 0F E6
+    CVTPD2DQ_XGoXEo,
+    CVTTPD2DQ_XGoXEo,
+    CVTDQ2PD_XGoXEq,
+    // 0F E7
+    MOVNTQ_MEqMGq,
+    MOVNTDQ_XEoXGo
+};
+
+enum {
     // 0F E8
     PSUBSB_MGqMEq,
     PSUBSB_XGoXEo,
@@ -373,6 +401,7 @@ int execute_0F7E_7F(struct decoded_instruction* i);
 int execute_0FC2_C6(struct decoded_instruction* i);
 int execute_0FD0_D7(struct decoded_instruction* i);
 int execute_0FD8_DF(struct decoded_instruction* i);
+int execute_0FE0_E7(struct decoded_instruction* i);
 int execute_0FE8_EF(struct decoded_instruction* i);
 int execute_0FF8_FE(struct decoded_instruction* i);
 

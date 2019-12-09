@@ -69,7 +69,7 @@ int cpu_sse_handle_exceptions(void)
 {
     // Check if any of the exceptions are masked.
 
-    int flags = status.float_exception_flags, unmasked = flags & ~status.float_exception_masks;
+    int flags = status.float_exception_flags, unmasked = flags & ~status.float_exception_masks & 0x3F;
     status.float_exception_flags = 0;
     if (unmasked & 7)
         flags &= 7;
@@ -238,6 +238,10 @@ static int get_reg_write_ptr(uint32_t flags, struct decoded_instruction* i)
 static void* get_mmx_reg_dest(int x)
 {
     fpu.mm[x].dummy = 0xFFFF; // STn.exponent is set to all ones
+    return &fpu.mm[x].reg;
+}
+static void* get_mmx_reg_src(int x)
+{
     return &fpu.mm[x].reg;
 }
 static void* get_sse_reg_dest(int x)
@@ -571,6 +575,14 @@ static void pmullw(uint16_t* dest, uint16_t* src, int wordcount, int shift)
         dest[i] = result >> shift;
     }
 }
+static void pmuluw(void* dest, void* src, int wordcount, int shift)
+{
+    uint16_t* dest16 = dest, *src16 = src;
+    for (int i = 0; i < wordcount; i++) {
+        uint32_t result = (uint32_t)dest16[i] * (uint32_t)src16[i];
+        dest16[i] = result >> shift;
+    }
+}
 static int pmovmskb(uint8_t* src, int bytecount)
 {
     int dest = 0;
@@ -742,6 +754,16 @@ static void shufpd(void* dest, void* src, int imm)
         dest32[0] = dest32[2];
         dest32[1] = dest32[3];
     }
+}
+static void pavgb(void* dest, void* src, int bytecount){
+    uint8_t* dest8 = dest, *src8 = src;
+    for(int i=0;i<bytecount;i++)
+        dest8[i] = (dest8[i] + src8[i]) >> 1;
+}
+static void pavgw(void* dest, void* src, int wordcount){
+    uint16_t* dest16 = dest, *src16 = src;
+    for(int i=0;i<wordcount;i++)
+        dest16[i] = (dest16[i] + src16[i]) >> 1;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1877,7 +1899,7 @@ int execute_0F7E_7F(struct decoded_instruction* i)
     case MOVQ_MEqMGq:
         CHECK_MMX;
         EX(get_mmx_write_ptr(flags, i, 2));
-        dest32 = get_mmx_reg_dest(I_REG(flags));
+        dest32 = get_mmx_reg_src(I_REG(flags));
         *(uint32_t*)result_ptr = dest32[0];
         *(uint32_t*)(result_ptr + 4) = dest32[1];
         WRITE_BACK();
@@ -2314,6 +2336,120 @@ int execute_0F58_5F(struct decoded_instruction* i)
         dest64 = get_sse_reg_dest(I_REG(flags));
         dest64[0] = float64_max(dest64[0], *(float64*)(result_ptr), &status);
         fp_exception = cpu_sse_handle_exceptions();
+        break;
+    }
+    return fp_exception;
+}
+int execute_0FE0_E7(struct decoded_instruction* i)
+{
+    uint32_t flags = i->flags, *dest32;
+    int fp_exception = 0;
+    switch(i->imm8 & 31){
+        case PAVGB_MGqMEq:
+        CHECK_MMX;
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pavgb(dest32, result_ptr, 8);
+        break;
+        case PAVGB_XGoXEo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pavgb(dest32, result_ptr, 16);
+        break;
+        case PSRAW_MGqMEq:
+        CHECK_MMX;
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pshift(dest32, PSHIFT_PSRAW, 4, get_shift(result_ptr, 8));
+        break;
+        case PSRAD_MGqMEq:
+        CHECK_MMX;
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pshift(dest32, PSHIFT_PSRAD, 4, get_shift(result_ptr, 8));
+        break;
+        case PSRAW_XGoXEo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pshift(dest32, PSHIFT_PSRAW, 8, get_shift(result_ptr, 16));
+        break;
+        case PSRAD_XGoXEo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pshift(dest32, PSHIFT_PSRAD, 8, get_shift(result_ptr, 16));
+        break;
+        case PAVGW_MGqMEq:
+        CHECK_MMX;
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pavgw(dest32, result_ptr, 4);
+        break;
+        case PAVGW_XGoXEo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pavgw(dest32, result_ptr, 8);
+        break;
+        case PMULHUW_MGqMEq:
+        CHECK_MMX;
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pmuluw(dest32, result_ptr, 4, 16);
+        break;
+        case PMULHUW_XGoXEo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pmuluw(dest32, result_ptr, 8, 16);
+        break;
+        case CVTPD2DQ_XGoXEo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float64_to_int32(*(float64*)result_ptr, &status);
+        dest32[1] = float64_to_int32(*(float64*)(result_ptr+8), &status);
+        dest32[2] = 0;
+        dest32[3] = 0;
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+        case CVTTPD2DQ_XGoXEo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float64_to_int32_round_to_zero(*(float64*)result_ptr, &status);
+        dest32[1] = float64_to_int32_round_to_zero(*(float64*)(result_ptr+8), &status);
+        dest32[2] = 0;
+        dest32[3] = 0;
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+        case CVTDQ2PD_XGoXEq:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        *(uint64_t*)(&dest32[0]) = int32_to_float64(*(uint32_t*)result_ptr);
+        *(uint64_t*)(&dest32[2]) = int32_to_float64(*(uint32_t*)(result_ptr+8));
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+        case MOVNTQ_MEqMGq:
+        CHECK_MMX;
+        EX(get_mmx_write_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_src(I_REG(flags));
+        *(uint32_t*)(result_ptr) = dest32[0];
+        *(uint32_t*)(result_ptr+4) = dest32[1];
+        WRITE_BACK();
+        break;
+        case MOVNTDQ_XEoXGo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        *(uint32_t*)(result_ptr) = dest32[0];
+        *(uint32_t*)(result_ptr+4) = dest32[1];
+        *(uint32_t*)(result_ptr+8) = dest32[2];
+        *(uint32_t*)(result_ptr+12) = dest32[3];
+        WRITE_BACK();
         break;
     }
     return fp_exception;

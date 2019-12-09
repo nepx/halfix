@@ -3157,6 +3157,7 @@ static int decode_sseD0_D7(struct decoded_instruction* i){
     i->handler = op_sse_D0_D7;
     I_SET_OP(flags, modrm >= 0xC0);
     i->flags = flags;
+    opcode--;
     i->imm8 = decode_sseD0_D7_tbl[opcode << 2 | sse_prefix];
     return 0;
 }
@@ -3193,6 +3194,56 @@ static int decode_sseD8_DF(struct decoded_instruction* i){
     I_SET_OP(flags, modrm >= 0xC0);
     i->flags = flags;
     i->imm8 = decode_sseD8_DF_tbl[opcode << 1 | (sse_prefix == SSE_PREFIX_66)];
+    return 0;
+}
+static const int decode_sseE0_E7_tbl[8 * 4] = {
+    PAVGB_MGqMEq, // 0F E0
+    PAVGB_XGoXEo, // 66 0F E0
+    PAVGB_MGqMEq, // F2 0F E0 - invalid
+    PAVGB_MGqMEq, // F3 0F E0 - invalid
+    
+    PSRAW_MGqMEq, // 0F E1
+    PSRAW_XGoXEo, // 66 0F E1
+    PSRAW_MGqMEq, // F2 0F E1 - invalid
+    PSRAW_MGqMEq, // F3 0F E1 - invalid
+
+    PSRAD_MGqMEq, // 0F E2
+    PSRAD_XGoXEo, // 66 0F E2
+    PSRAD_MGqMEq, // F2 0F E2 - invalid
+    PSRAD_MGqMEq, // F3 0F E2 - invalid
+    
+    PAVGW_MGqMEq, // 0F E3
+    PAVGW_XGoXEo, // 66 0F E3
+    PAVGW_MGqMEq, // F2 0F E3 - invalid
+    PAVGW_MGqMEq, // F3 0F E3 - invalid
+    
+    PMULHUW_MGqMEq, // 0F E4
+    PMULHUW_XGoXEo, // 66 0F E4
+    PMULHUW_MGqMEq, // F2 0F E4 - invalid
+    PMULHUW_MGqMEq, // F3 0F E4 - invalid
+    
+    PMULHW_MGqMEq, // 0F E5
+    PMULHW_XGoXEo, // 66 0F E5
+    PMULHW_MGqMEq, // F2 0F E5 - invalid
+    PMULHW_MGqMEq, // F3 0F E5 - invalid
+    
+    CVTTPD2DQ_XGoXEo, // 0F E6 - invalid
+    CVTTPD2DQ_XGoXEo, // 66 0F E6
+    CVTPD2DQ_XGoXEo, // F2 0F E6
+    CVTDQ2PD_XGoXEq, // F3 0F E6
+    
+    MOVNTQ_MEqMGq, // 0F E7
+    MOVNTDQ_XEoXGo, // 66 0F E7
+    MOVNTQ_MEqMGq, // F2 0F E7 - invalid
+    MOVNTQ_MEqMGq // F2 0F E7 - invalid
+};
+static int decode_sseE0_E7(struct decoded_instruction* i){
+    uint8_t opcode = rawp[-1] & 7, modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    i->handler = op_sse_E0_E7;
+    I_SET_OP(flags, modrm >= 0xC0);
+    i->flags = flags;
+    i->imm8 = decode_sseE0_E7_tbl[opcode << 2 | sse_prefix];
     return 0;
 }
 
@@ -3849,14 +3900,14 @@ static const decode_handler_t table0F[256] = {
     /* 0F DD */ decode_sseD8_DF,
     /* 0F DE */ decode_sseD8_DF,
     /* 0F DF */ decode_sseD8_DF,
-    /* 0F E0 */ decode_invalid0F,
-    /* 0F E1 */ decode_invalid0F,
-    /* 0F E2 */ decode_invalid0F,
-    /* 0F E3 */ decode_invalid0F,
-    /* 0F E4 */ decode_invalid0F,
-    /* 0F E5 */ decode_invalid0F,
-    /* 0F E6 */ decode_invalid0F,
-    /* 0F E7 */ decode_invalid0F,
+    /* 0F E0 */ decode_sseE0_E7,
+    /* 0F E1 */ decode_sseE0_E7,
+    /* 0F E2 */ decode_sseE0_E7,
+    /* 0F E3 */ decode_sseE0_E7,
+    /* 0F E4 */ decode_sseE0_E7,
+    /* 0F E5 */ decode_sseE0_E7,
+    /* 0F E6 */ decode_sseE0_E7,
+    /* 0F E7 */ decode_sseE0_E7,
     /* 0F E8 */ decode_sseE8_EF,
     /* 0F E9 */ decode_sseE8_EF,
     /* 0F EA */ decode_sseE8_EF,
