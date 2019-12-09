@@ -2071,14 +2071,249 @@ int execute_0FC2_C6(struct decoded_instruction* i)
         cpu.reg32[I_REG(flags)] = dest16[imm & 7]; // Zero-extend to 32-bits
         break;
     case SHUFPS_XGoXEoIb:
+        CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         shufps(dest32, result_ptr, imm);
         break;
     case SHUFPD_XGoXEoIb:
+        CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         shufpd(dest32, result_ptr, imm);
+        break;
+    }
+    return fp_exception;
+}
+int execute_0F58_5F(struct decoded_instruction* i)
+{
+    CHECK_SSE;
+    uint32_t flags = i->flags, *dest32;
+    float64* dest64;
+    int fp_exception = 0;
+    switch (i->imm8 & 31) {
+    case ADDPS_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float32_add(dest32[0], *(float32*)(result_ptr), &status);
+        dest32[1] = float32_add(dest32[1], *(float32*)(result_ptr + 4), &status);
+        dest32[2] = float32_add(dest32[2], *(float32*)(result_ptr + 8), &status);
+        dest32[3] = float32_add(dest32[3], *(float32*)(result_ptr + 12), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case ADDSS_XGdXEd:
+        EX(get_sse_read_ptr(flags, i, 1, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float32_add(dest32[0], *(float32*)(result_ptr), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case ADDPD_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest64 = get_sse_reg_dest(I_REG(flags));
+        dest64[0] = float64_add(dest64[0], *(float64*)(result_ptr), &status);
+        dest64[1] = float64_add(dest64[1], *(float64*)(result_ptr + 8), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case ADDSD_XGqXEq:
+        EX(get_sse_read_ptr(flags, i, 2, 1));
+        dest64 = get_sse_reg_dest(I_REG(flags));
+        dest64[0] = float64_add(dest64[0], *(float64*)(result_ptr), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case MULPS_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float32_mul(dest32[0], *(float32*)(result_ptr), &status);
+        dest32[1] = float32_mul(dest32[1], *(float32*)(result_ptr + 4), &status);
+        dest32[2] = float32_mul(dest32[2], *(float32*)(result_ptr + 8), &status);
+        dest32[3] = float32_mul(dest32[3], *(float32*)(result_ptr + 12), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case MULSS_XGdXEd:
+        EX(get_sse_read_ptr(flags, i, 1, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float32_mul(dest32[0], *(float32*)(result_ptr), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case MULPD_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest64 = get_sse_reg_dest(I_REG(flags));
+        dest64[0] = float64_mul(dest64[0], *(float64*)(result_ptr), &status);
+        dest64[1] = float64_mul(dest64[1], *(float64*)(result_ptr + 8), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case MULSD_XGqXEq:
+        EX(get_sse_read_ptr(flags, i, 2, 1));
+        dest64 = get_sse_reg_dest(I_REG(flags));
+        dest64[0] = float64_mul(dest64[0], *(float64*)(result_ptr), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case CVTPS2PD_XGoXEo: // float --> double
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest64 = get_sse_reg_dest(I_REG(flags));
+        dest64[0] = float32_to_float64(*(float32*)result_ptr, &status);
+        dest64[1] = float32_to_float64(*(float32*)(result_ptr+4), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case CVTPD2PS_XGoXEo: // double --> float
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float64_to_float32(*(float64*)(result_ptr), &status);
+        dest32[1] = float64_to_float32(*(float64*)(result_ptr+8), &status);
+        dest32[2] = 0;
+        dest32[3] = 0;
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case CVTSS2SD_XGoXEd: // float --> double
+        EX(get_sse_read_ptr(flags, i, 1, 1));
+        dest64 = get_sse_reg_dest(I_REG(flags));
+        dest64[0] = float32_to_float64(*(float32*)result_ptr, &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case CVTSD2SS_XGoXEq: // double --> float
+        EX(get_sse_read_ptr(flags, i, 2, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float64_to_float32(*(float64*)(result_ptr), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case CVTDQ2PS_XGoXEo: // int32 --> float
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = int32_to_float32(*(int32_t*)(result_ptr), &status);
+        dest32[1] = int32_to_float32(*(int32_t*)(result_ptr+4), &status);
+        dest32[2] = int32_to_float32(*(int32_t*)(result_ptr+8), &status);
+        dest32[3] = int32_to_float32(*(int32_t*)(result_ptr+12), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case CVTPS2DQ_XGoXEo: // float --> int32
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float32_to_int32(*(float32*)(result_ptr), &status);
+        dest32[1] = float32_to_int32(*(float32*)(result_ptr+4), &status);
+        dest32[2] = float32_to_int32(*(float32*)(result_ptr+8), &status);
+        dest32[3] = float32_to_int32(*(float32*)(result_ptr+12), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case CVTTPS2DQ_XGoXEo: // float --> int32
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float32_to_int32_round_to_zero(*(float32*)(result_ptr), &status);
+        dest32[1] = float32_to_int32_round_to_zero(*(float32*)(result_ptr+4), &status);
+        dest32[2] = float32_to_int32_round_to_zero(*(float32*)(result_ptr+8), &status);
+        dest32[3] = float32_to_int32_round_to_zero(*(float32*)(result_ptr+12), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case SUBPS_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float32_sub(dest32[0], *(float32*)(result_ptr), &status);
+        dest32[1] = float32_sub(dest32[1], *(float32*)(result_ptr + 4), &status);
+        dest32[2] = float32_sub(dest32[2], *(float32*)(result_ptr + 8), &status);
+        dest32[3] = float32_sub(dest32[3], *(float32*)(result_ptr + 12), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case SUBSS_XGdXEd:
+        EX(get_sse_read_ptr(flags, i, 1, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float32_sub(dest32[0], *(float32*)(result_ptr), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case SUBPD_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest64 = get_sse_reg_dest(I_REG(flags));
+        dest64[0] = float64_sub(dest64[0], *(float64*)(result_ptr), &status);
+        dest64[1] = float64_sub(dest64[1], *(float64*)(result_ptr + 8), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case SUBSD_XGqXEq:
+        EX(get_sse_read_ptr(flags, i, 2, 1));
+        dest64 = get_sse_reg_dest(I_REG(flags));
+        dest64[0] = float64_sub(dest64[0], *(float64*)(result_ptr), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case MINPS_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float32_min(dest32[0], *(float32*)(result_ptr), &status);
+        dest32[1] = float32_min(dest32[1], *(float32*)(result_ptr + 4), &status);
+        dest32[2] = float32_min(dest32[2], *(float32*)(result_ptr + 8), &status);
+        dest32[3] = float32_min(dest32[3], *(float32*)(result_ptr + 12), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case MINSS_XGdXEd:
+        EX(get_sse_read_ptr(flags, i, 1, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float32_min(dest32[0], *(float32*)(result_ptr), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case MINPD_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest64 = get_sse_reg_dest(I_REG(flags));
+        dest64[0] = float64_min(dest64[0], *(float64*)(result_ptr), &status);
+        dest64[1] = float64_min(dest64[1], *(float64*)(result_ptr + 8), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case MINSD_XGqXEq:
+        EX(get_sse_read_ptr(flags, i, 2, 1));
+        dest64 = get_sse_reg_dest(I_REG(flags));
+        dest64[0] = float64_min(dest64[0], *(float64*)(result_ptr), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case DIVPS_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float32_div(dest32[0], *(float32*)(result_ptr), &status);
+        dest32[1] = float32_div(dest32[1], *(float32*)(result_ptr + 4), &status);
+        dest32[2] = float32_div(dest32[2], *(float32*)(result_ptr + 8), &status);
+        dest32[3] = float32_div(dest32[3], *(float32*)(result_ptr + 12), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case DIVSS_XGdXEd:
+        EX(get_sse_read_ptr(flags, i, 1, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float32_div(dest32[0], *(float32*)(result_ptr), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case DIVPD_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest64 = get_sse_reg_dest(I_REG(flags));
+        dest64[0] = float64_div(dest64[0], *(float64*)(result_ptr), &status);
+        dest64[1] = float64_div(dest64[1], *(float64*)(result_ptr + 8), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case DIVSD_XGqXEq:
+        EX(get_sse_read_ptr(flags, i, 2, 1));
+        dest64 = get_sse_reg_dest(I_REG(flags));
+        dest64[0] = float64_div(dest64[0], *(float64*)(result_ptr), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case MAXPS_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float32_max(dest32[0], *(float32*)(result_ptr), &status);
+        dest32[1] = float32_max(dest32[1], *(float32*)(result_ptr + 4), &status);
+        dest32[2] = float32_max(dest32[2], *(float32*)(result_ptr + 8), &status);
+        dest32[3] = float32_max(dest32[3], *(float32*)(result_ptr + 12), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case MAXSS_XGdXEd:
+        EX(get_sse_read_ptr(flags, i, 1, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = float32_max(dest32[0], *(float32*)(result_ptr), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case MAXPD_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest64 = get_sse_reg_dest(I_REG(flags));
+        dest64[0] = float64_max(dest64[0], *(float64*)(result_ptr), &status);
+        dest64[1] = float64_max(dest64[1], *(float64*)(result_ptr + 8), &status);
+        fp_exception = cpu_sse_handle_exceptions();
+        break;
+    case MAXSD_XGqXEq:
+        EX(get_sse_read_ptr(flags, i, 2, 1));
+        dest64 = get_sse_reg_dest(I_REG(flags));
+        dest64[0] = float64_max(dest64[0], *(float64*)(result_ptr), &status);
+        fp_exception = cpu_sse_handle_exceptions();
         break;
     }
     return fp_exception;

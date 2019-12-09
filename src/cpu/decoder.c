@@ -2421,6 +2421,56 @@ static int decode_sse50_57(struct decoded_instruction* i){
     i->imm8 = decode_sse50_57_tbl[opcode << 2 | sse_prefix] | ((opcode & 1) << 4);
     return 0;
 }
+static const int decode_sse58_5F_tbl[8 * 4] = {
+    ADDPS_XGoXEo, // 0F 58
+    ADDPD_XGoXEo, // 66 0F 58
+    ADDSD_XGqXEq, // F2 0F 58
+    ADDSS_XGdXEd, // F3 0F 58
+    
+    MULPS_XGoXEo, // 0F 59
+    MULPD_XGoXEo, // 66 0F 59
+    MULSD_XGqXEq, // F2 0F 59
+    MULSS_XGdXEd, // F3 0F 59
+    
+    CVTPS2PD_XGoXEo, // 0F 5A
+    CVTPD2PS_XGoXEo, // 66 0F 5A
+    CVTSD2SS_XGoXEq, // F2 0F 5A
+    CVTSS2SD_XGoXEd, // F3 0F 5A
+    
+    CVTDQ2PS_XGoXEo, // 0F 5B
+    CVTPS2DQ_XGoXEo, // 66 0F 5B
+    CVTDQ2PS_XGoXEo, // F2 0F 5B - invalid
+    CVTTPS2DQ_XGoXEo, // F3 0F 5B
+
+    SUBPS_XGoXEo, // 0F 5C
+    SUBPD_XGoXEo, // 66 0F 5C
+    SUBSD_XGqXEq, // F2 0F 5C
+    SUBSS_XGdXEd, // F3 0F 5C
+
+    MINPS_XGoXEo, // 0F 5D
+    MINPD_XGoXEo, // 66 0F 5D
+    MINSD_XGqXEq, // F2 0F 5D
+    MINSS_XGdXEd, // F3 0F 5D
+
+    DIVPS_XGoXEo, // 0F 5E
+    DIVPD_XGoXEo, // 66 0F 5E
+    DIVSD_XGqXEq, // F2 0F 5E
+    DIVSS_XGdXEd, // F3 0F 5E
+
+    MAXPS_XGoXEo, // 0F 5F
+    MAXPD_XGoXEo, // 66 0F 5F
+    MAXSD_XGqXEq, // F2 0F 5F
+    MAXSS_XGdXEd // F3 0F 5F
+};
+static int decode_sse58_5F(struct decoded_instruction* i){
+    uint8_t opcode = rawp[-1] & 7, modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    i->handler = op_sse_58_5F;
+    I_SET_OP(flags, modrm >= 0xC0);
+    i->flags = flags;
+    i->imm8 = decode_sse58_5F_tbl[opcode << 2 | sse_prefix];
+    return 0;
+}
 
 static const int decode_sse60_67_tbl[8 * 2] = {
     // 0F 60
@@ -2494,10 +2544,10 @@ static const int decode_sse68_6F_tbl[8 * 4] = {
     MOVD_MGdEd, // F2 0F 6E - invalid
     MOVD_MGdEd, // F3 0F 6E - invalid
 
-    MOVQ_MGqMEq, // 0F 6E
-    MOVDQA_XGoXEo, // 66 0F 6E
-    MOVQ_MGqMEq, // F2 0F 6E - invalid
-    MOVDQU_XGoXEo // F3 0F 6E
+    MOVQ_MGqMEq, // 0F 6F
+    MOVDQA_XGoXEo, // 66 0F 6F
+    MOVQ_MGqMEq, // F2 0F 6F - invalid
+    MOVDQU_XGoXEo // F3 0F 6F
 };
 static int decode_sse68_6F(struct decoded_instruction* i){
     uint8_t opcode = rawp[-1] & 7, modrm = rb();
@@ -3664,14 +3714,14 @@ static const decode_handler_t table0F[256] = {
     /* 0F 55 */ decode_sse50_57,
     /* 0F 56 */ decode_sse50_57,
     /* 0F 57 */ decode_sse50_57,
-    /* 0F 58 */ decode_invalid0F,
-    /* 0F 59 */ decode_invalid0F,
-    /* 0F 5A */ decode_invalid0F,
-    /* 0F 5B */ decode_invalid0F,
-    /* 0F 5C */ decode_invalid0F,
-    /* 0F 5D */ decode_invalid0F,
-    /* 0F 5E */ decode_invalid0F,
-    /* 0F 5F */ decode_invalid0F,
+    /* 0F 58 */ decode_sse58_5F,
+    /* 0F 59 */ decode_sse58_5F,
+    /* 0F 5A */ decode_sse58_5F,
+    /* 0F 5B */ decode_sse58_5F,
+    /* 0F 5C */ decode_sse58_5F,
+    /* 0F 5D */ decode_sse58_5F,
+    /* 0F 5E */ decode_sse58_5F,
+    /* 0F 5F */ decode_sse58_5F,
     /* 0F 60 */ decode_sse60_67,
     /* 0F 61 */ decode_sse60_67,
     /* 0F 62 */ decode_sse60_67,

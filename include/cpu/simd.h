@@ -92,6 +92,48 @@ enum {
 };
 
 enum {
+    // 0F 58
+    ADDPS_XGoXEo,
+    ADDSS_XGdXEd,
+    ADDPD_XGoXEo,
+    ADDSD_XGqXEq,
+    // 0F 59
+    MULPS_XGoXEo,
+    MULSS_XGdXEd,
+    MULPD_XGoXEo,
+    MULSD_XGqXEq,
+    // 0F 5A
+    CVTPS2PD_XGoXEo,
+    CVTPD2PS_XGoXEo,
+    CVTSS2SD_XGoXEd,
+    CVTSD2SS_XGoXEq,
+    // 0F 5B
+    CVTDQ2PS_XGoXEo,
+    CVTPS2DQ_XGoXEo,
+    CVTTPS2DQ_XGoXEo,
+    // 0F 5C
+    SUBPS_XGoXEo,
+    SUBSS_XGdXEd,
+    SUBPD_XGoXEo,
+    SUBSD_XGqXEq,
+    // 0F 5D
+    MINPS_XGoXEo,
+    MINSS_XGdXEd,
+    MINPD_XGoXEo,
+    MINSD_XGqXEq,
+    // 0F 5E
+    DIVPS_XGoXEo,
+    DIVSS_XGdXEd,
+    DIVPD_XGoXEo,
+    DIVSD_XGqXEq,
+    // 0F 5F
+    MAXPS_XGoXEo,
+    MAXSS_XGdXEd,
+    MAXPD_XGoXEo,
+    MAXSD_XGqXEq
+};
+
+enum {
     // 0F 60
     PUNPCKLBW_MGqMEq,
     PUNPCKLBW_XGoXEo,
@@ -323,6 +365,7 @@ int cpu_emms(void);
 int execute_0F10_17(struct decoded_instruction* i);
 int execute_0F28_2F(struct decoded_instruction* i);
 int execute_0F50_57(struct decoded_instruction* i);
+int execute_0F58_5F(struct decoded_instruction* i);
 int execute_0F60_67(struct decoded_instruction* i);
 int execute_0F68_6F(struct decoded_instruction* i);
 int execute_0F70_76(struct decoded_instruction* i);
