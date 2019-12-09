@@ -501,9 +501,9 @@ static void cpu_psrldq(uint64_t* a, int shift, int mask)
         return;
     }
     // This is a 128 bit SHR shift for xmm registers only
-    a[1] >>= shift;
-    a[1] |= a[0] << (64L - shift);
     a[0] >>= shift;
+    a[0] |= a[1] << (64L - shift);
+    a[1] >>= shift;
 }
 static void pcmpeqb(uint8_t* dest, uint8_t* src, int count)
 {
