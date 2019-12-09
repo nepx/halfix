@@ -473,8 +473,9 @@ static void cpu_psrlq(uint64_t* a, int shift, int mask, int wordcount)
             a[i] = 0;
     }
 }
-static void cpu_psllq(uint64_t* a, int shift, int mask, int qwordcount)
+static void cpu_psllq(uint64_t* a, int shift, int mask, int wordcount)
 {
+    int qwordcount = wordcount >> 2;
     for (int i = 0; i < qwordcount; i++)
         if (mask)
             a[i] = a[i] << shift;
