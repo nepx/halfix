@@ -127,8 +127,10 @@ static int get_read_ptr(uint32_t flags, struct decoded_instruction* i, int dword
 {
     uint32_t linaddr = cpu_get_linaddr(flags, i);
     if (linaddr & ((dwords << 2) - 1)) {
-        if (unaligned_exception)
+        if (unaligned_exception) {
+            __asm__("int3");
             EXCEPTION_GP(0);
+        }
         for (int i = 0, j = 0; i < dwords; i++, j += 4)
             cpu_read32(linaddr + j, temp.d128[i], cpu.tlb_shift_read);
         result_ptr = temp.d128;
@@ -490,9 +492,17 @@ static void cpu_pslldq(uint64_t* a, int shift, int mask)
         return;
     }
     // This is a 128 bit SHL shift for xmm registers only
-    a[0] <<= shift; // Bottom bits should be 0
-    a[0] |= a[1] >> (64L - shift);
-    a[1] <<= shift;
+    if(shift == 64){
+        a[1] = a[0];
+        a[0] = 0;
+    }else if(shift > 64){
+        a[1] = a[0] << (shift - 32);
+        a[0] = 0;
+    }else {
+        a[0] <<= shift; // Bottom bits should be 0
+        a[0] |= a[1] >> (64L - shift);
+        a[1] <<= shift;
+    }
 }
 static void cpu_psrldq(uint64_t* a, int shift, int mask)
 {
@@ -502,9 +512,17 @@ static void cpu_psrldq(uint64_t* a, int shift, int mask)
         return;
     }
     // This is a 128 bit SHR shift for xmm registers only
-    a[0] >>= shift;
-    a[0] |= a[1] << (64L - shift);
-    a[1] >>= shift;
+    if(shift == 64){
+        a[0] = a[1];
+        a[1] = 0;
+    }else if(shift > 64){
+        a[0] = a[1] >> (shift - 32);
+        a[1] = 0;
+    }else {
+        a[0] >>= shift;
+        a[0] |= a[1] << (64L - shift);
+        a[1] >>= shift;
+    }
 }
 static void pcmpeqb(uint8_t* dest, uint8_t* src, int count)
 {
@@ -836,7 +854,7 @@ int execute_0F10_17(struct decoded_instruction* i)
     case MOVSS_XGdXEd:
         // xmm32 <<== r/m32
         // Clear top 96 bits if source is memory
-        EX(get_sse_read_ptr(flags, i, 1, 1));
+        EX(get_sse_read_ptr(flags, i, 1, 0));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = *(uint32_t*)(result_ptr);
         if (!I_OP2(flags)) {
@@ -849,7 +867,7 @@ int execute_0F10_17(struct decoded_instruction* i)
     case MOVSD_XGqXEq:
         // xmm64 <<== r/m64
         // Clear top 64 bits if source is memory
-        EX(get_sse_read_ptr(flags, i, 2, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 0));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = *(uint32_t*)(result_ptr);
         dest32[1] = *(uint32_t*)(result_ptr + 4);
