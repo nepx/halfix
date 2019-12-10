@@ -1341,8 +1341,8 @@ int execute_0F68_6F(struct decoded_instruction* i)
         break;
     case PUNPCKLQDQ_XGoXEo:
         CHECK_SSE;
-        EX(get_mmx_read_ptr(flags, i, 2));
-        dest32 = get_mmx_reg_dest(I_REG(flags));
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
         punpckl(dest32, result_ptr, 16, 8);
         break;
     case PUNPCKHQDQ_XGoXEo:
@@ -1611,29 +1611,29 @@ int execute_0F70_76(struct decoded_instruction* i)
         pcmpeqb((uint8_t*)dest32, result_ptr, 8);
         break;
     case PCMPEQB_XGoXEo:
-        EX(get_mmx_read_ptr(flags, i, 2));
-        dest32 = get_mmx_reg_dest(I_REG(flags));
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
         pcmpeqb((uint8_t*)dest32, result_ptr, 16);
         break;
     case PCMPEQW_MGqMEq:
         EX(get_mmx_read_ptr(flags, i, 2));
         dest32 = get_mmx_reg_dest(I_REG(flags));
-        pcmpeqw((uint16_t*)dest32, result_ptr, 8);
+        pcmpeqw((uint16_t*)dest32, result_ptr, 4);
         break;
     case PCMPEQW_XGoXEo:
-        EX(get_mmx_read_ptr(flags, i, 2));
-        dest32 = get_mmx_reg_dest(I_REG(flags));
-        pcmpeqw((uint16_t*)dest32, result_ptr, 16);
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pcmpeqw((uint16_t*)dest32, result_ptr, 8);
         break;
     case PCMPEQD_MGqMEq:
         EX(get_mmx_read_ptr(flags, i, 2));
         dest32 = get_mmx_reg_dest(I_REG(flags));
-        pcmpeqd(dest32, result_ptr, 8);
+        pcmpeqd(dest32, result_ptr, 2);
         break;
     case PCMPEQD_XGoXEo:
-        EX(get_mmx_read_ptr(flags, i, 2));
-        dest32 = get_mmx_reg_dest(I_REG(flags));
-        pcmpeqd(dest32, result_ptr, 16);
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pcmpeqd(dest32, result_ptr, 4);
         break;
     }
     return 0;
@@ -2246,13 +2246,16 @@ int execute_0F58_5F(struct decoded_instruction* i)
         dest64[0] = float64_mul(dest64[0], *(float64*)(result_ptr), &status);
         fp_exception = cpu_sse_handle_exceptions();
         break;
-    case CVTPS2PD_XGoXEo: // float --> double
-        EX(get_sse_read_ptr(flags, i, 4, 1));
+    case CVTPS2PD_XGoXEo: {// float --> double
+        EX(get_sse_read_ptr(flags, i, 2, 1));
         dest64 = get_sse_reg_dest(I_REG(flags));
+        // The second dword might get overwritten by the first. 
+        float32 temp = *(float32*)(result_ptr + 4);
         dest64[0] = float32_to_float64(*(float32*)result_ptr, &status);
-        dest64[1] = float32_to_float64(*(float32*)(result_ptr + 4), &status);
+        dest64[1] = float32_to_float64(temp, &status);
         fp_exception = cpu_sse_handle_exceptions();
         break;
+    }
     case CVTPD2PS_XGoXEo: // double --> float
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
