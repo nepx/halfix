@@ -889,14 +889,14 @@ int execute_0F10_17(struct decoded_instruction* i)
         break;
     case MOVSS_XEdXGd:
         // r/m32 <<== xmm32
-        EX(get_sse_write_ptr(flags, i, 1, 1));
+        EX(get_sse_write_ptr(flags, i, 1, 0));
         dest32 = get_sse_reg_dest(I_REG(flags));
         *(uint32_t*)(result_ptr) = dest32[0];
         WRITE_BACK();
         break;
     case MOVSD_XEqXGq:
         // r/m64 <<== xmm64
-        EX(get_sse_write_ptr(flags, i, 1, 1));
+        EX(get_sse_write_ptr(flags, i, 2, 0));
         dest32 = get_sse_reg_dest(I_REG(flags));
         *(uint32_t*)(result_ptr) = dest32[0];
         *(uint32_t*)(result_ptr + 4) = dest32[1];
@@ -979,8 +979,15 @@ int execute_0F10_17(struct decoded_instruction* i)
     case MOVHPS_XEqXGq:
         EX(get_sse_write_ptr(flags, i, 2, 1));
         src32 = get_sse_reg_dest(I_REG(flags));
-        *(uint32_t*)(result_ptr + 8) = src32[0];
-        *(uint32_t*)(result_ptr + 12) = src32[1];
+        if(I_OP2(flags)){
+            // register --> register moves: upper two quadwords
+            *(uint32_t*)(result_ptr + 8) = src32[0];
+            *(uint32_t*)(result_ptr + 12) = src32[1];
+        }else{
+            // register --> memory
+            *(uint32_t*)(result_ptr) = src32[2];
+            *(uint32_t*)(result_ptr + 4) = src32[3];
+        }
         WRITE_BACK();
         break;
     }
@@ -2483,6 +2490,18 @@ int execute_0FE0_E7(struct decoded_instruction* i)
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         pmuluw(dest32, result_ptr, 8, 16);
+        break;
+    case PMULHW_MGqMEq:
+        CHECK_MMX;
+        EX(get_mmx_read_ptr(flags, i, 2));
+        dest32 = get_mmx_reg_dest(I_REG(flags));
+        pmullw((uint16_t*)dest32, result_ptr, 4, 16);
+        break;
+    case PMULHW_XGoXEo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        pmullw((uint16_t*)dest32, result_ptr, 8, 16);
         break;
     case CVTPD2DQ_XGoXEo:
         CHECK_SSE;

@@ -2183,10 +2183,11 @@ static const int decode_sse10_17_tbl[8 * 4] = {
     MOVHLPS_XGqXEq, // F2 0F 12 - TODO: SSE3
     MOVHLPS_XGqXEq, // F3 0F 12 - TODO: SSE3
 
-    MOVLPS_XGqXEq, // 0F 13
-    MOVLPS_XGqXEq, // 66 0F 13
-    MOVLPS_XGqXEq, // F2 0F 13 - invalid
-    MOVLPS_XGqXEq, // F3 0F 13 - invalid
+    // Technically MOVLPS, but it has the same functionality as MOVSD.
+    MOVSD_XEqXGq, // 0F 13
+    MOVSD_XEqXGq, // 66 0F 13
+    MOVSD_XEqXGq, // F2 0F 13 - invalid
+    MOVSD_XEqXGq, // F3 0F 13 - invalid
 
     UNPCKLPS_XGoXEq, // 0F 14
     UNPCKLPD_XGoXEo, // 66 0F 14
