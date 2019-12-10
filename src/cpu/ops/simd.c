@@ -1576,16 +1576,16 @@ int execute_0F70_76(struct decoded_instruction* i)
     case PSHUFHW_XGoXEoIb:
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
-        dest32[0] = 0;
-        dest32[1] = 0;
+        dest32[0] = *(uint32_t*)(result_ptr);
+        dest32[1] = *(uint32_t*)(result_ptr+4);
         imm = i->imm16 >> 8;
-        pshuf(dest32 + 2, result_ptr, imm, 1);
+        pshuf(dest32 + 2, result_ptr+8, imm, 1);
         break;
     case PSHUFLW_XGoXEoIb:
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
-        dest32[2] = 0;
-        dest32[3] = 0;
+        dest32[2] = *(uint32_t*)(result_ptr+8);
+        dest32[3] = *(uint32_t*)(result_ptr+12);
         imm = i->imm16 >> 8;
         pshuf(dest32, result_ptr, imm, 1);
         break;
