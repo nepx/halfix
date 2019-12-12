@@ -391,6 +391,9 @@ static void kbd_write(uint32_t port, uint32_t data)
                 kbd_add(KBD_QUEUE, 0xFA);
                 kbd_add(KBD_QUEUE, 0xAA);
                 break;
+            case 0x05: // Windows NT 4.0 uses this one, don't know what it does.
+                kbd_add(KBD_QUEUE, 0xFE); // RESEND
+                break;
 #if 0
             case 0:
                 kbd_add(KBD_QUEUE, 0xFA);
