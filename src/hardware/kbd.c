@@ -166,8 +166,9 @@ static void kbd_raise_irq(int aux)
         kbd.status &= ~STATUS_AUX;
 
     int bit_to_test = 0x10 << aux; // 0x10 if aux is 0, 0x20 if aux is 1
+    UNUSED(bit_to_test);
     if (
-        !(bit_to_test & kbd.ram[0]) && // Check if disabled bit is set to zero
+        //!(bit_to_test & kbd.ram[0]) && // Check if disabled bit is set to zero
         (kbd.ram[0] & (1 << aux)) // And IRQs are enabled for this device
         ) {
         int irqn = aux ? 12 : 1;
@@ -413,8 +414,8 @@ static void kbd_write(uint32_t port, uint32_t data)
         case 0xD1: // Controller output gate
             cpu_set_a20(data >> 1 & 1);
             break;
-        case 0xD2 ... 0xD3:
-            kbd_add(KBD_QUEUE, command & 1);
+        case 0xD2 ... 0xD3: // Outport
+            kbd_add(KBD_QUEUE, data);
             break;
         case 0xD4: // Write mouse status bits
             switch (kbd.mouse_command) {
