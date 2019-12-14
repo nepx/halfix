@@ -315,7 +315,7 @@ static inline void ide_raise_irq(struct ide_controller* ctrl)
 // Indicates that the command has been aborted for one reason or another.
 static void ide_abort_command(struct ide_controller* ctrl)
 {
-    ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_ERR;
+    ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_DSC | ATA_STATUS_ERR;
     ctrl->error = ATA_ERROR_ABRT;
     ctrl->pio_position = 0;
     ide_raise_irq(ctrl);
@@ -1083,6 +1083,8 @@ static void ide_pio_read_callback(struct ide_controller* ctrl)
             ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_DSC;
         }
         break;
+    case 0: // Uninitialized, Windows NT does this. 
+        break;
     default:
         IDE_FATAL("Unknown PIO read command: %02x\n", ctrl->command_issued);
     }
@@ -1574,11 +1576,13 @@ static void ide_write(uint32_t port, uint32_t data)
         ctrl->command_issued = data;
         switch (data) {
         case 8: // ATAPI Reset
+            IDE_LOG("ATAPI Reset\n");
             if (SELECTED(ctrl, type) == DRIVE_TYPE_CDROM) {
                 ctrl->error &= ~ATA_ERROR_BBK;
+                ctrl->error = ATA_ERROR_AMNF;
                 ctrl->status = 0; // ?
                 ide_set_signature(ctrl);
-            } else
+            } else 
                 ide_abort_command(ctrl);
             break;
         case 0x10 ... 0x1F: // Calibrate Drive
@@ -1696,7 +1700,6 @@ static void ide_write(uint32_t port, uint32_t data)
                 ctrl->error = 0;
                 ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_DRQ | ATA_STATUS_DSC;
                 ide_identify(ctrl);
-                ide_set_signature(ctrl);
                 ide_raise_irq(ctrl);
             } else
                 ide_abort_command(ctrl);
