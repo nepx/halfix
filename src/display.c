@@ -193,6 +193,12 @@ static int sdl_keysym_to_scancode(int sym)
         return 0xE048;
     case SDLK_SPACE:
         return 0x39;
+    case SDLK_PAGEUP:
+        return 0xE04F;
+    case SDLK_PAGEDOWN:
+        return 0xE051;
+    case SDLK_DELETE:
+        return 0xE053;
     case SDLK_F1... SDLK_F12:
         return 0x3B + (sym - SDLK_F1);
     case SDLK_SLASH:
@@ -261,7 +267,8 @@ void display_handle_events(void)
             //printf("KeyDown\n");
             display_set_title();
             send_keymod_scancode(event.key.keysym.mod, 0);
-            display_kbd_send_key(sdl_keysym_to_scancode(event.key.keysym.sym));
+            int s = sdl_keysym_to_scancode(event.key.keysym.sym);
+            display_kbd_send_key(s);
             break;
         }
         case SDL_MOUSEBUTTONDOWN:
@@ -294,6 +301,7 @@ void display_handle_events(void)
         case SDL_KEYUP: {
             //printf("KeyUp\n");
             int c = sdl_keysym_to_scancode(event.key.keysym.sym);
+            send_keymod_scancode(event.key.keysym.mod, 0x80);
             display_kbd_send_key(c | 0x80);
             break;
         }
