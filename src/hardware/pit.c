@@ -207,7 +207,6 @@ static void pit_channel_latch_counter(struct pit_channel* this)
 {
     if (!(this->whats_latched & COUNTER_LATCHED)) {
         uint16_t ct = pit_get_count(this);
-        PIT_LOG("Latch count: %ld\n", get_now());
         int mode = this->rw_mode;
         this->whats_latched = (mode << 2) | COUNTER_LATCHED;
         switch (mode) {
