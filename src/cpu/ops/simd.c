@@ -127,10 +127,8 @@ static int get_read_ptr(uint32_t flags, struct decoded_instruction* i, int dword
 {
     uint32_t linaddr = cpu_get_linaddr(flags, i);
     if (linaddr & ((dwords << 2) - 1)) {
-        if (unaligned_exception) {
-            __asm__("int3");
+        if (unaligned_exception) 
             EXCEPTION_GP(0);
-        }
         for (int i = 0, j = 0; i < dwords; i++, j += 4)
             cpu_read32(linaddr + j, temp.d128[i], cpu.tlb_shift_read);
         result_ptr = temp.d128;
@@ -1567,20 +1565,17 @@ static void pshift(void* dest, int opcode, int wordcount, int imm)
 int execute_0F70_76(struct decoded_instruction* i)
 {
     uint32_t *dest32, flags = i->flags;
-    if (i->imm8 & 1) {
-        CHECK_SSE;
-    } else {
-        CHECK_MMX;
-    }
     int imm;
     switch (i->imm8 & 15) {
     case PSHUFW_MGqMEqIb:
+        CHECK_MMX;
         EX(get_mmx_read_ptr(flags, i, 2));
         dest32 = get_mmx_reg_dest(I_REG(flags));
         imm = i->imm16 >> 8;
         pshuf(dest32, result_ptr, imm, 1);
         break;
     case PSHUFHW_XGoXEoIb:
+        CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = *(uint32_t*)(result_ptr);
@@ -1589,6 +1584,7 @@ int execute_0F70_76(struct decoded_instruction* i)
         pshuf(dest32 + 2, result_ptr+8, imm, 1);
         break;
     case PSHUFLW_XGoXEoIb:
+        CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[2] = *(uint32_t*)(result_ptr+8);
@@ -1597,47 +1593,56 @@ int execute_0F70_76(struct decoded_instruction* i)
         pshuf(dest32, result_ptr, imm, 1);
         break;
     case PSHUFD_XGoXEoIb:
+        CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         imm = i->imm16 >> 8;
         pshuf(dest32, result_ptr, imm, 2);
         break;
     case PSHIFT_MGqIb:
+        CHECK_MMX;
         dest32 = get_mmx_reg_dest(I_RM(flags)); // Note: R/M is dest, but RMW accesses are not allowed
         imm = i->imm16 >> 8;
         pshift(dest32, i->imm8 >> 4 & 15, 4, imm);
         break;
     case PSHIFT_XEoIb:
+        CHECK_SSE;
         dest32 = get_sse_reg_dest(I_RM(flags));
         imm = i->imm16 >> 8;
         pshift(dest32, i->imm8 >> 4 & 15, 8, imm);
         break;
     case PCMPEQB_MGqMEq:
+        CHECK_MMX;
         EX(get_mmx_read_ptr(flags, i, 2));
         dest32 = get_mmx_reg_dest(I_REG(flags));
         pcmpeqb((uint8_t*)dest32, result_ptr, 8);
         break;
     case PCMPEQB_XGoXEo:
+        CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         pcmpeqb((uint8_t*)dest32, result_ptr, 16);
         break;
     case PCMPEQW_MGqMEq:
+        CHECK_MMX;
         EX(get_mmx_read_ptr(flags, i, 2));
         dest32 = get_mmx_reg_dest(I_REG(flags));
         pcmpeqw((uint16_t*)dest32, result_ptr, 4);
         break;
     case PCMPEQW_XGoXEo:
+        CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         pcmpeqw((uint16_t*)dest32, result_ptr, 8);
         break;
     case PCMPEQD_MGqMEq:
+        CHECK_MMX;
         EX(get_mmx_read_ptr(flags, i, 2));
         dest32 = get_mmx_reg_dest(I_REG(flags));
         pcmpeqd(dest32, result_ptr, 2);
         break;
     case PCMPEQD_XGoXEo:
+        CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         pcmpeqd(dest32, result_ptr, 4);
@@ -1823,6 +1828,7 @@ int execute_0FD0_D7(struct decoded_instruction* i)
             *(uint32_t*)(result_ptr + 8) = 0;
             *(uint32_t*)(result_ptr + 12) = 0;
         }
+        WRITE_BACK();
         break;
     case MOVQ2DQ_XGoMEq:
         CHECK_MMX;
@@ -1871,7 +1877,7 @@ int execute_0FD8_DF(struct decoded_instruction* i)
         psubusb((uint8_t*)dest32, result_ptr, 8);
         break;
     case PSUBUSB_XGoXEo:
-        EX(get_sse_write_ptr(flags, i, 4, 1));
+        EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         psubusb((uint8_t*)dest32, result_ptr, 16);
         break;
@@ -1881,7 +1887,7 @@ int execute_0FD8_DF(struct decoded_instruction* i)
         psubusw((uint16_t*)dest32, result_ptr, 4);
         break;
     case PSUBUSW_XGoXEo:
-        EX(get_sse_write_ptr(flags, i, 4, 1));
+        EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         psubusw((uint16_t*)dest32, result_ptr, 8);
         break;
@@ -1889,8 +1895,9 @@ int execute_0FD8_DF(struct decoded_instruction* i)
         EX(get_mmx_read_ptr(flags, i, 2));
         dest32 = get_mmx_reg_dest(I_REG(flags));
         pminub((uint8_t*)dest32, result_ptr, 8);
+        break;
     case PMINUB_XGoXEo:
-        EX(get_sse_write_ptr(flags, i, 4, 1));
+        EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         pminub((uint8_t*)dest32, result_ptr, 16);
         break;
@@ -1914,7 +1921,7 @@ int execute_0FD8_DF(struct decoded_instruction* i)
         paddusb((uint8_t*)dest32, result_ptr, 8);
         break;
     case PADDUSB_XGoXEo:
-        EX(get_sse_write_ptr(flags, i, 4, 1));
+        EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         paddusb((uint8_t*)dest32, result_ptr, 16);
         break;
@@ -1924,7 +1931,7 @@ int execute_0FD8_DF(struct decoded_instruction* i)
         paddusw((uint16_t*)dest32, result_ptr, 4);
         break;
     case PADDUSW_XGoXEo:
-        EX(get_sse_write_ptr(flags, i, 4, 1));
+        EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         paddusw((uint16_t*)dest32, result_ptr, 8);
         break;
@@ -1932,8 +1939,9 @@ int execute_0FD8_DF(struct decoded_instruction* i)
         EX(get_mmx_read_ptr(flags, i, 2));
         dest32 = get_mmx_reg_dest(I_REG(flags));
         pmaxub((uint8_t*)dest32, result_ptr, 8);
+        break;
     case PMAXUB_XGoXEo:
-        EX(get_sse_write_ptr(flags, i, 4, 1));
+        EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         pmaxub((uint8_t*)dest32, result_ptr, 16);
         break;
@@ -1974,10 +1982,12 @@ int execute_0F7E_7F(struct decoded_instruction* i)
         break;
     case MOVQ_XGqXEq:
         CHECK_SSE;
-        EX(get_sse_read_ptr(flags, i, 2, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 0));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = *(uint32_t*)result_ptr;
         dest32[1] = *(uint32_t*)(result_ptr + 4);
+        dest32[2] = 0;
+        dest32[3] = 0;
         break;
     case MOVQ_MEqMGq:
         CHECK_MMX;
