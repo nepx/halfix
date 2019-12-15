@@ -766,6 +766,10 @@ static void ide_atapi_run_command(struct ide_controller* ctrl)
         ide_raise_irq(ctrl);
         break;
     }
+    case 0x1B: 
+        ide_atapi_no_transfer(ctrl);
+        ide_raise_irq(ctrl);
+        break;
     case 0x1A:
     case 0x5A: { // Mode sense
         int length, nlength;
@@ -905,6 +909,10 @@ static void ide_atapi_run_command(struct ide_controller* ctrl)
             ide_atapi_abort(ctrl, ATAPI_SENSE_NOT_READY, ATAPI_ASC_NOT_PRESENT);
             ide_raise_irq(ctrl);
         }
+        break;
+    case 0x51: // Read disk information
+        IDE_LOG("ATAPI: Read disk information (stubbed)\n");
+        ide_atapi_abort(ctrl, ATAPI_SENSE_ILLEGAL_REQUEST, 36);
         break;
     case 0xBD: { // Mechanism status
         IDE_LOG("ATAPI: Mechanism status\n");
@@ -1907,9 +1915,9 @@ void ide_init(struct pc_settings* pc)
             ctrl->media_inserted[drive_id] = 1;
             ctrl->total_sectors_chs[drive_id] = info->cylinders_per_head * info->heads * info->sectors_per_cylinder;
             ctrl->total_sectors[drive_id] = info->type == DRIVE_TYPE_CDROM ? info->sectors >> 2 : info->sectors; // Adjust for 2048-byte sectors
-            ctrl->type[drive_id] = info->type;
         } else {
             ctrl->media_inserted[drive_id] = 0;
         }
+        ctrl->type[drive_id] = info->type;
     }
 }
