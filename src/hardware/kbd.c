@@ -31,8 +31,8 @@
 #define COMMAND_ENABLE_KBD_INTR 0x01
 
 #define MOUSE_LEFT 1
-#define MOUSE_MIDDLE 2
-#define MOUSE_RIGHT 4
+#define MOUSE_MIDDLE 4
+#define MOUSE_RIGHT 2
 
 #define KBD_LOG(x, ...) LOG("KBD", x, ##__VA_ARGS__)
 #define KBD_FATAL(x, ...)          \
