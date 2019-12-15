@@ -1804,7 +1804,7 @@ OPTYPE op_cmov_r32r32(struct decoded_instruction* i)
 OPTYPE op_setcc_e8(struct decoded_instruction* i)
 {
     int flags = i->flags, linaddr = cpu_get_linaddr(flags, i);
-    cpu_write8(linaddr, cpu_cond(I_OP3(flags)), cpu.tlb_shift_read);
+    cpu_write8(linaddr, cpu_cond(I_OP3(flags)), cpu.tlb_shift_write);
     NEXT(flags);
 }
 OPTYPE op_setcc_r8(struct decoded_instruction* i)
