@@ -1588,12 +1588,6 @@ int fpu_mem_op(struct decoded_instruction* i, uint32_t virtaddr, uint32_t seg)
         floatx80 st0 = fpu_get_st(0);
         uint64_t bcd = floatx80_to_int64(st0, &fpu.status);
 
-        uint64_t bcdlo;
-        uint16_t bcdhi;
-        UNUSED(bcd);
-        UNUSED(bcdlo);
-        UNUSED(bcdhi);
-
         if (fpu_check_exceptions())
             FPU_ABORT();
         // Make sure we didn't cause exception
@@ -1611,6 +1605,7 @@ int fpu_mem_op(struct decoded_instruction* i, uint32_t virtaddr, uint32_t seg)
             result |= (bcd % 10) << 4;
             cpu_write8(linaddr + 9, result | (st0.exp >> 8 & 0x80), cpu.tlb_shift_write);
 
+        fpu_pop();
         break;
     }
     case OP(0xDF, 7): { // FISTP - Store floating point register to integer and pop
