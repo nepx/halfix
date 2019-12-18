@@ -143,5 +143,20 @@
         "additional_flags": [
             "@flags=emscripten"
         ]
+    },
+    "src/ini.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/drive.h",
+            "include/state.h",
+            "include/state.h",
+            "include/util.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+        ]
     }
 }
