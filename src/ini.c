@@ -212,6 +212,20 @@ static int get_field_int(struct ini_section* sect, char* name, int def)
     }
     return res;
 }
+static int get_field_long(struct ini_section* sect, char* name, int def)
+{
+    char* str = get_field_string(sect, name);
+    uint64_t res = 0;
+    int i = 0;
+    if (!str)
+        return def; // If the field isn't there, then simply return the default
+    for (;; ++i) {
+        if (str[i] < '0' || str[i] > '9')
+            break;
+        res = res * 10 + str[i] - '0';
+    }
+    return res;
+}
 static void free_ini(struct ini_section* sect)
 {
     while (sect) {
@@ -296,6 +310,9 @@ int parse_cfg(struct pc_settings* pc, char* data)
     pc->memory_size = get_field_int(global, "memory", 32);
     pc->vga_memory_size = get_field_int(global, "vgamemory", 4);
 
+    // Set emulator time
+    pc->current_time = get_field_long(global, "now", 0);
+
     // Enable/disable features
     pc->pci_enabled = get_field_int(global, "pci", 1);
     pc->acpi_enabled = get_field_int(global, "acpi", 1);
@@ -312,7 +329,15 @@ int parse_cfg(struct pc_settings* pc, char* data)
         goto fail;
     }
 
-    // Determine boot
+    // Now check for floppy drive information
+    res = parse_disk(&pc->floppy_drives[0], get_section(global, "fda"));
+    res |= parse_disk(&pc->floppy_drives[1], get_section(global, "fdb"));
+    if (res) {
+        fprintf(stderr, "Unable to initialize floppy drive images\n");
+        goto fail;
+    }
+
+    // Determine boot order
     struct ini_section* boot = get_section(global, "boot");
     if (boot == NULL) {
         pc->boot_sequence[0] = BOOT_DISK;
