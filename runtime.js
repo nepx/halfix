@@ -1,9 +1,10 @@
 // Halfix emulator loader and minimal runtime initializer.
-// Copyright 2019 Joey Kim. All rights reserved..
 
 // Some URL query parameters you may find useful:
 //  ?app=file.js  -  Load Halfix from path "file.js" (default: halfix.js)
 //  ?hd[a|b|c|d]=imgdir  -  Set hard disk image (none by default)
+//  ?cd[a|b|c|d]=imgdir  -  Set CD-ROM disk image (none by default)
+//  ?fd[a|b]=imgdir  -  Set floppy disk image (none by default)
 //  ?pcienabled=true  -  Enable PCI support (disabled by default)
 //  ?apicenabled=true  -  Enable APIC support (disabled by default)
 //  ?bios=file.bin  -  Load BIOS image from "file.bin" (default: bios.bin)
@@ -195,20 +196,67 @@ var Module = {
         /** @type {Int32Array} */
         i32;
 
-    function getBooleanByName(x){
+
+    function getBooleanByName(x) {
         var param = getParameterByName(x);
-        if(typeof param !== "string") return true;
-        return param === "true";
+        if (typeof param !== "string") return 1;
+        return (param === "true") | 0;
     }
-    // ============================================================================
-    // Emscripten helper functions
-    // ============================================================================
-    var options = {
+
+    function getIntegerByName(x, v2) {
+        var param = getParameterByName(x);
+        if (typeof param !== "string") return v2;
+        return parseInt(param) | 0;
+    }
+
+    function getDoubleByName(x, v2) {
+        var param = getParameterByName(x);
+        if (typeof param !== "string") return v2;
+        return +parseFloat(param);
+    }
+
+    function buildDrive(config, drvid, primary, master) {
+        var hd = getParameterByName("hd" + drvid),
+            cd = getParameterByName("cd" + drvid);
+        if (!hd && !cd)
+            return;
+        config.push("[ata" + primary + "-" + master + "]");
+        if (hd) {
+            if (hd !== "none") {
+                config.push("file=" + hd);
+                config.push("inserted=1");
+            }
+            config.push("type=hd");
+        } else {
+            if (cd !== "none") {
+                config.push("file=" + cd);
+                config.push("inserted=1");
+            }
+            config.push("type=cd");
+        }
+    }
+
+    function buildFloppy(config, drvid) {
+        var fd = getParameterByName("fd" + drvid);
+        if (!fd)
+            return;
+        config.push("[fd" + drvid + "]");
+        config.push("file=" + fd);
+    }
+
+    /**
+     * From the given URL parameters, we build a .conf file for Halfix to consume. 
+     */
+    function buildConfiguration() {
+        var config = [];
+        /*
+
         bios_path: getParameterByName("bios") || "bios.bin",
         bios: null,
         vgabios_path: getParameterByName("vgabios") || "vgabios.bin",
         vgabios: null,
         hd: [getParameterByName("hda"), getParameterByName("hdb"), getParameterByName("hdc"), getParameterByName("hdd")],
+        cd: [getParameterByName("cda"), getParameterByName("cdb"), getParameterByName("cdc"), getParameterByName("cdd")],
         pci: getBooleanByName("pcienabled"),
         apic: getBooleanByName("apicenabled"),
         acpi: getBooleanByName("apicenabled"),
@@ -217,23 +265,44 @@ var Module = {
         vgamem: getParameterByName("vgamem") ? parseInt(getParameterByName("vgamem")) : 32,
         fd: [getParameterByName("fda"), getParameterByName("fdb")],
         boot: getParameterByName("boot") || "chf" // HDA, FDC, CDROM
-    };
+        */
+        config.push("bios=" + (getParameterByName("bios") || "bios.bin"));
+        config.push("vgabios=" + (getParameterByName("vgabios") || "vgabios.bin"));
+        config.push("pci=" + getBooleanByName("pcienabled"));
+        config.push("apic=" + getBooleanByName("apicenabled"));
+        config.push("acpi=" + getBooleanByName("acpienabled"));
+        config.push("now=" + getDoubleByName("now", new Date().getTime()));
+        var mem = getIntegerByName("mem", 32),
+            vgamem = getIntegerByName("vgamem", 4);
 
-    function roundUp(v) {
-        v--;
-        v |= v >> 1;
-        v |= v >> 2;
-        v |= v >> 4;
-        v |= v >> 8;
-        v |= v >> 16;
-        v++;
-        return v;
-    }
-    Module["TOTAL_MEMORY"] = roundUp(options.mem + 32 + options.vgamem) * 1024 * 1024 | 0;
+        function roundUp(v) {
+            v--;
+            v |= v >> 1;
+            v |= v >> 2;
+            v |= v >> 4;
+            v |= v >> 8;
+            v |= v >> 16;
+            v++;
+            return v;
+        }
+        Module["TOTAL_MEMORY"] = roundUp(mem + 32 + vgamem) * 1024 * 1024 | 0;
+        config.push("memory=" + mem + "M");
+        config.push("vgamemory=" + vgamem + "M");
+        buildDrive(config, "a", 0, "master");
+        buildDrive(config, "b", 0, "slave");
+        buildDrive(config, "c", 1, "master");
+        buildDrive(config, "d", 1, "slave");
 
-    // Returns a pointer to an Emscripten-compiled function
-    function wrap(nm) {
-        return Module["_" + nm];
+        buildFloppy(config, "a");
+        buildFloppy(config, "b");
+        config.push("[boot]");
+
+        var bootOrder = getParameterByName("boot") || "chf";
+        config.push("a=" + bootOrder[0] + "d");
+        config.push("b=" + bootOrder[1] + "d");
+        config.push("c=" + bootOrder[2] + "d");
+
+        return config.join("\n");
     }
 
     var _allocs = [];
@@ -269,18 +338,6 @@ var Module = {
         for (var i = 0; i < srclen; i = i + 1 | 0)
             u8[i + dest | 0] = src[i | 0];
     }
-    /**
-     * Copy a string into memory
-     * @param {number} src
-     */
-    function readstr(src) {
-        var str = "";
-        while (u8[src] !== 0) {
-            str += String.fromCharCode(u8[src]);
-            src = src + 1 | 0;
-        }
-        return str;
-    }
 
     /**
      * Frees every single patch of memory we have reserved with alloc()
@@ -288,6 +345,7 @@ var Module = {
     function gc() {
         var free = Module["_free"];
         for (var i = 0; i < _allocs.length; i = i + 1 | 0) free(_allocs[i]);
+        _allocs = [];
     }
 
     /**
@@ -299,127 +357,32 @@ var Module = {
     function fptr_vii(cb, cb_ptr, arg2) {
         Module["dynCall_vii"](cb, cb_ptr, arg2);
     }
-
-    Module["onRuntimeInitialized"] = function () {
-        // Load ROMs into memory to be copied.
-        var load_rom = wrap("emscripten_alloc");
-        var bios = load_rom(1, options.bios.length);
-        var vgabios = load_rom(0, options.vgabios.length);
-
-        wrap("emscripten_set_time")(options.now);
-        wrap("emscripten_set_memory_size")(options.mem * 1024 * 1024 | 0);
-        wrap("emscripten_set_vga_memory_size")(options.vgamem * 1024 * 1024 | 0);
-
-        var boot_order = wrap("emscripten_bootorder");
-        for (var i = 0; i < 3; i++)
-            boot_order(i, options.boot.charCodeAt(i));
-
-        u8 = Module["HEAPU8"];
-        u16 = Module["HEAPU16"];
-        i32 = Module["HEAP32"];
-
-
-        u8.set(options.bios, bios);
-        u8.set(options.vgabios, vgabios);
-
-        console.log(options);
-
-        for (var i = 0; i < 4; i = i + 1 | 0)
-            if (options.hd[i])
-                options.hd[i] = new RemoteHardDiskImage(i, options.hd[i].path, options.hd[i].info);
-
-        // For our purposes here, a floppy drive is bascially a hard drive, but smaller
-        for (var i = 0; i < 2; i = i + 1 | 0)
-            if (options.fd[i])
-                options.fd[i] = new RemoteHardDiskImage(i, options.fd[i].path, options.fd[i].info, 1);
-
-        // Start initializing disks
-        wrap("emscripten_enable_pci")(options.pci);
-        wrap("emscripten_enable_apic")(options.apic);
-        wrap("emscripten_enable_acpi")(options.acpi);
-        console.log(options);
-
-        wrap("emscripten_initialize")();
-        window["debug"] = wrap("emscripten_debug");
-        var run = wrap("emscripten_run"),
-            cycles = wrap("emscripten_get_cycles"),
-            cyclebase = 0;
-        var n = 0,
-            now = new Date().getTime();
-
-        var start = new Date().getTime(),
-            runs = 0,
-            failed = false;
-
-        var paused = 0;
-        $("pause").addEventListener("click", function () {
-            paused ^= 1;
-            if (paused) {
-                $("pause").innerHTML = "Run";
-            } else {
-                $("pause").innerHTML = "Pause";
-            }
-            if (paused == 0) run_wrapper(0);
-        });
-
-        var cycles_slept = 0;
-
-        function run_wrapper() {
-            if (failed) return;
-            if (paused) return;
-            try {
-                //if(runs++ > 500) throw new Error("stop");
-                var x = run();
-                //console.log("Pausing ", x, "ms");
-                n++;
-                var temp;
-                var elapsed = (temp = new Date().getTime()) - now;
-                if (elapsed >= 1000) {
-                    console.log("FPS: ", n);
-                    var curcycles = cycles();
-                    $("speed").innerHTML = ((curcycles - cyclebase) / (elapsed) / (1000)).toFixed(2);
-                    cyclebase = curcycles;
-                    now = temp;
-                    n = 0;
-                }
-                //x = 0;
-                //update_screen();
-                setTimeout(run_wrapper, x);
-            } catch (e) {
-                $("error").innerHTML = "Exception thrown -- see JavaScript console";
-                $("messages").innerHTML = e.toString() + "<br />" + e.stack;
-                failed = true;
-                console.log(e);
-                throw e;
-            }
+    /**
+     * Copy a string into JavaScript
+     * @param {number} src
+     */
+    function readstr(src) {
+        var str = "";
+        while (u8[src] !== 0) {
+            str += String.fromCharCode(u8[src]);
+            src = src + 1 | 0;
         }
-        run_wrapper();
-    };
+        return str;
+    }
 
-    // ============================================================================
-    // Drive helper functions
-    // ============================================================================
+    // Returns a pointer to an Emscripten-compiled function
+    function wrap(nm) {
+        return Module["_" + nm];
+    }
+
     /**
      * Create a disk image and set up Emscripten state
      * @param {number} diskid 
      * @param {string} path 
      * @param {Uint8Array} info 
-     * @param {number=} type 0 - Hard drive, 1 - Floppy drive, 2 - CD-ROM drive
      * @constructor
      */
-    function RemoteHardDiskImage(diskid, path, info, type) {
-        // Call initialization mechanism
-        var pathaddr = alloc(path.length + 1 | 0),
-            infoaddr = alloc(info.length);
-        strcpy(pathaddr, path);
-        memcpy(infoaddr, info);
-        // void emscripten_init_disk(int disk, int has_media, char* path, void* info);
-        if (type === 1)
-            wrap("emscripten_init_floppy")(diskid | 0, 1, pathaddr, infoaddr);
-        else
-            wrap("emscripten_init_disk")(diskid | 0, 1, pathaddr, infoaddr);
-        gc();
-
+    function RemoteHardDiskImage(diskid, path, info) {
         /** @type {string} */
         this.path = path;
         /** @type {Uint8Array} */
@@ -553,95 +516,105 @@ var Module = {
     /** @type {RemoteHardDiskImage[]} */
     window["drives"] = [];
 
-    // Load BIOS images and disk information, if required.
-    loadFiles([options.bios_path, options.vgabios_path], function (err, data) {
-        if (err) throw error;
-        // Initialize disk drives, if required.
-        var disk_drives = [],
-            disk_drive_ids = [];
-        for (var i = 0; i < 4; i++) {
-            if (options.hd[i]) {
-                disk_drives.push(join_path(options.hd[i], "info.dat"));
-                disk_drive_ids.push(i);
-            }
+    var paused = 0,
+        now, cycles, cyclebase = 0,
+        run;
+    $("pause").addEventListener("click", function () {
+        paused ^= 1;
+        if (paused) {
+            $("pause").innerHTML = "Run";
+        } else {
+            $("pause").innerHTML = "Pause";
         }
-        for (var i = 0; i < 2; i++) {
-            if (options.fd[i]) {
-                disk_drives.push(join_path(options.fd[i], "info.dat"));
-                disk_drive_ids.push(i | 4);
-            }
-        }
-
-        options.bios = data[0];
-        options.vgabios = data[1];
-
-        function ready() {
-            loadEmulator(getParameterByName("app") || "halfix.js");
-            // Execution continues from onRuntimeInitialized
-        }
-        if (disk_drives.length)
-            loadFiles(disk_drives, function (err, data) {
-                if (err) throw err;
-                for (var i = 0; i < data.length; i++) {
-                    var drive_id = disk_drive_ids[i];
-                    if (drive_id & 4)
-                        options.fd[drive_id & 1] = {
-                            info: data[drive_id & 1],
-                            path: disk_drives[drive_id & 1].replace("info.dat", "") // XXX
-                        };
-                    else
-                        options.hd[drive_id] = {
-                            info: data[drive_id],
-                            path: disk_drives[drive_id].replace("info.dat", "") // XXX
-                        };
-                }
-                ready();
-            });
-        else ready();
+        if (paused == 0) run_wrapper(0);
     });
 
-    // ============================================================================
-    // Savestate handlers
-    // ============================================================================
-
-    var zip = null;
-    /**
-     * Save a file to the JSZip instance. 
-     * 
-     * @param {number} nameptr Pointer to the name string
-     * @param {number} ptr Pointer to the data
-     * @param {number} length Length of the data
-     */
-    function saveFile(nameptr, ptr, length) {
-        var name = normalize_path(readstr(nameptr)).substring(1); // Trim off leading /
-        console.log(name);
-        zip.file(name, u8.slice(ptr, ptr + length | 0));
+    function run_wrapper2() {
+        now = new Date().getTime();
+        cycles = wrap("emscripten_get_cycles");
+        run = wrap("emscripten_run");
+        wrap("emscripten_init")();
+        run_wrapper();
     }
-    window["saveFile"] = saveFile;
-    /**
-     * Stores the current Halfix state to a ZIP file. Uses the JSZip API
-     */
-    function saveState() {
-        if (inLoading) {
-            savestateRequested = true;
-            return;
-        }
-        zip = new JSZip();
-        wrap("emscripten_savestate")();
-        console.log("HERE\n");
-        zip.generateAsync({
-            "type": "blob",
-            "compression": "DEFLATE",
-            "compressionOptions": {
-                "level": 6
+
+    function run_wrapper() {
+        if (paused) return;
+        try {
+            //if(runs++ > 500) throw new Error("stop");
+            var x = run();
+            //console.log("Pausing ", x, "ms");
+            var temp;
+            var elapsed = (temp = new Date().getTime()) - now;
+            if (elapsed >= 1000) {
+                var curcycles = cycles();
+                $("speed").innerHTML = ((curcycles - cyclebase) / (elapsed) / (1000)).toFixed(2);
+                cyclebase = curcycles;
+                now = temp;
             }
-        }).then(function (blob) {
-            var a = document.createElement("a");
-            a.href = URL.createObjectURL(blob);
-            document.body.appendChild(a);
-            a.click();
-        });
+            //x = 0;
+            //update_screen();
+            setTimeout(run_wrapper, x);
+        } catch (e) {
+            $("error").innerHTML = "Exception thrown -- see JavaScript console";
+            $("messages").innerHTML = e.toString() + "<br />" + e.stack;
+            failed = true;
+            console.log(e);
+            throw e;
+        }
     }
 
-    $("savebutton").addEventListener("click", saveState);
+    var requests_in_progress = 0;
+    window["load_file_xhr"] = function (lenptr, dataptr, path) {
+        var src = readstr(path);
+        requests_in_progress++;
+        loadFiles([src], function (err, data) {
+            if (err) throw err;
+            data = data[0];
+
+            var destination = Module["_emscripten_alloc"](data.length, 4096);
+            memcpy(destination, data);
+            i32[lenptr >> 2] = data.length;
+            i32[dataptr >> 2] = destination;
+            requests_in_progress--;
+            if (requests_in_progress === 0) run_wrapper2();
+        });
+    };
+    window["drive_init"] = function (info_ptr, path, id) {
+        var p = readstr(path);
+        requests_in_progress++;
+        loadFiles([join_path(p, "info.dat")], function (err, data) {
+            if (err) throw err;
+            data = data[0];
+            var rhd = new RemoteHardDiskImage(id, p, data);
+            var dataptr = alloc(data.length), strptr = alloc(p.length + 1);
+            memcpy(dataptr, data);
+            strcpy(strptr, p);
+            wrap("drive_emscripten_init")(info_ptr, strptr, dataptr, id);
+            gc();
+
+            // Register it with Emscripten
+            window["drives"][id] = rhd;
+            requests_in_progress--;
+            if (requests_in_progress === 0) run_wrapper2();
+        });
+    };
+
+    var cfg = buildConfiguration();
+    loadEmulator(getParameterByName("app") || "halfix.js");
+
+    Module["onRuntimeInitialized"] = function () {
+        // Initialize runtime
+        u8 = Module["HEAPU8"];
+        u16 = Module["HEAPU16"];
+        i32 = Module["HEAP32"];
+
+        // Load configuration file into Halfix
+        var pc = Module["_emscripten_get_pc_config"]();
+
+        var area = alloc(cfg.length + 1);
+        strcpy(area, cfg);
+        Module["_parse_cfg"](pc, area);
+
+        gc();
+    };
 })();

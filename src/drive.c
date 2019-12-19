@@ -634,7 +634,7 @@ static void drive_internal_state(void* this_ptr, char* pn)
 static
 #endif
     int
-    drive_internal_init(struct drive_info* info, char* filename, void* info_dat)
+    drive_internal_init(struct drive_info* info, char* filename, void* info_dat, int drvid)
 {
     struct drive_internal_info* drv = malloc(sizeof(struct drive_internal_info));
 
@@ -645,6 +645,11 @@ static
     drv->path_count = 1;
     drv->paths = malloc(sizeof(char*));
     drv->paths[0] = pathbase;
+#ifdef EMSCRIPTEN
+    drv->drive_id = drvid;
+#else
+    UNUSED(drvid);
+#endif
 
     // Parse
     struct drive_info_file* internal = info_dat;
@@ -709,7 +714,7 @@ int drive_init(struct drive_info* info, char* filename)
         return -1;
     close(fd);
 
-    drive_internal_init(info, filename, data);
+    drive_internal_init(info, filename, data, -1);
     free(data);
     return 0;
 }

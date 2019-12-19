@@ -54,7 +54,7 @@ struct drive_info {
 void drive_state(struct drive_info* info, char* filename);
 
 #ifdef EMSCRIPTEN
-int drive_internal_init(struct drive_info* info, char* filename, void* info_dat);
+int drive_internal_init(struct drive_info* info, char* filename, void* info_dat, int);
 #endif
 
 int drive_init(struct drive_info* info, char* path);

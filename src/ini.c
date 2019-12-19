@@ -269,7 +269,7 @@ static const struct ini_enum driver_types[] = {
     { NULL, 0 }
 };
 
-static int parse_disk(struct drive_info* drv, struct ini_section* s)
+static int parse_disk(struct drive_info* drv, struct ini_section* s, int id)
 {
     if (s == NULL) {
         drv->type = DRIVE_TYPE_NONE;
@@ -281,15 +281,24 @@ static int parse_disk(struct drive_info* drv, struct ini_section* s)
     int driver = get_field_enum(s, "driver", driver_types, 0), inserted = get_field_int(s, "inserted", 0);
     char* path = get_field_string(s, "file");
     if (path && inserted) {
+#ifndef EMSCRIPTEN
+        UNUSED(id);
         if (driver == 0)
             return drive_init(drv, path);
         else
             return drive_simple_init(drv, path);
+#else   
+        UNUSED(driver);
+        EM_ASM_({ window["drive_init"]($0, $1, $2); }, drv, path, id);
+#endif
     }
 
     return 0;
 }
 
+#ifdef EMSCRIPTEN
+EMSCRIPTEN_KEEPALIVE
+#endif
 int parse_cfg(struct pc_settings* pc, char* data)
 {
     struct ini_section* global = ini_parse(data);
@@ -307,8 +316,8 @@ int parse_cfg(struct pc_settings* pc, char* data)
     }
 
     // Determine memory size
-    pc->memory_size = get_field_int(global, "memory", 32);
-    pc->vga_memory_size = get_field_int(global, "vgamemory", 4);
+    pc->memory_size = get_field_int(global, "memory", 32 * 1024 * 1024);
+    pc->vga_memory_size = get_field_int(global, "vgamemory", 4 * 1024 * 1024);
 
     // Set emulator time
     pc->current_time = get_field_long(global, "now", 0);
@@ -320,18 +329,18 @@ int parse_cfg(struct pc_settings* pc, char* data)
     pc->floppy_enabled = get_field_int(global, "floppy", 1);
 
     // Now figure out disk image information
-    int res = parse_disk(&pc->drives[0], get_section(global, "ata0-master"));
-    res |= parse_disk(&pc->drives[1], get_section(global, "ata0-slave"));
-    res |= parse_disk(&pc->drives[2], get_section(global, "ata1-master"));
-    res |= parse_disk(&pc->drives[3], get_section(global, "ata1-slave"));
+    int res = parse_disk(&pc->drives[0], get_section(global, "ata0-master"), 0);
+    res |= parse_disk(&pc->drives[1], get_section(global, "ata0-slave"), 1);
+    res |= parse_disk(&pc->drives[2], get_section(global, "ata1-master"), 2);
+    res |= parse_disk(&pc->drives[3], get_section(global, "ata1-slave"), 3);
     if (res) {
         fprintf(stderr, "Unable to initialize disk drive images\n");
         goto fail;
     }
 
     // Now check for floppy drive information
-    res = parse_disk(&pc->floppy_drives[0], get_section(global, "fda"));
-    res |= parse_disk(&pc->floppy_drives[1], get_section(global, "fdb"));
+    res = parse_disk(&pc->floppy_drives[0], get_section(global, "fda"), 4);
+    res |= parse_disk(&pc->floppy_drives[1], get_section(global, "fdb"), 5);
     if (res) {
         fprintf(stderr, "Unable to initialize floppy drive images\n");
         goto fail;
