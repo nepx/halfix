@@ -286,7 +286,7 @@ static inline int get_ctrl_id(struct ide_controller* ctrl)
 }
 static inline int selected_drive_has_media(struct ide_controller* ctrl)
 {
-    return SELECTED(ctrl, media_inserted);
+    return SELECTED(ctrl, type) != DRIVE_TYPE_NONE;
 }
 static inline int controller_has_media(struct ide_controller* ctrl)
 {
