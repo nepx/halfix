@@ -2227,6 +2227,14 @@ static int decode_0F18(struct decoded_instruction* i)
     return 0;
 }
 
+static int decode_0F1F(struct decoded_instruction* i){
+    uint8_t modrm = rb();
+    parse_modrm(i, modrm, 0);
+    i->flags = 0;
+    i->handler = op_nop;
+    return 0;
+}
+
 static int decode_0F20(struct decoded_instruction* i)
 {
     uint8_t modrm = rb();
@@ -3745,7 +3753,7 @@ static const decode_handler_t table0F[256] = {
     /* 0F 1C */ decode_invalid0F,
     /* 0F 1D */ decode_invalid0F,
     /* 0F 1E */ decode_invalid0F,
-    /* 0F 1F */ decode_invalid0F,
+    /* 0F 1F */ decode_0F1F,
     /* 0F 20 */ decode_0F20,
     /* 0F 21 */ decode_0F21,
     /* 0F 22 */ decode_0F22,
