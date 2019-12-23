@@ -197,6 +197,8 @@ void cpu_reset(void)
     // Clear EFLAGS except for reserved bits
     cpu.eflags = 2;
 
+    cpu.page_attribute_tables = 0x0007040600070406LL;
+
     // Reset APIC MSR, if APIC is enabled
     if (apic_is_enabled())
         cpu.apic_base = 0xFEE00900; // We are BSP
@@ -220,7 +222,7 @@ int cpu_apic_connected(void)
 static void cpu_state(void)
 {
     // <<< BEGIN AUTOGENERATE "state" >>>
-    struct bjson_object* obj = state_obj("cpu", 42);
+    struct bjson_object* obj = state_obj("cpu", 43);
     state_field(obj, 64, "cpu.reg32", &cpu.reg32);
     state_field(obj, 128, "cpu.xmm32", &cpu.xmm32);
     state_field(obj, 4, "cpu.mxcsr", &cpu.mxcsr);
@@ -255,6 +257,7 @@ static void cpu_state(void)
     state_field(obj, 256, "cpu.mtrr_fixed", &cpu.mtrr_fixed);
     state_field(obj, 128, "cpu.mtrr_variable_addr_mask", &cpu.mtrr_variable_addr_mask);
     state_field(obj, 8, "cpu.mtrr_deftype", &cpu.mtrr_deftype);
+    state_field(obj, 8, "cpu.page_attribute_tables", &cpu.page_attribute_tables);
     state_field(obj, 4, "cpu.a20_mask", &cpu.a20_mask);
     state_field(obj, 8, "cpu.apic_base", &cpu.apic_base);
     state_field(obj, 8, "cpu.tsc_fudge", &cpu.tsc_fudge);

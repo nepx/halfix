@@ -317,6 +317,9 @@ struct cpu {
     uint64_t mtrr_variable_addr_mask[16]; // Order: addr[0], mask[0], addr[1], mask[1]
     uint64_t mtrr_deftype;
 
+    // Related, but not identical -- Page Attribute Tables
+    uint64_t page_attribute_tables;
+
     // ========================================================================
     // Miscellaneous state
     // ========================================================================

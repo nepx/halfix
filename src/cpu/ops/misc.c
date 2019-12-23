@@ -115,6 +115,9 @@ int rdmsr(uint32_t index, uint32_t* high, uint32_t* low)
     case 0x200 ... 0x20F:
         value = cpu.mtrr_variable_addr_mask[index ^ 0x200];
         break;
+    case 0x277:
+        value = cpu.page_attribute_tables;
+        break;
     case 0x2FF:
         value = cpu.mtrr_deftype;
         break;
@@ -172,6 +175,9 @@ int wrmsr(uint32_t index, uint32_t high, uint32_t low)
         break;
     case 0x200 ... 0x20F:
         cpu.mtrr_variable_addr_mask[index ^ 0x200] = msr_value;
+        break;
+    case 0x277:
+        cpu.page_attribute_tables = msr_value;
         break;
     case 0x2FF:
         cpu.mtrr_deftype = msr_value;
