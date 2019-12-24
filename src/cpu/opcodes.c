@@ -2349,7 +2349,7 @@ OPTYPE op_bsr_r32e32(struct decoded_instruction* i)
 {
     int flags = i->flags, linaddr = cpu_get_linaddr(flags, i), data;
     cpu_read32(linaddr, data, cpu.tlb_shift_read);
-    R32(I_REG(flags)) = bsr32(data, R16(I_REG(flags)));
+    R32(I_REG(flags)) = bsr32(data, R32(I_REG(flags)));
     NEXT(flags);
 }
 
