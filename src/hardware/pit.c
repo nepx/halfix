@@ -163,11 +163,12 @@ static int pit_get_out(struct pit_channel* pit)
 {
     // Get cycles elapsed since we reloaded the count register
     uint32_t elapsed = pit_itick_to_counter(get_now() - pit->last_load_time);
+    if(pit->count == 0) return 0;
     uint32_t current_counter = elapsed % pit->count; // The current value of the counter
     switch (pit->mode) {
     case 0:
-    case 1:
-        return (pit->count >= elapsed) ^ pit->mode; // They are the opposites of each other
+    case 1: // XXX : one shot mode?
+        return (pit->count >= current_counter) ^ pit->mode; // They are the opposites of each other
     case 2:
         return current_counter != 1;
     case 3: // XXX: Is this right?
@@ -402,7 +403,7 @@ static uint32_t pit_speaker_readb(uint32_t port)
     UNUSED(port);
     // XXX: Use channel 2 for timing, not channel 0
     pit.chan[2].timer_flipflop ^= 1;
-    return pit.chan[2].timer_flipflop << 4 | (pit_get_out(&pit.chan[0]) << 5);
+    return pit.chan[2].timer_flipflop << 4 | (pit_get_out(&pit.chan[2]) << 5);
 }
 static void pit_speaker_writeb(uint32_t port, uint32_t data)
 {
