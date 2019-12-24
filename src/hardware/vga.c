@@ -11,6 +11,7 @@
 #include "display.h"
 #include "io.h"
 #include "state.h"
+#include "cpuapi.h"
 #include <string.h>
 
 #define VGA_LOG(x, ...) LOG("VGA", x, ##__VA_ARGS__)
@@ -77,6 +78,10 @@ static struct vga_info {
     uint16_t vbe_index, vbe_version, vbe_enable;
     uint32_t vbe_regs[10];
     uint32_t vbe_bank;
+
+    // PCI VGA stuff
+    uint32_t vgabios_addr;
+    uint8_t* mem;
 
     int vram_size;
     uint8_t* vram;
@@ -151,7 +156,7 @@ static void vga_state(void)
     state_field(obj, 40, "vga.vbe_regs", &vga.vbe_regs);
     state_field(obj, 4, "vga.vbe_bank", &vga.vbe_bank);
     state_field(obj, 4, "vga.vram_size", &vga.vram_size);
-// <<< END AUTOGENERATE "state" >>>
+    // <<< END AUTOGENERATE "state" >>>
     if (state_is_reading()) {
         vga_update_size();
         vga_alloc_mem();
@@ -388,9 +393,11 @@ static
         case 4:
             diffxor = vga.vbe_enable ^ data;
             if (diffxor) {
-                if(!(diffxor & VBE_DISPI_ENABLED)){
+                if (!(diffxor & VBE_DISPI_ENABLED)) {
                     data &= ~VBE_DISPI_LFB_ENABLED;
                     data |= vga.vbe_enable & VBE_DISPI_LFB_ENABLED;
+                    if (!(data & VBE_DISPI_NOCLEARMEM)) // should i use diffxor or data?
+                        memset(vga.vram, 0, vga.vram_size);
                 }
                 VGA_LOG(" Set VBE enable=%04x bpp=%d diffxor=%04x current=%04x\n", data, vga.vbe_regs[3], diffxor, vga.vbe_enable);
                 vga.vbe_enable = data;
@@ -400,12 +407,6 @@ static
                 int width = vga.vbe_regs[1], // AKA xres
                     height = vga.vbe_regs[2]; // AKA yres
                 //int bytes_per_pixel = (vga.vbe_regs[3] + 7) >> 3, total_bytes_used = bytes_per_pixel * width * height;
-
-                if (diffxor & VBE_DISPI_LFB_ENABLED) {
-                    // Clear VRAM, if needed
-                    if (!(data & VBE_DISPI_NOCLEARMEM)) // should i use diffxor or data?
-                        memset(vga.vram, 0, vga.vram_size);
-                }
 
                 vga.total_height = height;
                 vga.total_width = width;
@@ -1151,7 +1152,7 @@ void vga_update(void)
                 case RENDER_16BPP:
                     if (!vga.vbe_scanlines_modified[vga.current_scanline])
                         break;
-                    for (unsigned int i = 0; i < vga.total_width; i++, vram_addr+=2) {
+                    for (unsigned int i = 0; i < vga.total_width; i++, vram_addr += 2) {
                         uint16_t word = *((uint16_t*)&vga.vram[vram_addr]);
                         int red = word >> 11 << 3,
                             green = (word >> 5 & 63) << 2, // Note: 6 bits for green
@@ -1165,7 +1166,7 @@ void vga_update(void)
 
                     vga.vbe_scanlines_modified[vga.current_scanline] = 0;
                     break;
-                case RENDER_24BPP: 
+                case RENDER_24BPP:
                     if (!vga.vbe_scanlines_modified[vga.current_scanline])
                         break;
                     for (unsigned int i = 0; i < vga.total_width; i++, vram_addr += 3) {
@@ -1255,7 +1256,7 @@ static
         if (addr & 0x80000000) // read from LFB
             return vga.vram[addr - VBE_LFB_BASE];
         else // banked read
-            return vga.vram[vga.vbe_regs[5] + (addr & 0xFFFF)];
+            return vga.vram[vga.vbe_regs[5] + (addr & 0x1FFFF)];
     }
 
     addr -= vga.vram_window_base;
@@ -1341,7 +1342,7 @@ static
             else
                 return;
         } else {
-            vram_offset = vga.vbe_regs[5] + (addr & 0xFFFF);
+            vram_offset = vga.vbe_regs[5] + (addr & 0x1FFFF);
             if (vga.vbe_enable & VBE_DISPI_LFB_ENABLED)
                 return;
             else
@@ -1455,6 +1456,51 @@ static
 #endif
 }
 
+static const uint8_t pci_config_space[16] = { 121, 18, 63, 63, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0 };
+static int vga_pci_write(uint8_t* ptr, uint8_t addr, uint8_t data)
+{
+    switch (addr) {
+    case 0x10:
+        // Do what Bochs does
+        ptr[addr] = (ptr[addr] & 0x0F) | (data & 0xF0);
+        return 0;
+    case 0x13: // VBE base pointers
+        break;
+    case 0x33: { // ROM address
+        uint32_t new_mmio = ptr[0x30] | (ptr[0x31] << 8) | (ptr[0x32] << 16) | (data << 24);
+        new_mmio &= ~1; // TODO: What if the bit is clear (disabling ROM access)?
+        // XXX hack
+        if(new_mmio == 0xFFFFFFFE) break;
+
+        // XXX: Don't do this here
+        vga.mem = cpu_get_ram_ptr();
+
+        io_remap_mmio_read(vga.vgabios_addr, new_mmio);
+        vga.vgabios_addr = new_mmio;
+        VGA_LOG("Remapping VGA ROM to: %08x\n", new_mmio);
+        break;
+    }
+    }
+    return 0;
+}
+static uint32_t vga_rom_readb(uint32_t addr)
+{
+    return vga.mem[addr - vga.vgabios_addr + 0xC0000];
+}
+static void vga_rom_writeb(uint32_t addr, uint32_t data)
+{
+    UNUSED(addr | data);
+}
+static void vga_pci_init(void)
+{
+    // Dummy PCI VGA controller.
+    uint8_t* dev = pci_create_device(0, 12, 3, vga_pci_write);
+    pci_copy_default_configuration(dev, (void*)pci_config_space, 16);
+    dev[0x10] = 8; // VBE enabled
+    io_register_mmio_read(vga.vgabios_addr = 0xC0000000, 0x20000, vga_rom_readb, NULL, NULL);
+    io_register_mmio_write(vga.vgabios_addr, 0x20000, vga_rom_writeb, NULL, NULL);
+}
+
 void vga_init(int memory_size)
 {
     io_register_reset(vga_reset);
@@ -1473,8 +1519,12 @@ void vga_init(int memory_size)
 
     vga.vram_size = memory_size;
     vga_alloc_mem();
+
+    //UNUSED(vga_pci_init);
+    vga_pci_init();
 }
 
-void* vga_get_raw_vram(void){
+void* vga_get_raw_vram(void)
+{
     return vga.vram;
 }
