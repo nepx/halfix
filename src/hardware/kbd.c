@@ -292,7 +292,8 @@ static void kbd_write(uint32_t port, uint32_t data)
             break;
         case 0xF0 ... 0xFF: // Pulse output line
             if ((data & 1) == 0) {
-                KBD_FATAL("TODO: trigger system reset\n");
+                printf("System reset requested -- start the emulator again\n");
+                exit(0);
             }
             break;
         case 0xA1: // Read keyboard BIOS version
