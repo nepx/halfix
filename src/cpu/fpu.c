@@ -165,6 +165,7 @@ static void fpu_set_control_word(uint16_t control_word)
 
 static void fpu_state(void)
 {
+#ifndef LIBCPU
     // <<< BEGIN AUTOGENERATE "state" >>>
     struct bjson_object* obj = state_obj("fpu", 9 + 16);
     state_field(obj, 4, "fpu.ftop", &fpu.ftop);
@@ -186,6 +187,7 @@ static void fpu_state(void)
     }
     if (state_is_reading())
         fpu_set_control_word(fpu.control_word);
+#endif
 }
 
 static uint16_t fpu_get_status_word(void)
@@ -1648,7 +1650,7 @@ int fpu_fxsave(uint32_t linaddr)
     if (fpu_nm_check())
         return 1;
 
-    cpu_access_verify(linaddr, linaddr + 512, cpu.tlb_shift_write);
+    if(cpu_access_verify(linaddr, linaddr + 512, cpu.tlb_shift_write)) return 1;
     cpu_write16(linaddr + 0, fpu.control_word, cpu.tlb_shift_write);
     cpu_write16(linaddr + 2, fpu_get_status_word(), cpu.tlb_shift_write);
     // "Abridge" tag word
@@ -1694,7 +1696,7 @@ int fpu_fxrstor(uint32_t linaddr)
         EXCEPTION_GP(0);
     if (fpu_nm_check())
         return 1;
-    cpu_access_verify(linaddr, linaddr + 512, cpu.tlb_shift_read);
+    if(cpu_access_verify(linaddr, linaddr + 512, cpu.tlb_shift_read)) return 1;
 
     uint32_t mxcsr;
     cpu_read32(linaddr + 24, mxcsr, cpu.tlb_shift_read);
