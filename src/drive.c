@@ -160,7 +160,7 @@ static void* drive_read_file(struct drive_internal_info* this, char* fn)
         data = malloc(this->block_size);
         size = lseek(fd, 0, SEEK_END);
         lseek(fd, 0, SEEK_SET);
-        if (read(fd, data, size) != size)
+        if (read(fd, data, size) != (ssize_t)size)
             DRIVE_FATAL("Could not read file %s\n", fn);
         close(fd);
         return data;
@@ -171,7 +171,7 @@ static void* drive_read_file(struct drive_internal_info* this, char* fn)
     size = lseek(fd, 0, SEEK_END);
     lseek(fd, 0, SEEK_SET);
     readbuf = malloc(size);
-    if (read(fd, readbuf, size) != size)
+    if (read(fd, readbuf, size) != (ssize_t)size)
         DRIVE_FATAL("Could not read file %s\n", fn);
 
     z_stream inflate_stream = { 0 };
@@ -788,10 +788,9 @@ static int drive_simple_fetch_cache(struct simple_driver* info, void* buffer, dr
 static int drive_simple_add_cache(struct simple_driver* info, drv_offset_t offset)
 {
     void* dest = info->blocks[offset / info->block_size] = malloc(info->block_size);
-    DRIVE_LOG("Cache Offset: %lx\n", offset);
     lseek(info->fd, offset & (drv_offset_t)~(info->block_size - 1), SEEK_SET); // Seek to the beginning of the current block
     if ((uint32_t)read(info->fd, dest, info->block_size) != info->block_size)
-        DRIVE_FATAL("Unable to read %ld bytes from image file\n", info->block_size);
+        DRIVE_FATAL("Unable to read %d bytes from image file\n", (int)info->block_size);
     return 0;
 }
 
@@ -848,7 +847,6 @@ static int drive_simple_read(void* this, void* cb_ptr, void* buffer, uint32_t si
     drv_offset_t end = size + offset;
     while (offset != end) {
         if (!drive_simple_fetch_cache(info, buffer, offset)) {
-            DRIVE_LOG("Offset: %lx\n", offset);
             lseek(info->fd, offset, SEEK_SET);
             if (read(info->fd, buffer, 512) != 512)
                 DRIVE_FATAL("Unable to read 512 bytes from image file\n");
