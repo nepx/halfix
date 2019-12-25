@@ -46,4 +46,7 @@ void cpu_instrument_pre_fpu(void);
 // Called when a DMA operation modifies memory
 void cpu_instrument_dma(uint32_t addr, void* data, uint32_t length);
 
+// Called when the TLB gets full and needs to be refilled
+void cpu_instrument_tlb_full(void);
+
 #endif

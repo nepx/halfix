@@ -4,6 +4,12 @@
 #include "cpu/opcodes.h"
 #include "cpu/simd.h"
 
+#ifdef LIBCPU
+void* get_phys_ram_ptr(uint32_t addr, int write);
+#else
+#define get_phys_ram_ptr(a, b) (cpu.mem + (a))
+#endif
+
 // ============================================================================
 // Important state variable used by the emulator
 // ============================================================================
@@ -3373,9 +3379,9 @@ static void set_smc(int length, uint32_t lin)
 int cpu_decode(struct trace_info* info, struct decoded_instruction* i)
 {
     state_hash = cpu.state_hash;
-    rawp = cpu.mem + cpu.phys_eip;
+    rawp = get_phys_ram_ptr(cpu.phys_eip, 0);
     uint8_t* rawp_base = rawp;
-    uintptr_t high_mark = (uintptr_t)(cpu.mem + ((cpu.phys_eip & ~0xFFF) + 0xFF0));
+    uintptr_t high_mark = (uintptr_t)(get_phys_ram_ptr ((cpu.phys_eip & ~0xFFF) + 0xFF0, 0));
     void* original = i;
     //if(cpu.phys_eip == 0x1102b8) __asm__("int3");
 

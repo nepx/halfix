@@ -5,6 +5,12 @@
 
 #define EXCEPTION_HANDLER return 1
 
+#ifdef LIBCPU
+void* get_phys_ram_ptr(uint32_t addr, int write);
+#else
+#define get_phys_ram_ptr(a, b) (cpu.mem + a)
+#endif
+
 void cpu_mmu_tlb_flush(void)
 {
     for (unsigned int i = 0; i < cpu.tlb_entry_count; i++) {
@@ -52,17 +58,21 @@ static void cpu_set_tlb_entry(uint32_t lin, uint32_t phys, int user, int write, 
         tag_write = 1;
     }
 
-    if (cpu.tlb_entry_count >= MAX_TLB_ENTRIES) // Flush TLB
+    if (cpu.tlb_entry_count >= MAX_TLB_ENTRIES) {// Flush TLB
         cpu_mmu_tlb_flush();
+#ifdef INSTRUMENT
+        cpu_instrument_tlb_full();
+#endif
+    }
 
     int system_read = tag << TLB_SYSTEM_READ,
         system_write = (tag_write | (!write ? 3 : 0)) << TLB_SYSTEM_WRITE,
         user_read = (tag | (!user ? 3 : 0)) << TLB_USER_READ,
-        user_write = (tag_write | (!user | !write ? 3 : 0)) << TLB_USER_WRITE;
+        user_write = (tag_write | ((!user | !write) ? 3 : 0)) << TLB_USER_WRITE;
 
     uint32_t entry = lin >> 12;
     cpu.tlb_entry_indexes[cpu.tlb_entry_count++] = entry | (global ? 0x80000000 : 0);
-    cpu.tlb[entry] = (void*)(((uintptr_t)cpu.mem + phys) - lin);
+    cpu.tlb[entry] = (void*)(((uintptr_t)(get_phys_ram_ptr(phys, write))) - lin);
     cpu.tlb_tags[entry] = system_read | system_write | user_read | user_write;
 }
 
@@ -177,6 +187,8 @@ int cpu_mmu_translate(uint32_t lin, int shift)
                 cpu_instrument_paging_modified(page_table_entry_addr);
 #endif
             }
+            //if(lin == 0xe1001332) __asm__("int3");
+        //CPU_LOG("lin: %08x global=%d bochs=%08x %d\n", lin, page_table_entry >> 8 & 1, lin >> 12 & 2047, x);
         cpu_set_tlb_entry(lin & ~0xFFF, page_table_entry & ~0xFFF, user, write, page_table_entry & 0x100);
         }
         return 0;
@@ -185,12 +197,11 @@ int cpu_mmu_translate(uint32_t lin, int shift)
         cpu.cr[2] = lin;
         error_code |= (write << 1) | (user << 2);
         CPU_LOG(" ---- Page fault information dump ----\n");
-        CPU_LOG("PDE Entry addr: %08x PDE Entry: %08x\n", page_directory_entry_addr << 2, page_directory_entry);
-        CPU_LOG("PTE Entry addr: %08x PTE Entry: %08x\n", page_table_entry_addr << 2, page_table_entry);
+        CPU_LOG("PDE Entry addr: %08x PDE Entry: %08x\n", page_directory_entry_addr, page_directory_entry);
+        CPU_LOG("PTE Entry addr: %08x PTE Entry: %08x\n", page_table_entry_addr, page_table_entry);
         CPU_LOG("Address to translate: %08x [%s %sing]\n", lin, user ? "user" : "kernel", write ? "writ" : "read");
         CPU_LOG("CR3: %08x CPL: %d\n", cpu.cr[3], cpu.cpl);
         CPU_LOG("EIP: %08x ESP: %08x\n", VIRT_EIP(), cpu.reg32[ESP]);
-        //if(lin == 0x804d4da0)__asm__("int3");
         //if(cpu.cpl == 3 && !user) __asm__("int3");
         EXCEPTION_PF(error_code);
         return -1; // Never reached

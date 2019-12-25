@@ -221,6 +221,7 @@ int cpu_apic_connected(void)
 
 static void cpu_state(void)
 {
+#ifndef LIBCPU
     // <<< BEGIN AUTOGENERATE "state" >>>
     struct bjson_object* obj = state_obj("cpu", 43);
     state_field(obj, 64, "cpu.reg32", &cpu.reg32);
@@ -279,6 +280,7 @@ static void cpu_state(void)
         // In many cases, OS/2 loads the base/limit/access into the segment register (updating the cache) and then modifies descriptors in memorys.
         //for(int i=0;i<6;i++) cpu_load_seg_value_mov(i, cpu.seg[i]);
     }
+#endif
 }
 
 // Initializes CPU
