@@ -193,6 +193,8 @@ function parse(fields, fn) {
         if (inUnion) {
             while (!is("}")) eat();
             mustBe("}");
+            // If we use the __attribute__ keyword, then we just skip up to the semicolon
+            if(is("__attribute__((aligned(16)))")) while(!is(";")) eat();
             mustBe(";");
             inUnion = false;
         }
