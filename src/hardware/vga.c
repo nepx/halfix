@@ -164,7 +164,7 @@ static void vga_state(void)
     state_file(vga.vram_size, "vram", vga.vram);
 
     // Force a redraw.
-    vga.memory_modified = 1;
+    vga.memory_modified = 3;
 }
 
 enum {
@@ -219,7 +219,7 @@ static void vga_complete_redraw(void)
     vga.framebuffer_offset = 0;
 
     // Force a complete redraw of the screen, and to do that, pretend that memory has been written.
-    vga.memory_modified = 1;
+    vga.memory_modified = 3;
 }
 
 static void vga_change_renderer(void)
@@ -936,6 +936,7 @@ void vga_update(void)
     }
     if (!vga.memory_modified)
         return;
+    vga.memory_modified &= ~(1 << (vga.current_scanline != 0));
 
     uint32_t
         //current = vga.current_scanline,
@@ -1203,9 +1204,6 @@ void vga_update(void)
 
             total_scanlines_drawn = 0;
 
-            // No memory has been modified since the frame has been rendered.
-            vga.memory_modified = 0;
-
             // also, one frame has been completely drawn
             //framectr = (framectr + 1) & 0x3F;
         }
@@ -1443,7 +1441,7 @@ static
         }
     }
 
-    vga.memory_modified = 1;
+    vga.memory_modified = 3;
 
 #if 0
     VGA_LOG("Writing %02x to vram=0x%08x, phys=%08x [%c%c%c%c, offset: 0x%x] d32: %08x vram: %08x latch: %08x wmode: %d\n", data, addr, vga.vram_window_base + addr,
@@ -1520,8 +1518,8 @@ void vga_init(int memory_size)
     vga.vram_size = memory_size;
     vga_alloc_mem();
 
-    //UNUSED(vga_pci_init);
-    vga_pci_init();
+    UNUSED(vga_pci_init);
+    //vga_pci_init();
 }
 
 void* vga_get_raw_vram(void)
