@@ -58,7 +58,6 @@ static struct ioapic_info {
 static void ioapic_state(void)
 {
     // <<< BEGIN AUTOGENERATE "state" >>>
-    // Auto-generated on Wed Oct 09 2019 13:00:43 GMT-0700 (PDT)
     struct bjson_object* obj = state_obj("ioapic", 9 + 0);
     state_field(obj, 4, "ioapic.base", &ioapic.base);
     state_field(obj, 4, "ioapic.register_selected", &ioapic.register_selected);
@@ -69,7 +68,7 @@ static void ioapic_state(void)
     state_field(obj, 192, "ioapic.redtbl", &ioapic.redtbl);
     state_field(obj, 4, "ioapic.enabled", &ioapic.enabled);
     state_field(obj, 4, "ioapic.temp_data", &ioapic.temp_data);
-    // <<< END AUTOGENERATE "state" >>>
+// <<< END AUTOGENERATE "state" >>>
 }
 
 static void ioapic_update(void)
@@ -146,7 +145,7 @@ static void ioapic_write(uint32_t addr, uint32_t data)
         IOAPIC_LOG("Write id=%02x data=%08x\n", ioapic.register_selected, data);
         switch (ioapic.register_selected & 0xFF) {
         case IOAPICID:
-            ioapic.id = (data & 15) << 24;
+            ioapic.id = data & 0x0F000000;
             break;
         case 0x10 ... 0x3F: {
             // Modify I/O indirection table. Note that each quantity is 64 bits wide. Modifying this is like modifying the PIC's IMR
