@@ -1370,7 +1370,7 @@ static void ide_read_sectors(struct ide_controller* ctrl, int lba48, int chunk_c
 #ifdef EMSCRIPTEN
     IDE_LOG("Reading %d sectors at %llx\n", sector_count, sector_offset);
 #else
-    IDE_LOG("Reading %d sectors at %lx\n", sector_count, sector_offset);
+    IDE_LOG("Reading %d sectors at %x\n", sector_count, (uint32_t)sector_offset);
 #endif
     if(sector_offset > 0xFFFFFFFF) IDE_LOG("Big sector!!\n");
     int res = drive_read(SELECTED(ctrl, info), ctrl, ctrl->pio_buffer, sectors_to_read * 512, sector_offset * (uint64_t)512, ide_read_sectors_callback);
@@ -1675,6 +1675,12 @@ static void ide_write(uint32_t port, uint32_t data)
                 ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_DSC;
                 ide_raise_irq(ctrl);
             }
+            break;
+        case 0xE5: // Windows NT 4 SP6
+            IDE_LOG("Command: CHECK POWER MODE\n");
+            ctrl->status = ATA_STATUS_DRDY;
+            ctrl->sector_count = 255;
+            ide_raise_irq(ctrl);
             break;
         case 0xE0:
         case 0xE1:
