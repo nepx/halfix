@@ -37,7 +37,6 @@ static struct cmos cmos;
 static void cmos_state(void)
 {
     // <<< BEGIN AUTOGENERATE "state" >>>
-// Auto-generated on Wed Oct 09 2019 13:00:43 GMT-0700 (PDT)
     struct bjson_object* obj = state_obj("cmos", 10);
     state_field(obj, 128, "cmos.ram", &cmos.ram);
     state_field(obj, 1, "cmos.addr", &cmos.addr);

@@ -55,7 +55,6 @@ static struct dma_controller dma;
 static void dma_state(void)
 {
     // <<< BEGIN AUTOGENERATE "state" >>>
-    // Auto-generated on Wed Oct 09 2019 13:00:43 GMT-0700 (PDT)
     struct bjson_object* obj = state_obj("dma", 11);
     state_field(obj, 32, "dma.addr_high", &dma.addr_high);
     state_field(obj, 16, "dma.start_addr", &dma.start_addr);
@@ -68,7 +67,7 @@ static void dma_state(void)
     state_field(obj, 2, "dma.request", &dma.request);
     state_field(obj, 2, "dma.mask", &dma.mask);
     state_field(obj, 2, "dma.flipflop", &dma.flipflop);
-    // <<< END AUTOGENERATE "state" >>>
+// <<< END AUTOGENERATE "state" >>>
 }
 
 static void dma_run_transfers(void);
