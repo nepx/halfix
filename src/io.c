@@ -28,7 +28,7 @@ uint32_t io_default_readb(uint32_t port)
 uint32_t io_default_readw(uint32_t port)
 {
     uint16_t res = io_readb(port);
-    return res | io_readb(port + 1);
+    return res | io_readb(port + 1) << 8;
 }
 uint32_t io_default_readd(uint32_t port)
 {
@@ -124,7 +124,7 @@ uint8_t io_readb(uint32_t port)
     uint8_t data = read[port & 0xFFFF][0](port);
     //cpu_io_read(port, data, 1);
 #ifndef LOG_ALL_IO
-    if(port != 0x1F7 && port != 0x92 && port != 0x3c9 && (port & ~1) != 0x70 && port != 0x61 && port != 0x1F0)
+    if(port != 0x1F7 && port != 0x92 && port != 0x3c9 && (port & ~1) != 0x70 && port != 0x1F0)
 #endif 
     IO_LOG("readb: port=0x%04x res=0x%02x\n", port, data);
     return data;
@@ -224,10 +224,8 @@ static uint32_t io_default_mmio_readd(uint32_t addr)
     return result | io_handle_mmio_read(addr + 3, 0) << 24;
 }
 
-static void io_default(uint32_t addr, uint32_t data) { UNUSED(addr | data); }
-
 // Memory mapped locations are so few and far in between that it's ok to do it the simple way:
-#define MAX_MMIO 5
+#define MAX_MMIO 10
 struct mmio {
     io_read r[3];
     io_write w[3];
@@ -266,16 +264,15 @@ void io_register_mmio_write(uint32_t start, uint32_t length, io_write b, io_writ
 
     mmio_pos[1]++;
 }
-void io_register_mmio_rom(uint32_t start, uint32_t length)
-{
-    mmio[mmio_pos[0]].begin = start;
-    mmio[mmio_pos[0]].end = start + length;
-    mmio[mmio_pos[0]].r[0] = io_default_mmio_readb; // Should not get here
-    mmio[mmio_pos[0]].r[1] = io_default_mmio_readw;
-    mmio[mmio_pos[0]].r[2] = io_default_mmio_readd;
-    mmio[mmio_pos[0]].w[0] = io_default; // Should not get here
-    mmio[mmio_pos[0]].w[1] = io_default;
-    mmio[mmio_pos[0]].w[2] = io_default;
+void io_remap_mmio_read(uint32_t oldstart, uint32_t newstart){
+    for(int i=0;i<MAX_MMIO;i++){
+        if(mmio[i].begin == oldstart){
+            mmio[i].begin = newstart;
+            mmio[i].end = (mmio[i].end - oldstart) + newstart;
+            return;
+        }
+    }
+    IO_LOG("Unable to remap MMIO range at %08x to %08x\n", oldstart, newstart);
 }
 
 void io_handle_mmio_write(uint32_t addr, uint32_t data, int size)
