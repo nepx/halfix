@@ -127,6 +127,8 @@ static int sdl_keysym_to_scancode(int sym)
             return KEYMOD_INVALID;
         }
         return 1;
+    case SDLK_EQUALS:
+        return 0x0D;
     case SDLK_RETURN:
         return 0x1C;
     case SDLK_a:
@@ -267,8 +269,7 @@ void display_handle_events(void)
             //printf("KeyDown\n");
             display_set_title();
             send_keymod_scancode(event.key.keysym.mod, 0);
-            int s = sdl_keysym_to_scancode(event.key.keysym.sym);
-            display_kbd_send_key(s);
+            display_kbd_send_key(sdl_keysym_to_scancode(event.key.keysym.sym));
             break;
         }
         case SDL_MOUSEBUTTONDOWN:
@@ -288,7 +289,7 @@ void display_handle_events(void)
                     display_mouse_capture_update(1);
                 else
 #endif
-                    kbd_mouse_down(MOUSE_STATUS_NOCHANGE, MOUSE_STATUS_NOCHANGE, k);
+                     kbd_mouse_down(MOUSE_STATUS_NOCHANGE, MOUSE_STATUS_NOCHANGE, k);
                 break;
             }
             break;
@@ -309,6 +310,16 @@ void display_handle_events(void)
     }
 }
 
+// Send the CTRL+ALT+DEL sequence to the emulator
+#ifdef EMSCRIPTEN
+EMSCRIPTEN_KEEPALIVE
+#endif
+void display_send_ctrl_alt_del(int down){
+    down = down ? 0 : 0x80;
+    display_kbd_send_key(0x1D | down); // CTRL
+    display_kbd_send_key(0xE038 | down); // ALT
+    display_kbd_send_key(0xE053 | down); // DEL
+}
 
 void display_init(void)
 {
