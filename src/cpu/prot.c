@@ -12,7 +12,7 @@ int cpu_prot_set_cr(int cr, uint32_t v)
             cpu_mmu_tlb_flush();
         break;
     case 3: // PDBR
-        cpu.cr[3] &= ~0xFFF;
+        cpu.cr[3] &= ~31;
         if(cpu.cr[4] & CR4_PGE)
             cpu_mmu_tlb_flush_nonglobal();
         else

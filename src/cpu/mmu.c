@@ -25,13 +25,14 @@ void cpu_mmu_tlb_flush_nonglobal(void)
 {
     for (unsigned int i = 0; i < cpu.tlb_entry_count; i++) {
         uint32_t entry = cpu.tlb_entry_indexes[i];
-        if(entry & 0x80000000) continue;
+        if (entry & 0x80000000)
+            continue;
         entry &= (1 << 20) - 1;
         cpu.tlb[entry] = NULL;
         cpu.tlb_tags[entry] = 0xFF;
         cpu.tlb_entry_indexes[i] = -1;
     }
-    cpu.tlb_entry_count = cpu.tlb_entry_count; // We may still have global entries. 
+    cpu.tlb_entry_count = cpu.tlb_entry_count; // We may still have global entries.
 }
 
 static void cpu_set_tlb_entry(uint32_t lin, uint32_t phys, int user, int write, int global)
@@ -58,7 +59,7 @@ static void cpu_set_tlb_entry(uint32_t lin, uint32_t phys, int user, int write, 
         tag_write = 1;
     }
 
-    if (cpu.tlb_entry_count >= MAX_TLB_ENTRIES) {// Flush TLB
+    if (cpu.tlb_entry_count >= MAX_TLB_ENTRIES) { // Flush TLB
         cpu_mmu_tlb_flush();
 #ifdef INSTRUMENT
         cpu_instrument_tlb_full();
@@ -76,16 +77,23 @@ static void cpu_set_tlb_entry(uint32_t lin, uint32_t phys, int user, int write, 
     cpu.tlb_tags[entry] = system_read | system_write | user_read | user_write;
 }
 
-static uint32_t cpu_read_phys(uint32_t addr){
-    if(addr >= cpu.memory_size || (addr >= 0xA0000 && addr < 0xC0000))
+static uint32_t cpu_read_phys(uint32_t addr)
+{
+    if (addr >= cpu.memory_size || (addr >= 0xA0000 && addr < 0xC0000))
         return io_handle_mmio_read(addr, 2);
-    else return MEM32(addr);
+    else
+        return MEM32(addr);
 }
-static void cpu_write_phys(uint32_t addr, uint32_t data){
-    if(addr >= cpu.memory_size || (addr >= 0xA0000 && addr < 0xC0000))
+static void cpu_write_phys(uint32_t addr, uint32_t data)
+{
+    if (addr >= cpu.memory_size || (addr >= 0xA0000 && addr < 0xC0000))
         io_handle_mmio_write(addr, data, 2);
-    else MEM32(addr) = data;
+    else
+        MEM32(addr) = data;
 }
+
+// Checks reserved fields for error. disable for speed.
+#define PAE_HANDLE_RESERVED 1
 
 // Converts linear to physical address.
 int cpu_mmu_translate(uint32_t lin, int shift)
@@ -94,117 +102,131 @@ int cpu_mmu_translate(uint32_t lin, int shift)
         cpu_set_tlb_entry(lin & ~0xFFF, lin & ~0xFFF, 1, 1, 0);
         return 0; // No page faults at all!
     } else {
-        // https://wiki.osdev.org/Paging
-        // If we do end up page faulting, #PF will push an error code to stack
-        int error_code = 0;
+        if (!(cpu.cr[4] & CR4_PAE)) {
+            // https://wiki.osdev.org/Paging
+            // If we do end up page faulting, #PF will push an error code to stack
+            int error_code = 0;
 
-        // Determine whether we are reading or writing
-        // 0: Supervisor read
-        // 2: Supervisor write
-        // 4: User read
-        // 6: User write
-        int write = shift >> 1 & 1, user = shift >> 2 & 1;
+            // Determine whether we are reading or writing
+            // 0: Supervisor read
+            // 2: Supervisor write
+            // 4: User read
+            // 6: User write
+            int write = shift >> 1 & 1, user = shift >> 2 & 1;
 
-        uint32_t page_directory_entry_addr = cpu.cr[3] + (lin >> 20 & 0xFFC),
-                 page_directory_entry = -1, page_table_entry_addr = -1, page_table_entry = -1;
+            uint32_t page_directory_entry_addr = cpu.cr[3] + (lin >> 20 & 0xFFC),
+                     page_directory_entry = -1, page_table_entry_addr = -1, page_table_entry = -1;
 
-        page_directory_entry = cpu_read_phys(page_directory_entry_addr);
-        
-        if (!(page_directory_entry & 1)) {
-            // Not present
-            CPU_LOG("#PF: PDE not present\n");
-            error_code = 0;
-            goto page_fault;
-        }
+            page_directory_entry = cpu_read_phys(page_directory_entry_addr);
 
-        // Page directory entry seems to be OK, so now check page table entry
-        page_table_entry_addr = ((lin >> 10 & 0xFFC) + (page_directory_entry & ~0xFFF));
-        page_table_entry = -1;
-
-        // If PSE, then return a single large page
-        if (page_directory_entry & 0x80 && cpu.cr[4] & CR4_PSE) {
-                uint32_t new_page_dierctory_entry = page_directory_entry | 0x20 | (write << 6);
-            if (new_page_dierctory_entry != page_directory_entry) {
-                cpu_write_phys(page_directory_entry_addr, new_page_dierctory_entry);
-#ifdef INSTRUMENT
-                cpu_instrument_paging_modified(page_directory_entry_addr);
-#endif
-            }
-            uint32_t phys = (page_directory_entry & 0xFFC00000) | (lin & 0x3FF000);
-            cpu_set_tlb_entry(lin & ~0xFFF, phys, user, write, page_directory_entry & 0x100);
-        } else {
-            page_table_entry = cpu_read_phys(page_table_entry_addr);
-
-            // Check for existance
-            if ((page_table_entry & 1) == 0) {
-                CPU_LOG("#PF: PTE not present\n");
+            if (!(page_directory_entry & 1)) {
+                // Not present
+                CPU_LOG("#PF: PDE not present\n");
                 error_code = 0;
                 goto page_fault;
             }
 
-            // The page directory and page entry are almost identical, so why not just find the bits that are set?
-            // Also, find the NOT at the same time to make finding bits easier.
-            // Normally, we check if bits are not set, but if we NOT the value, then we can simply find out which bits are set.
-            uint32_t combined = ~page_table_entry | ~page_directory_entry;
+            // Page directory entry seems to be OK, so now check page table entry
+            page_table_entry_addr = ((lin >> 10 & 0xFFC) + (page_directory_entry & ~0xFFF));
+            page_table_entry = -1;
 
-            int write_mask = write << 1;
-            if (combined & write_mask) { // Normally (combined & 2) == 0
-                // So far, we have determined that
-                //  - Bit 1 of either PTE or PDE is 0 (because bit 1 of inverse is 1)
-                //  - Write is set (because write_mask != 0)
+            // If PSE, then return a single large page
+            if (page_directory_entry & 0x80 && cpu.cr[4] & CR4_PSE) {
+                uint32_t new_page_dierctory_entry = page_directory_entry | 0x20 | (write << 6);
+                if (new_page_dierctory_entry != page_directory_entry) {
+                    cpu_write_phys(page_directory_entry_addr, new_page_dierctory_entry);
+#ifdef INSTRUMENT
+                    cpu_instrument_paging_modified(page_directory_entry_addr);
+#endif
+                }
+                uint32_t phys = (page_directory_entry & 0xFFC00000) | (lin & 0x3FF000);
+                cpu_set_tlb_entry(lin & ~0xFFF, phys, user, write, page_directory_entry & 0x100);
+            } else {
+                page_table_entry = cpu_read_phys(page_table_entry_addr);
 
-                // Supervisor can write to read-only pages if and only if CR0.WP is clear
-                if (user || (cpu.cr[0] & CR0_WP)) {
-                    CPU_LOG("#PF: Illegal write\n");
+                // Check for existance
+                if ((page_table_entry & 1) == 0) {
+                    CPU_LOG("#PF: PTE not present\n");
+                    error_code = 0;
+                    goto page_fault;
+                }
+
+                // The page directory and page entry are almost identical, so why not just find the bits that are set?
+                // Also, find the NOT at the same time to make finding bits easier.
+                // Normally, we check if bits are not set, but if we NOT the value, then we can simply find out which bits are set.
+                uint32_t combined = ~page_table_entry | ~page_directory_entry;
+
+                int write_mask = write << 1;
+                if (combined & write_mask) { // Normally (combined & 2) == 0
+                    // So far, we have determined that
+                    //  - Bit 1 of either PTE or PDE is 0 (because bit 1 of inverse is 1)
+                    //  - Write is set (because write_mask != 0)
+
+                    // Supervisor can write to read-only pages if and only if CR0.WP is clear
+                    if (user || (cpu.cr[0] & CR0_WP)) {
+                        CPU_LOG("#PF: Illegal write\n");
+                        error_code = 1;
+                        goto page_fault;
+                    }
+
+                    // If we are still here, then that means that we are a supervisor and CR0.WP is not set, so we're allowed to write to the page
+                }
+
+                int user_mask = user << 2;
+                if (combined & user_mask) { // Normally (combined & 4) == 0
+                    // So far, we have determined that
+                    //  - Bit 2 of either PTE or PDE is 0 (because bit 2 of inverse is 4)
+                    //  - User is set (because user_mask != 0)
+                    CPU_LOG("#PF: User trying to write to supervisor page\n");
                     error_code = 1;
                     goto page_fault;
                 }
 
-                // If we are still here, then that means that we are a supervisor and CR0.WP is not set, so we're allowed to write to the page
-            }
-
-            int user_mask = user << 2;
-            if (combined & user_mask) { // Normally (combined & 4) == 0
-                // So far, we have determined that
-                //  - Bit 2 of either PTE or PDE is 0 (because bit 2 of inverse is 4)
-                //  - User is set (because user_mask != 0)
-                CPU_LOG("#PF: User trying to write to supervisor page\n");
-                error_code = 1;
-                goto page_fault;
-            }
-
-            // Note: Accessed bits should only be set if there wasn't any page fault.
-            if ((page_directory_entry & 0x20) == 0) {
-                cpu_write_phys(page_directory_entry_addr, page_directory_entry | 0x20);
+                // Note: Accessed bits should only be set if there wasn't any page fault.
+                if ((page_directory_entry & 0x20) == 0) {
+                    cpu_write_phys(page_directory_entry_addr, page_directory_entry | 0x20);
 #ifdef INSTRUMENT
-                cpu_instrument_paging_modified(page_directory_entry_addr);
+                    cpu_instrument_paging_modified(page_directory_entry_addr);
 #endif
-            }
-            uint32_t new_page_table_entry = page_table_entry | (write << 6) | 0x20; // Set dirty bit and accessed bit, if needed
-            if (new_page_table_entry != page_table_entry) {
-                cpu_write_phys(page_table_entry_addr, new_page_table_entry);
+                }
+                uint32_t new_page_table_entry = page_table_entry | (write << 6) | 0x20; // Set dirty bit and accessed bit, if needed
+                if (new_page_table_entry != page_table_entry) {
+                    cpu_write_phys(page_table_entry_addr, new_page_table_entry);
 #ifdef INSTRUMENT
-                cpu_instrument_paging_modified(page_table_entry_addr);
+                    cpu_instrument_paging_modified(page_table_entry_addr);
 #endif
+                }
+                //if(lin == 0xe1001332) __asm__("int3");
+                //CPU_LOG("lin: %08x global=%d bochs=%08x %d\n", lin, page_table_entry >> 8 & 1, lin >> 12 & 2047, x);
+                cpu_set_tlb_entry(lin & ~0xFFF, page_table_entry & ~0xFFF, user, write, page_table_entry & 0x100);
             }
-            //if(lin == 0xe1001332) __asm__("int3");
-        //CPU_LOG("lin: %08x global=%d bochs=%08x %d\n", lin, page_table_entry >> 8 & 1, lin >> 12 & 2047, x);
-        cpu_set_tlb_entry(lin & ~0xFFF, page_table_entry & ~0xFFF, user, write, page_table_entry & 0x100);
+            return 0;
+        // A page fault has occurred
+        page_fault:
+            cpu.cr[2] = lin;
+            error_code |= (write << 1) | (user << 2);
+            CPU_LOG(" ---- Page fault information dump ----\n");
+            CPU_LOG("PDE Entry addr: %08x PDE Entry: %08x\n", page_directory_entry_addr, page_directory_entry);
+            CPU_LOG("PTE Entry addr: %08x PTE Entry: %08x\n", page_table_entry_addr, page_table_entry);
+            CPU_LOG("Address to translate: %08x [%s %sing]\n", lin, user ? "user" : "kernel", write ? "writ" : "read");
+            CPU_LOG("CR3: %08x CPL: %d\n", cpu.cr[3], cpu.cpl);
+            CPU_LOG("EIP: %08x ESP: %08x\n", VIRT_EIP(), cpu.reg32[ESP]);
+            //if(cpu.cpl == 3 && !user) __asm__("int3");
+            EXCEPTION_PF(error_code);
+            return -1; // Never reached
+        } else {
+            // PAE enabled
+            // http://www.rcollins.org/ddj/Jul96/
+            // Note that we only support 3 GB of RAM at max, so we're OK with ignoring the top bits
+            uint32_t pdp_addr = (cpu.cr[3] & ~31) | (lin >> 27 & 0x18),
+                     pdpte = cpu_read_phys(pdp_addr);
+            if ((pdpte & 1) == 0)
+                goto pae_page_fault;
+        pae_page_fault:
+            cpu.cr[2] = lin;
+            CPU_FATAL("TODO: PAE translation\n");
+            abort();
         }
-        return 0;
-    // A page fault has occurred
-    page_fault:
-        cpu.cr[2] = lin;
-        error_code |= (write << 1) | (user << 2);
-        CPU_LOG(" ---- Page fault information dump ----\n");
-        CPU_LOG("PDE Entry addr: %08x PDE Entry: %08x\n", page_directory_entry_addr, page_directory_entry);
-        CPU_LOG("PTE Entry addr: %08x PTE Entry: %08x\n", page_table_entry_addr, page_table_entry);
-        CPU_LOG("Address to translate: %08x [%s %sing]\n", lin, user ? "user" : "kernel", write ? "writ" : "read");
-        CPU_LOG("CR3: %08x CPL: %d\n", cpu.cr[3], cpu.cpl);
-        CPU_LOG("EIP: %08x ESP: %08x\n", VIRT_EIP(), cpu.reg32[ESP]);
-        //if(cpu.cpl == 3 && !user) __asm__("int3");
-        EXCEPTION_PF(error_code);
-        return -1; // Never reached
     }
 }
 
