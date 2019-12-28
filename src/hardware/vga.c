@@ -26,7 +26,7 @@
 static struct vga_info {
     // <<< BEGIN STRUCT "struct" >>>
 
-    /// ignore: framebuffer, vram, scanlines_modified, scanlines_to_update
+    /// ignore: framebuffer, vram, scanlines_modified, scanlines_to_update, mem
 
     // CRT Controller
     uint8_t crt[256], crt_index;
@@ -114,7 +114,7 @@ static void vga_alloc_mem(void)
 static void vga_state(void)
 {
     // <<< BEGIN AUTOGENERATE "state" >>>
-    struct bjson_object* obj = state_obj("vga", 41);
+    struct bjson_object* obj = state_obj("vga", 42);
     state_field(obj, 256, "vga.crt", &vga.crt);
     state_field(obj, 1, "vga.crt_index", &vga.crt_index);
     state_field(obj, 32, "vga.attr", &vga.attr);
@@ -155,8 +155,9 @@ static void vga_state(void)
     state_field(obj, 2, "vga.vbe_enable", &vga.vbe_enable);
     state_field(obj, 40, "vga.vbe_regs", &vga.vbe_regs);
     state_field(obj, 4, "vga.vbe_bank", &vga.vbe_bank);
+    state_field(obj, 4, "vga.vgabios_addr", &vga.vgabios_addr);
     state_field(obj, 4, "vga.vram_size", &vga.vram_size);
-    // <<< END AUTOGENERATE "state" >>>
+// <<< END AUTOGENERATE "state" >>>
     if (state_is_reading()) {
         vga_update_size();
         vga_alloc_mem();
@@ -396,8 +397,6 @@ static
                 if (!(diffxor & VBE_DISPI_ENABLED)) {
                     data &= ~VBE_DISPI_LFB_ENABLED;
                     data |= vga.vbe_enable & VBE_DISPI_LFB_ENABLED;
-                    if (!(data & VBE_DISPI_NOCLEARMEM)) // should i use diffxor or data?
-                        memset(vga.vram, 0, vga.vram_size);
                 }
                 VGA_LOG(" Set VBE enable=%04x bpp=%d diffxor=%04x current=%04x\n", data, vga.vbe_regs[3], diffxor, vga.vbe_enable);
                 vga.vbe_enable = data;
@@ -414,12 +413,18 @@ static
 
                 if (diffxor & VBE_DISPI_ENABLED) {
                     vga_change_renderer();
+                    if(vga.vbe_enable & VBE_DISPI_ENABLED)
+                        if (!(data & VBE_DISPI_NOCLEARMEM)) // should i use diffxor or data?
+                            memset(vga.vram, 0, vga.vram_size);
                 }
 
                 if (diffxor & VBE_DISPI_8BIT_DAC) {
                     // 8-bit DAC: TODO
                     update_all_dac_entries();
                 }
+
+                vga.vbe_regs[8] = 0;
+                vga.vbe_regs[9] = 0;
                 // TODO...
             }
             break;
@@ -428,6 +433,9 @@ static
             if (data >= (unsigned int)vga.vram_size)
                 VGA_FATAL("Unsupported VBE bank offset: %08x\n", data);
             vga.vbe_regs[5] = data;
+            break;
+        case 8 ... 9:
+            vga.vbe_regs[vga.vbe_index] = data;
             break;
         default:
             VGA_FATAL("Unknown VBE register: %d\n", vga.vbe_index);
