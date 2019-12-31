@@ -223,7 +223,7 @@ static void cpu_state(void)
 {
 #ifndef LIBCPU
     // <<< BEGIN AUTOGENERATE "state" >>>
-    struct bjson_object* obj = state_obj("cpu", 43);
+    struct bjson_object* obj = state_obj("cpu", 44);
     state_field(obj, 64, "cpu.reg32", &cpu.reg32);
     state_field(obj, 128, "cpu.xmm32", &cpu.xmm32);
     state_field(obj, 4, "cpu.mxcsr", &cpu.mxcsr);
@@ -266,6 +266,7 @@ static void cpu_state(void)
     state_field(obj, 4, "cpu.intr_line_state", &cpu.intr_line_state);
     state_field(obj, 4, "cpu.interrupts_blocked", &cpu.interrupts_blocked);
     state_field(obj, 4, "cpu.exit_reason", &cpu.exit_reason);
+    state_field(obj, 8, "cpu.ia32_efer", &cpu.ia32_efer);
     state_field(obj, 12, "cpu.sysenter", &cpu.sysenter);
 // <<< END AUTOGENERATE "state" >>>
     state_file(cpu.memory_size, "ram", cpu.mem);

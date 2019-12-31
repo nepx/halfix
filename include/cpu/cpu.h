@@ -339,6 +339,9 @@ struct cpu {
     // The reason why we exited from the CPU loop
     int exit_reason;
 
+    // The IA32_EFER register that we don't actually use. 
+    uint64_t ia32_efer;
+
     uint32_t sysenter[3]; // CS, ESP, and EIP for SYSENTER instruction.
 
     // <<< END STRUCT "struct" >>>

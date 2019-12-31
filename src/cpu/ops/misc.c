@@ -7,7 +7,10 @@
 
 #define EXCEPTION_HANDLER return 1
 
-#define P4_SUPPORT
+// Recommended for Windows 7, REQUIRED for Windows NT 4.0
+//#define P4_SUPPORT
+// Required for Windows 8
+#define CORE_DUO_SUPPORT
 
 void cpuid(void)
 {
@@ -15,7 +18,11 @@ void cpuid(void)
     switch (cpu.reg32[EAX]) {
     // TODO: Allow this instruction to be customized
     case 0:
-        cpu.reg32[EAX] = 2;
+#ifdef CORE_DUO_SUPPORT
+        cpu.reg32[EAX] = 10;
+#else
+        cpu.reg32[EAX] = 2; // Windows NT doesn't like big CPU levels!
+#endif
         cpu.reg32[ECX] = 0x6c65746e;
         cpu.reg32[EDX] = 0x49656e69;
         cpu.reg32[EBX] = 0x756e6547; // GenuineIntel
@@ -25,6 +32,11 @@ void cpuid(void)
         cpu.reg32[EAX] = 0x00000f12;
         cpu.reg32[ECX] = 0;
         cpu.reg32[EDX] = 0x1febfbff | cpu_apic_connected() << 9;
+        cpu.reg32[EBX] = 0x00010800;
+#elif defined(CORE_DUO_SUPPORT)
+        cpu.reg32[EAX] = 0x000006EC;
+        cpu.reg32[ECX] = 0xC189;
+        cpu.reg32[EDX] = 0x9febf9ff | cpu_apic_connected() << 9;
         cpu.reg32[EBX] = 0x00010800;
 #else
         cpu.reg32[EAX] = 0x000006a0;
@@ -56,8 +68,14 @@ void cpuid(void)
 #endif
         break;
     case 0x80000001:
+#ifdef CORE_DUO_SUPPORT
+        cpu.reg32[EDX] = 0x00100000;
+        cpu.reg32[EBX] = 0;
+        cpu.reg32[ECX] = cpu.reg32[EAX] = 0;
+#else
         cpu.reg32[EBX] = 0;
         cpu.reg32[ECX] = cpu.reg32[EDX] = cpu.reg32[EAX] = 0;
+#endif
         break;
     case 0x80000002 ... 0x80000004: {
         static const char* brand_string = 
@@ -134,12 +152,17 @@ int rdmsr(uint32_t index, uint32_t* high, uint32_t* low)
     case 0x10:
         value = cpu_get_cycles() - cpu.tsc_fudge;
         break;
+    case 0x800000C0:
+        value = cpu.ia32_efer;
     }
 
     *high = value >> 32;
     *low = value & 0xFFFFFFFF;
 
 #ifdef INSTRUMENT
+    if(index == 0x10) {
+        cpu_instrument_rdtsc(*low, *high);
+    }
     cpu_instrument_access_msr(index, *high, *low, 0);
 #endif
     return 0;
@@ -184,6 +207,9 @@ int wrmsr(uint32_t index, uint32_t high, uint32_t low)
         break;
     case 0x10:
         cpu.tsc_fudge = cpu_get_cycles() - msr_value;
+        break;
+    case 0x800000C0: // https://wiki.osdev.org/CPU_Registers_x86-64#IA32_EFER
+        cpu.ia32_efer = msr_value;
         break;
     default:
         CPU_LOG("Unknown MSR write: 0x%x\n", index);
