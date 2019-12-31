@@ -987,7 +987,11 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
             if (fpu_check_stack_underflow(1))
                 FPU_ABORT();
             dest = fyl2xp1(fpu_get_st(0), fpu_get_st(1), &fpu.status);
-            break;
+            if (!fpu_check_exceptions()) {
+                fpu_pop();
+                fpu_set_st(0, dest);
+            }
+            return 0;
         case 2: // FSQRT - Compute sqrt(ST0)
             dest = floatx80_sqrt(fpu_get_st(0), &fpu.status);
             break;
