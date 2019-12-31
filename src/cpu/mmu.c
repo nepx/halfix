@@ -102,17 +102,17 @@ int cpu_mmu_translate(uint32_t lin, int shift)
         cpu_set_tlb_entry(lin & ~0xFFF, lin & ~0xFFF, 1, 1, 0);
         return 0; // No page faults at all!
     } else {
+        // Determine whether we are reading or writing
+        // 0: Supervisor read
+        // 2: Supervisor write
+        // 4: User read
+        // 6: User write
+        int write = shift >> 1 & 1, user = shift >> 2 & 1;
+
         if (!(cpu.cr[4] & CR4_PAE)) {
             // https://wiki.osdev.org/Paging
             // If we do end up page faulting, #PF will push an error code to stack
             int error_code = 0;
-
-            // Determine whether we are reading or writing
-            // 0: Supervisor read
-            // 2: Supervisor write
-            // 4: User read
-            // 6: User write
-            int write = shift >> 1 & 1, user = shift >> 2 & 1;
 
             uint32_t page_directory_entry_addr = cpu.cr[3] + (lin >> 20 & 0xFFC),
                      page_directory_entry = -1, page_table_entry_addr = -1, page_table_entry = -1;
@@ -197,7 +197,6 @@ int cpu_mmu_translate(uint32_t lin, int shift)
 #endif
                 }
                 //if(lin == 0xe1001332) __asm__("int3");
-                //CPU_LOG("lin: %08x global=%d bochs=%08x %d\n", lin, page_table_entry >> 8 & 1, lin >> 12 & 2047, x);
                 cpu_set_tlb_entry(lin & ~0xFFF, page_table_entry & ~0xFFF, user, write, page_table_entry & 0x100);
             }
             return 0;
@@ -217,11 +216,92 @@ int cpu_mmu_translate(uint32_t lin, int shift)
         } else {
             // PAE enabled
             // http://www.rcollins.org/ddj/Jul96/
+            // https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-3a-part-1-manual.pdf (page 117)
             // Note that we only support 3 GB of RAM at max, so we're OK with ignoring the top bits
             uint32_t pdp_addr = (cpu.cr[3] & ~31) | (lin >> 27 & 0x18),
                      pdpte = cpu_read_phys(pdp_addr);
             if ((pdpte & 1) == 0)
                 goto pae_page_fault;
+#if PAE_HANDLE_RESERVED
+            // "Writing to reserved bits in the PDPT generates a general protection fault (#GP),"
+            if (cpu_read_phys(pdp_addr + 4) & ~15)
+                EXCEPTION_GP(0);
+#endif
+            // Now look up page directory entry (which may end up being a page table entry, if we're lucky)
+            uint32_t pde_addr = (pdpte & ~0xFFF) | (lin >> 18 & 0xFF8),
+                     pde = cpu_read_phys(pde_addr), pde2 = cpu_read_phys(pde_addr + 4);
+
+            // Check if our address is too
+            if (cpu_read_phys(pdp_addr + 4) & ~15)
+                EXCEPTION_GP(0);
+#if PAE_HANDLE_RESERVED
+            if (pde2 & ~15)
+                EXCEPTION_GP(0);
+#endif
+                if ((pde & 1) == 0)
+                    goto pae_page_fault;
+            if (pde & (1 << 7)) {
+                // 2 MB page
+                uint32_t flags = ~pde;
+                if ((write << 1) & flags) {
+                    if (user || (cpu.cr[0] & CR0_WP)) {
+                        CPU_LOG("#PF: [PAE] Illegal write\n");
+                        goto pae_page_fault;
+                    }
+                }
+                if ((user << 2) & flags) {
+                    CPU_LOG("#PF: User trying to write to supervisor page\n");
+                        goto pae_page_fault;
+                }
+                // Write back
+                uint32_t new_pde = pde | 0x20 | (write << 6);
+                if (new_pde != pde) {
+                    cpu_write_phys(pde_addr, new_pde);
+#ifdef INSTRUMENT
+                    cpu_instrument_paging_modified(pde_addr);
+#endif
+                }
+                uint32_t phys = (pde & 0xFFE00000) | (lin & 0x1FF000);
+                cpu_set_tlb_entry(lin & ~0xFFF, phys, user, write, pde & 0x100);
+            }else{
+                uint32_t pte_addr = (pde & ~0xFFF) | (lin >> 9 & 0xFF8),
+                     pte = cpu_read_phys(pte_addr), pte2 = cpu_read_phys(pte_addr + 4);
+                    UNUSED(pte2);
+                
+                uint32_t combined = ~pte | ~pde;
+                if ((write << 1) & combined) {
+                    if (user || (cpu.cr[0] & CR0_WP)) {
+                        CPU_LOG("#PF: [PAE] Illegal write\n");
+                        goto pae_page_fault;
+                    }
+                }
+                if ((user << 2) & combined) {
+                    CPU_LOG("#PF: User trying to write to supervisor page\n");
+                        goto pae_page_fault;
+                }
+                uint32_t new_pde = pde | 0x20;
+                if (new_pde != pde) {
+                    cpu_write_phys(pde_addr, new_pde);
+#ifdef INSTRUMENT
+                    cpu_instrument_paging_modified(pde_addr);
+#endif
+                }
+                uint32_t new_pte = pte | 0x20 | (write << 6);
+                if (new_pte != pte) {
+                    cpu_write_phys(pte_addr, new_pte);
+#ifdef INSTRUMENT
+                    cpu_instrument_paging_modified(pte_addr);
+#endif
+                }
+#if 0
+                printf("Lin: %08x\n", lin);
+                printf("PDTPE: %08x PDTPE.addr: %08x\n", pdpte, pdp_addr);
+                printf("PDE: %08x PDE.addr: %08x\n", pde, pde_addr);
+                printf("PTE: %08x PTE.addr: %08x\n", pte, pte_addr);
+#endif
+                cpu_set_tlb_entry(lin & ~0xFFF, pte & ~0xFFF, user, write, pte & 0x100);
+            }
+            return 0;
         pae_page_fault:
             cpu.cr[2] = lin;
             CPU_FATAL("TODO: PAE translation\n");
