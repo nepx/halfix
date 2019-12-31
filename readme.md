@@ -1,6 +1,6 @@
 # Halfix x86 emulator
 
-Halfix is a portable x86 emulator written in C99. It allows you to run legacy operating systems on more modern platforms. 
+Halfix is a portable x86 emulator written in C99. It allows you to run legacy operating systems on modern platforms. 
 
 ## Why?
 
@@ -28,25 +28,67 @@ Halfix requires disk images to be chunked and gzip'ed. Run `node tools/imgsplit.
 
 ## Emulated Hardware
 
- - CPU: Pentium Pro-compatible (with FPU and optional Advanced Programmable Interrupt Controller)
+ - 32-bit x86 CPU, Pentium 4-compatible
  - Intel 8259 Programmable Interrupt Controller
  - Intel 8254 Programmable Interval Timer
  - Intel 8237 Direct Memory Access Controller
  - Intel 8042 "PS/2" Controller with attached keyboard and mouse
- - Generic VGA graphics card
- - Generic IDE controller (hard drive only)
- - i440FX chipset (this one doesn't work quite so well yet)
- - Intel 82093AA I/O Advanced Programmable Interrupt Controller
+ - Generic VGA graphics card with Bochs VBE extensions
+ - Generic IDE controller (hard drive and CD-ROM)
+ - i440FX chipset (this doesn't work quite so well yet)
+ - Intel 82093AA I/O APIC
  - Dummy PC speaker (no sound)
+ - Floppy drive controller (incomplete)
+
+## Compatibility
+
+It boots a wide range of operating system software, including all versions of DOS, most versions of Windows (from 1.01 to Vista and 7), newer versions of OS/2 Warp (3 and 4.5), ReactOS, and some varieties of Linux (ISO Linux, Damn Small Linux, Red Star OS 2). 
+
+See [Compatibility](compatibility.md) for more details.
+
+## Self-Virtualization
+
+Can you run Halfix inside Halfix? 
+
+You can, but not very quickly. 
+
+![Halfix in Halfix](docs/pics/halfix-in-halfix.png)
+
+Host: Ubuntu 16.04
+Guest: Windows XP SP2
+Guest 2: Windows 98 SE
+
+## Transferring Files
+
+Create a directory with all the files you want to transfer and create an ISO image. 
+
+```
+mkisofs -o programs.iso -max-iso9660-filenames -iso-level 4 programs/
+```
+
+Now update the configuration file as follows:
+
+```
+# Note: it does not hae to be ata0-slave
+[ata0-slave]
+inserted=1
+type=cd
+file=/tmp/programs.iso
+driver=sync
+```
+
+Now boot up your operating system and copy the files from the CD-ROM to the hard drive. 
 
 ## License
 
 GNU General Public License version 3
 
-## Similar Projects and Credits
+## Similar Projects
 
  - [v86](https://www.github.com/copy/v86)
  - [JSLinux](http://bellard.org/jslinux/)
  - [jemul8](http://www.github.com/asmblah/jemul8)
+
+## Credits
 
 The FPU emulator uses an modified version of [Berkeley SoftFloat](jhauser.us/arithmetic/SoftFloat.html) from the [Bochs](bochs.sourceforge.net) emulator. 
