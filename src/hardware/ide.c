@@ -1764,6 +1764,7 @@ static void ide_write(uint32_t port, uint32_t data)
             case 130: // ?
             case 0x66: // Windows XP writes to this one
             case 0x95:
+            case 0:
                 ctrl->status = ATA_STATUS_DSC | ATA_STATUS_DRDY;
                 ide_raise_irq(ctrl);
                 break;
