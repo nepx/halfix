@@ -358,6 +358,10 @@ struct cpu {
 
     // TLB entries plus tags
     uint8_t tlb_tags[1 << 20];
+#define TLB_ATTR_NX 1
+#define TLB_ATTR_NON_GLOBAL 2
+    // Interesting information on TLB
+    uint8_t tlb_attrs[1 << 20];
     void* tlb[1 << 20];
 
     // Actual trace cache

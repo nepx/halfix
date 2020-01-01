@@ -14,28 +14,34 @@ void* get_phys_ram_ptr(uint32_t addr, int write);
 void cpu_mmu_tlb_flush(void)
 {
     for (unsigned int i = 0; i < cpu.tlb_entry_count; i++) {
-        uint32_t entry = cpu.tlb_entry_indexes[i] & ((1 << 20) - 1);
+        uint32_t entry = cpu.tlb_entry_indexes[i];
+        if (entry == (uint32_t)-1)
+            continue; // Don't flush entries we have already flushed
         cpu.tlb[entry] = NULL;
         cpu.tlb_tags[entry] = 0xFF;
         cpu.tlb_entry_indexes[i] = -1;
+        cpu.tlb_attrs[entry] = 0xFF;
     }
     cpu.tlb_entry_count = 0;
 }
 void cpu_mmu_tlb_flush_nonglobal(void)
 {
+    printf("non global flush\n");
     for (unsigned int i = 0; i < cpu.tlb_entry_count; i++) {
         uint32_t entry = cpu.tlb_entry_indexes[i];
-        if (entry & 0x80000000)
+        if (entry == (uint32_t)-1)
+            continue; // Don't flush entries we have already flushed
+        if ((cpu.tlb_attrs[entry] & TLB_ATTR_NON_GLOBAL) == 0)
             continue;
-        entry &= (1 << 20) - 1;
         cpu.tlb[entry] = NULL;
         cpu.tlb_tags[entry] = 0xFF;
         cpu.tlb_entry_indexes[i] = -1;
+        cpu.tlb_attrs[entry] = 0xFF;
     }
     cpu.tlb_entry_count = cpu.tlb_entry_count; // We may still have global entries.
 }
 
-static void cpu_set_tlb_entry(uint32_t lin, uint32_t phys, int user, int write, int global)
+static void cpu_set_tlb_entry(uint32_t lin, uint32_t phys, int user, int write, int global, int nx)
 {
     // Mask out the A20 gate line here so that we don't have to do it after every access
     phys &= cpu.a20_mask;
@@ -72,12 +78,13 @@ static void cpu_set_tlb_entry(uint32_t lin, uint32_t phys, int user, int write, 
         user_write = (tag_write | ((!user | !write) ? 3 : 0)) << TLB_USER_WRITE;
 
     uint32_t entry = lin >> 12;
-    cpu.tlb_entry_indexes[cpu.tlb_entry_count++] = entry | (global ? 0x80000000 : 0);
+    cpu.tlb_entry_indexes[cpu.tlb_entry_count++] = entry;
+    cpu.tlb_attrs[entry] = (nx ? TLB_ATTR_NX : 0) | (global ? 0 : TLB_ATTR_NON_GLOBAL);
     cpu.tlb[entry] = (void*)(((uintptr_t)(get_phys_ram_ptr(phys, write))) - lin);
     cpu.tlb_tags[entry] = system_read | system_write | user_read | user_write;
 }
 
-static uint32_t cpu_read_phys(uint32_t addr)
+uint32_t cpu_read_phys(uint32_t addr)
 {
     if (addr >= cpu.memory_size || (addr >= 0xA0000 && addr < 0xC0000))
         return io_handle_mmio_read(addr, 2);
@@ -99,9 +106,11 @@ static void cpu_write_phys(uint32_t addr, uint32_t data)
 int cpu_mmu_translate(uint32_t lin, int shift)
 {
     if (!(cpu.cr[0] & CR0_PG)) {
-        cpu_set_tlb_entry(lin & ~0xFFF, lin & ~0xFFF, 1, 1, 0);
+        cpu_set_tlb_entry(lin & ~0xFFF, lin & ~0xFFF, 1, 1, 0, 0);
         return 0; // No page faults at all!
     } else {
+        int execute = shift & 8;
+        shift &= 7;
         // Determine whether we are reading or writing
         // 0: Supervisor read
         // 2: Supervisor write
@@ -140,7 +149,7 @@ int cpu_mmu_translate(uint32_t lin, int shift)
 #endif
                 }
                 uint32_t phys = (page_directory_entry & 0xFFC00000) | (lin & 0x3FF000);
-                cpu_set_tlb_entry(lin & ~0xFFF, phys, user, write, page_directory_entry & 0x100);
+                cpu_set_tlb_entry(lin & ~0xFFF, phys, user, write, page_directory_entry & 0x100, 0);
             } else {
                 page_table_entry = cpu_read_phys(page_table_entry_addr);
 
@@ -197,7 +206,7 @@ int cpu_mmu_translate(uint32_t lin, int shift)
 #endif
                 }
                 //if(lin == 0xe1001332) __asm__("int3");
-                cpu_set_tlb_entry(lin & ~0xFFF, page_table_entry & ~0xFFF, user, write, page_table_entry & 0x100);
+                cpu_set_tlb_entry(lin & ~0xFFF, page_table_entry & ~0xFFF, user, write, page_table_entry & 0x100, 0);
             }
             return 0;
         // A page fault has occurred
@@ -220,6 +229,7 @@ int cpu_mmu_translate(uint32_t lin, int shift)
             // Note that we only support 3 GB of RAM at max, so we're OK with ignoring the top bits
             uint32_t pdp_addr = (cpu.cr[3] & ~31) | (lin >> 27 & 0x18),
                      pdpte = cpu_read_phys(pdp_addr);
+            int fail = 0;
             if ((pdpte & 1) == 0)
                 goto pae_page_fault;
 #if PAE_HANDLE_RESERVED
@@ -231,28 +241,41 @@ int cpu_mmu_translate(uint32_t lin, int shift)
             uint32_t pde_addr = (pdpte & ~0xFFF) | (lin >> 18 & 0xFF8),
                      pde = cpu_read_phys(pde_addr), pde2 = cpu_read_phys(pde_addr + 4);
 
+            // XXX yucky yucky
+            uint32_t nx_mask = -1 ^ (cpu.ia32_efer << 20 & 0x80000000);
+
             // Check if our address is too
-            if (cpu_read_phys(pdp_addr + 4) & ~15)
+            if (cpu_read_phys(pdp_addr + 4) & ~15 & nx_mask)
                 EXCEPTION_GP(0);
 #if PAE_HANDLE_RESERVED
-            if (pde2 & ~15)
+            if (pde2 & ~15 & nx_mask)
                 EXCEPTION_GP(0);
 #endif
-                if ((pde & 1) == 0)
+
+            int nx_enabled = cpu.ia32_efer >> 11 & 1, nx = (pde2 >> 31) & nx_enabled;
+            fail = (execute && nx_enabled) << 4 | (write << 1) | (user << 2);
+
+            if ((pde & 1) == 0) {
+                fail |= 0;
+                goto pae_page_fault;
+            }
+
+            uint32_t flags = ~pde;
+            if ((write << 1) & flags) {
+                if (user || (cpu.cr[0] & CR0_WP)) {
+                    CPU_LOG("#PF: [PAE] Illegal write\n");
+                    fail |= 1;
                     goto pae_page_fault;
+                }
+            }
+            if ((user << 2) & flags) {
+                CPU_LOG("#PF: User trying to write to supervisor page\n");
+                    fail |= 1;
+                goto pae_page_fault;
+            }
+
             if (pde & (1 << 7)) {
                 // 2 MB page
-                uint32_t flags = ~pde;
-                if ((write << 1) & flags) {
-                    if (user || (cpu.cr[0] & CR0_WP)) {
-                        CPU_LOG("#PF: [PAE] Illegal write\n");
-                        goto pae_page_fault;
-                    }
-                }
-                if ((user << 2) & flags) {
-                    CPU_LOG("#PF: User trying to write to supervisor page\n");
-                        goto pae_page_fault;
-                }
                 // Write back
                 uint32_t new_pde = pde | 0x20 | (write << 6);
                 if (new_pde != pde) {
@@ -262,22 +285,27 @@ int cpu_mmu_translate(uint32_t lin, int shift)
 #endif
                 }
                 uint32_t phys = (pde & 0xFFE00000) | (lin & 0x1FF000);
-                cpu_set_tlb_entry(lin & ~0xFFF, phys, user, write, pde & 0x100);
-            }else{
+                cpu_set_tlb_entry(lin & ~0xFFF, phys, user, write, pde & 0x100, nx);
+            } else {
                 uint32_t pte_addr = (pde & ~0xFFF) | (lin >> 9 & 0xFF8),
-                     pte = cpu_read_phys(pte_addr), pte2 = cpu_read_phys(pte_addr + 4);
-                    UNUSED(pte2);
-                
-                uint32_t combined = ~pte | ~pde;
-                if ((write << 1) & combined) {
+                         pte = cpu_read_phys(pte_addr), pte2 = cpu_read_phys(pte_addr + 4);
+
+                if ((pte & 1) == 0)
+                    goto pae_page_fault;
+                UNUSED(pte2);
+
+                flags = ~pte;
+                if ((write << 1) & flags) {
                     if (user || (cpu.cr[0] & CR0_WP)) {
                         CPU_LOG("#PF: [PAE] Illegal write\n");
+                        fail |= 1;
                         goto pae_page_fault;
                     }
                 }
-                if ((user << 2) & combined) {
+                if ((user << 2) & flags) {
                     CPU_LOG("#PF: User trying to write to supervisor page\n");
-                        goto pae_page_fault;
+                    fail |= 1;
+                    goto pae_page_fault;
                 }
                 uint32_t new_pde = pde | 0x20;
                 if (new_pde != pde) {
@@ -299,13 +327,13 @@ int cpu_mmu_translate(uint32_t lin, int shift)
                 printf("PDE: %08x PDE.addr: %08x\n", pde, pde_addr);
                 printf("PTE: %08x PTE.addr: %08x\n", pte, pte_addr);
 #endif
-                cpu_set_tlb_entry(lin & ~0xFFF, pte & ~0xFFF, user, write, pte & 0x100);
+                cpu_set_tlb_entry(lin & ~0xFFF, pte & ~0xFFF, user, write, pte & 0x100, nx);
             }
             return 0;
         pae_page_fault:
             cpu.cr[2] = lin;
-            CPU_FATAL("TODO: PAE translation\n");
-            abort();
+            // i have no idea if this is right
+            EXCEPTION_PF(fail);
         }
     }
 }
