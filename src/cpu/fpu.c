@@ -1654,7 +1654,7 @@ int fpu_fxsave(uint32_t linaddr)
     if (fpu_nm_check())
         return 1;
 
-    if(cpu_access_verify(linaddr, linaddr + 512, cpu.tlb_shift_write)) return 1;
+    if(cpu_access_verify(linaddr, linaddr + 511, cpu.tlb_shift_write)) return 1;
     cpu_write16(linaddr + 0, fpu.control_word, cpu.tlb_shift_write);
     cpu_write16(linaddr + 2, fpu_get_status_word(), cpu.tlb_shift_write);
     // "Abridge" tag word
@@ -1700,7 +1700,7 @@ int fpu_fxrstor(uint32_t linaddr)
         EXCEPTION_GP(0);
     if (fpu_nm_check())
         return 1;
-    if(cpu_access_verify(linaddr, linaddr + 512, cpu.tlb_shift_read)) return 1;
+    if(cpu_access_verify(linaddr, linaddr + 511, cpu.tlb_shift_read)) return 1;
 
     uint32_t mxcsr;
     cpu_read32(linaddr + 24, mxcsr, cpu.tlb_shift_read);
