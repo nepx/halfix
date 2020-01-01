@@ -425,6 +425,8 @@ static
 
                 vga.vbe_regs[8] = 0;
                 vga.vbe_regs[9] = 0;
+                vga.vbe_regs[6] = vga.total_width;
+                vga.vbe_regs[7] = vga.total_height;
                 // TODO...
             }
             break;
@@ -433,6 +435,17 @@ static
             if (data >= (unsigned int)vga.vram_size)
                 VGA_FATAL("Unsupported VBE bank offset: %08x\n", data);
             vga.vbe_regs[5] = data;
+            break;
+        case 6: {// vbe virtual width
+            int bpp = (vga.vbe_regs[3] + 7) >> 3;
+            vga.vbe_regs[6] = data;
+            if(bpp)
+            vga.vbe_regs[7] = vga.vram_size / bpp;
+            else vga.vbe_regs[7] = 1;
+            break;
+        }
+        case 7: // vbe virtual height
+            vga.vbe_regs[7] = data;
             break;
         case 8 ... 9:
             vga.vbe_regs[vga.vbe_index] = data;
@@ -839,6 +852,12 @@ static
             return vga.vbe_enable & (VBE_DISPI_ENABLED | VBE_DISPI_GETCAPS | VBE_DISPI_8BIT_DAC);
         case 5:
             return vga.vbe_regs[5] >> 16;
+        case 6:
+            return vga.vbe_regs[6];
+        case 7:
+            return vga.vbe_regs[7];
+        case 8 ... 9:
+            return vga.vbe_regs[vga.vbe_index];
         case 10: // Get VBE RAM size in 64 KB banks
             return vga.vram_size >> 16;
         default:
