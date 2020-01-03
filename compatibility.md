@@ -1,6 +1,6 @@
 # Compatibility
 
-Some notes about the operating systems currently supported by Halfix: 
+Most operating systems work fine with the default configuration (32 MB RAM, no floppy drive, APIC/PCI/ACPI enabled). However, you might need to increase the RAM size or enable floppy drives. 
 
 ## DOS
 All versions should work, although they might not boot from floppy disks due to unimplemented commands. Installing must be done on DOSBox or Bochs because swapping floppy disks is not supported. 
@@ -32,7 +32,7 @@ Installs, boots, and runs. Very stable. Can self-virtualize if SP6 is installed.
 Boots and runs. 
 
 ### Windows XP
-Installs, boots, and runs. Very stable. 
+Installs, boots, and runs. Very stable. I recommend running with 128 MB RAM. 
 
 ### Windows Vista
 Takes forever to boot with the Pentium 4 CPU configuration. Set IPS to around 50,000,000 to get the nice Aero theme. Run with 512 MB of RAM. 
@@ -40,18 +40,22 @@ Takes forever to boot with the Pentium 4 CPU configuration. Set IPS to around 50
 ### Windows 7
 The disk image I created requires a Pentium 4 or better to boot (it hangs on a `#UD` exception on FXSAVE). Unstable, it crashed with a BSOD. Can't use CDs because not all commands are implemented. Run with 512 MB of RAM. 
 
-### Windows 8, 10
-Won't boot. PAE, NX aren't implemented. I suspect that they'll need some SSSE3 instructions too. 
+### Windows 8
+BSODs with a `KERNEL_DATA_INPAGE_ERROR`. Probably a device problem. 
+
+### Windows 10
+Haven't tried.
 
 ## OS/2 
 
-Don't jiggle the mouse around during boot. It confuses the keyboard controller, which then causes OS/2 to be confused. 
+### 1, 2
+Haven't tested. May not boot since floppy drive controller is completely inaccurate. 
 
 ### Warp 3
-Boots and runs. 
+During boot, OS/2 will complain about how it can't load `VCOM.SYS` (but it will still boot). This is because we don't emulate serial ports. Edit the lines out of `CONFIG.SYS`.
 
 ### Warp 4.5
-Boots and runs. DeScribe 5 works well. 
+Don't jiggle the mouse during boot. It confuses the keyboard controller, which then confuses OS/2. Otherwise, it boots fine and is very stable. 
 
 ## Linux
 
@@ -59,15 +63,13 @@ Boots and runs. DeScribe 5 works well.
 Boots from CD and runs. 
 
 ### Damn Small Linux
-Boots from CD and runs. Slightly longer boot time. 
+Boots from CD and runs. Slightly longer boot time than Windows XP. 
 
 ### Debian
 No PAE. Kernel doesn't like that. 
 
 ### Red Star OS 2
-
-Boots fine, but mouse doesn't work. I suspect it has something to do with the outport. 
+Boots fine, but mouse doesn't work. I suspect it has something to do with the keyboard controller outport. 
 
 ## ReactOS
-
-Works fine, from the LiveCD. VGA emulation is funky, though. Icons don't render. Hopefully VESA will fix that. 
+Works fine, from the LiveCD. VGA emulation is funky, though. Icons don't render. Hopefully enabling VESA will fix that. 
