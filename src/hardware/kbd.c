@@ -276,7 +276,7 @@ static void kbd_write(uint32_t port, uint32_t data)
 {
     if (port & 4) { // Command Port (0x64)
         // This port can either run a command on its own or supply the first byte to a multi-byte command.
-        kbd.status |= STATUS_CMD;
+        kbd.status &= ~STATUS_CMD;
         //kbd.command = data;
         switch (data) {
         case 0x20 ... 0x3F: { // Read internal RAM, although only 0x20 is documented
@@ -288,6 +288,7 @@ static void kbd_write(uint32_t port, uint32_t data)
             break;
         }
         case 0x60 ... 0x7F: // Write to internal RAM - receives parameter
+            kbd.status |= STATUS_CMD;
             kbd.command = data;
             break;
         case 0xF0 ... 0xFF: // Pulse output line
@@ -347,6 +348,8 @@ static void kbd_write(uint32_t port, uint32_t data)
             //kbd.command = NO_COMMAND;
             break;
         case 0xD1 ... 0xD4: // Outport utilities
+            if(data == 0xD3) kbd_add(KBD_QUEUE, 0xFA);
+            kbd.status |= STATUS_CMD;
             kbd.command = data;
             break;
         default:
@@ -407,16 +410,20 @@ static void kbd_write(uint32_t port, uint32_t data)
             break;
         case 0x60 ... 0x7F: // Write to internal RAM
             if (command == 0x60) {
-                static const int mask = STATUS_SYSFLAG /* | STATUS_CMD*/;
-                kbd.status = (kbd.status & ~mask) | (data & mask);
+                //kbd.command = data;
+                KBD_LOG("Command byte: %02x\n", kbd.command);
             }
             kbd.ram[command & 0x1F] = data;
+            kbd_refill_output();
             break;
         case 0xD1: // Controller output gate
             cpu_set_a20(data >> 1 & 1);
             break;
-        case 0xD2 ... 0xD3: // Outport
+        case 0xD2:
             kbd_add(KBD_QUEUE, data);
+            break;
+        case 0xD3: // Outport
+            kbd_add(AUX_QUEUE, data);
             break;
         case 0xD4: // Write mouse status bits
             switch (kbd.mouse_command) {
