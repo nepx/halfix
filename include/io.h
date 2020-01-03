@@ -12,7 +12,7 @@ void io_unregister_read(int port, int length);
 void io_unregister_write(int port, int length);
 void io_register_mmio_read(uint32_t start, uint32_t length, io_read b, io_read w, io_read d);
 void io_register_mmio_write(uint32_t start, uint32_t length, io_write b, io_write w, io_write d);
-void io_register_mmio_rom(uint32_t start, uint32_t length);
+void io_remap_mmio_read(uint32_t oldstart, uint32_t newstart);
 
 void io_register_reset(io_reset cb);
 void io_trigger_reset(void);
