@@ -1,3 +1,4 @@
+#include "cpuapi.h" // Needed for IDE DMA
 #include "devices.h"
 #include "drive.h"
 #include "platform.h"
@@ -262,7 +263,7 @@ static void ide_state(void)
     state_field(obj, 1, "ide[1].atapi_can_eject_cdrom", &ide[1].atapi_can_eject_cdrom);
     state_field(obj, 1, "ide[0].atapi_dma_enabled", &ide[0].atapi_dma_enabled);
     state_field(obj, 1, "ide[1].atapi_dma_enabled", &ide[1].atapi_dma_enabled);
-// <<< END AUTOGENERATE "state" >>>
+    // <<< END AUTOGENERATE "state" >>>
 
     char filename[1000];
     for (int i = 0; i < 2; i++) {
@@ -766,7 +767,7 @@ static void ide_atapi_run_command(struct ide_controller* ctrl)
         ide_raise_irq(ctrl);
         break;
     }
-    case 0x1B: 
+    case 0x1B:
         ide_atapi_no_transfer(ctrl);
         ide_raise_irq(ctrl);
         break;
@@ -1091,7 +1092,7 @@ static void ide_pio_read_callback(struct ide_controller* ctrl)
             ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_DSC;
         }
         break;
-    case 0: // Uninitialized, Windows NT does this. 
+    case 0: // Uninitialized, Windows NT does this.
         break;
     default:
         IDE_FATAL("Unknown PIO read command: %02x\n", ctrl->command_issued);
@@ -1114,7 +1115,7 @@ static void ide_pio_write_callback(struct ide_controller* ctrl)
         ide_raise_irq(ctrl);
 
         uint64_t sector_offset = ide_get_sector_offset(ctrl, ctrl->lba48);
-        IDE_LOG("Writing %d sectors at %d\n", ctrl->sectors_read, (uint32_t)sector_offset);
+        IDE_LOG("Writing %d sectors at %llx\n", ctrl->sectors_read, (unsigned long long)sector_offset);
 #ifndef EMSCRIPTEN
         printf("Writing %d sectors at %d\n", ctrl->sectors_read, (uint32_t)sector_offset);
 #endif
@@ -1133,7 +1134,6 @@ static void ide_pio_write_callback(struct ide_controller* ctrl)
         IDE_FATAL("Unknown PIO write command: %02x\n", ctrl->command_issued);
     }
 }
-
 
 #ifdef PIO_LOG
 static FILE* test;
@@ -1372,7 +1372,8 @@ static void ide_read_sectors(struct ide_controller* ctrl, int lba48, int chunk_c
 #else
     IDE_LOG("Reading %d sectors at %x\n", sector_count, (uint32_t)sector_offset);
 #endif
-    if(sector_offset > 0xFFFFFFFF) IDE_LOG("Big sector!!\n");
+    if (sector_offset > 0xFFFFFFFF)
+        IDE_LOG("Big sector!!\n");
     int res = drive_read(SELECTED(ctrl, info), ctrl, ctrl->pio_buffer, sectors_to_read * 512, sector_offset * (uint64_t)512, ide_read_sectors_callback);
 
     if (res < 0)
@@ -1539,6 +1540,153 @@ static void ide_identify(struct ide_controller* ctrl)
     ctrl->pio_position = 0;
 }
 
+static void ide_read_dma_handler(struct ide_controller* ctrl)
+{
+    uint32_t prdt_addr = ctrl->prdt_address,
+             sectors = ide_get_sector_count(ctrl, ctrl->lba48),
+             bytes_in_buffer = sectors * 512;
+    uint64_t offset = ide_get_sector_offset(ctrl, ctrl->lba48) * 512ULL;
+    struct drive_info* drv = SELECTED(ctrl, info);
+
+    // XXX -- our goal should be to write it directly into memory
+    void* temp = alloca(65536);
+    while (1) {
+        // Read fields from PRDT
+        uint32_t dest = cpu_read_phys(prdt_addr), other_stuff = cpu_read_phys(prdt_addr + 4),
+                 count = other_stuff & 0xFFFF, end = other_stuff & 0x80000000;
+        count |= !count << 16; // If count is zero, then we requested 0x10000 bytes.
+
+        uint32_t dma_bytes = count;
+        if (dma_bytes > bytes_in_buffer)
+            dma_bytes = bytes_in_buffer;
+
+        // This should be a sync read
+        IDE_LOG("PCI IDE read\n");
+        IDE_LOG(" -- Destination: %08x\n", dest);
+        IDE_LOG(" -- Length: %08x [real: %08x] End? %s\n", count, dma_bytes, end ? "Yes" : "No");
+        IDE_LOG(" -- sector: %llx\n", (unsigned long long)offset >> 9);
+        //if(offset == 0x19ba15000) __asm__("int3");
+
+        // Invalidate the TLB for all the pages we are going to mess with
+        {
+            // Round up so that we catch every page
+            int count_rounded = ((count + 0xFFF) >> 12) << 12;
+            for (int i = 0; i < count_rounded; i += 4096)
+                cpu_init_dma(dest + i);
+        }
+        while (dma_bytes >= 512) {
+            int res = drive_read(drv, NULL, temp, 512, offset, NULL);
+            if (res != DRIVE_RESULT_SYNC)
+                IDE_FATAL("Expected sync response for prefetched data\n");
+
+            cpu_write_mem(dest, temp, 512);
+            dma_bytes -= 512;
+            dest += 512;
+            offset += 512;
+        }
+
+        // Move ourselves forward.
+
+        bytes_in_buffer -= dma_bytes;
+        offset += dma_bytes;
+        prdt_addr += 8;
+        if (!bytes_in_buffer || end)
+            break;
+    }
+    ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_DSC;
+    ctrl->dma_status &= ~1;
+    ctrl->dma_status |= 4;
+    ide_set_sector_offset(ctrl, ctrl->lba48, ide_get_sector_offset(ctrl, ctrl->lba48) + sectors);
+    ide_raise_irq(ctrl);
+}
+
+void drive_debug(int64_t x){
+    uint32_t offset = x & 511;
+    uint8_t buf[512];
+    int res = drive_read(SELECTED((&ide[0]), info), NULL, buf, 512, x & ~511, NULL);
+    if(res == DRIVE_RESULT_SYNC)IDE_LOG("Cannot read\n");
+    for(int i=0;i<16;i++) {
+        printf("%02x ", buf[offset]);
+        offset++;
+    }
+    printf("\n");
+}
+
+static void ide_write_dma_handler(struct ide_controller* ctrl)
+{
+    uint32_t prdt_addr = ctrl->prdt_address,
+             sectors = ide_get_sector_count(ctrl, ctrl->lba48),
+             bytes_in_buffer = sectors * 512;
+    uint64_t offset = ide_get_sector_offset(ctrl, ctrl->lba48) * 512ULL;
+    struct drive_info* drv = SELECTED(ctrl, info);
+
+    void* mem = cpu_get_ram_ptr();
+
+    while (1) {
+        // Read fields from PRDT
+        uint32_t dest = cpu_read_phys(prdt_addr), other_stuff = cpu_read_phys(prdt_addr + 4),
+                 count = other_stuff & 0xFFFF, end = other_stuff & 0x80000000;
+        count |= !count << 16; // If count is zero, then we requested 0x10000 bytes.
+
+        uint32_t dma_bytes = count;
+        if (dma_bytes > bytes_in_buffer)
+            dma_bytes = bytes_in_buffer;
+
+        // This should be a sync read
+        IDE_LOG("PCI IDE write\n");
+        IDE_LOG(" -- Destination: %08x\n", dest);
+        IDE_LOG(" -- Length: %08x [real: %08x] End? %s\n", count, dma_bytes, end ? "Yes" : "No");
+        IDE_LOG(" -- sector: %llx\n", (unsigned long long)offset >> 9);
+        while (dma_bytes >= 512) {
+            int res = drive_write(drv, NULL, mem + dest, 512, offset, NULL);
+            if (res != DRIVE_RESULT_SYNC)
+                IDE_FATAL("Expected sync response for prefetched data\n");
+            dma_bytes -= 512;
+            dest += 512;
+            offset += 512;
+        }
+
+        // Move ourselves forward.
+
+        bytes_in_buffer -= dma_bytes;
+        offset += dma_bytes;
+        prdt_addr += 8;
+        if (!bytes_in_buffer || end)
+            break;
+    }
+    ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_DSC;
+    ctrl->dma_status &= ~1;
+    ctrl->dma_status |= 4;
+    ide_set_sector_offset(ctrl, ctrl->lba48, ide_get_sector_offset(ctrl, ctrl->lba48) + sectors);
+    ide_raise_irq(ctrl);
+}
+
+static void ide_dma_cb(void* this, int result)
+{
+    if (result != 0) {
+        ide_abort_command(this);
+        return;
+    }
+    struct ide_controller* ctrl = this;
+    ctrl->dma_status |= 1;
+}
+
+static void ide_read_dma(struct ide_controller* ctrl, int lba48)
+{
+    // Prefetch the sectors and write them to disk according to memory.
+    ctrl->status = ATA_STATUS_BSY | ATA_STATUS_DRDY;
+    ctrl->lba48 = lba48;
+    drive_prefetch(SELECTED(ctrl, info), ctrl, ide_get_sector_count(ctrl, lba48), ide_get_sector_offset(ctrl, lba48), ide_dma_cb);
+}
+
+static void ide_write_dma(struct ide_controller* ctrl, int lba48)
+{
+    ctrl->status = ATA_STATUS_BSY | ATA_STATUS_DRDY;
+    ctrl->lba48 = lba48;
+    // We need to prefetch in case we write a partial block
+    drive_prefetch(SELECTED(ctrl, info), ctrl, ide_get_sector_count(ctrl, lba48), ide_get_sector_offset(ctrl, lba48), ide_dma_cb);
+}
+
 // Write to an IDE port
 static void ide_write(uint32_t port, uint32_t data)
 {
@@ -1590,7 +1738,7 @@ static void ide_write(uint32_t port, uint32_t data)
                 ctrl->error = ATA_ERROR_AMNF;
                 ctrl->status = 0; // ?
                 ide_set_signature(ctrl);
-            } else 
+            } else
                 ide_abort_command(ctrl);
             break;
         case 0x10 ... 0x1F: // Calibrate Drive
@@ -1607,6 +1755,16 @@ static void ide_write(uint32_t port, uint32_t data)
                 ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_DSC;
             }
             ide_raise_irq(ctrl);
+            break;
+        case 0x25: // Read DMA lba48
+        case 0xC8: // Read DMA
+            IDE_LOG("Command: READ DMA [w/%s LBA48]\n", data == 0x25 ? "" : "o");
+            ide_read_dma(ctrl, data == 0x25);
+            break;
+        case 0x35: // Write DMA lba48
+        case 0xCA: // Write DMA
+            IDE_LOG("Command: WRITE DMA [w/%s LBA48]\n", data == 0x35 ? "" : "o");
+            ide_write_dma(ctrl, data == 0x35);
             break;
         case 0x29: // Read multiple, using LBA48
         case 0xC4: // Read multiple
@@ -1773,7 +1931,7 @@ static void ide_write(uint32_t port, uint32_t data)
             }
             break;
         case 0xC6: // Set Multiple Mode
-            IDE_LOG("Command: SET MULTIPLE MODE\n");
+            IDE_LOG("Command: SET MULTIPLE MODE (%d)\n", ctrl->sector_count & 0xFF);
             if (!selected_drive_has_media(ctrl))
                 ide_abort_command(ctrl);
             else if (SELECTED(ctrl, type) == DRIVE_TYPE_CDROM)
@@ -1793,11 +1951,12 @@ static void ide_write(uint32_t port, uint32_t data)
         case 0xF5: // No clue, but Windows XP writes to this register
         case 0xDA: // Windows 98 boot
         case 0xDE: // Windows 2000 boot
+        default:
             IDE_LOG("Command %02x unknown, aborting!\n", data);
             ide_abort_command(ctrl);
             break;
-        default:
-            IDE_FATAL("Unknown command: %02x\n", data);
+        //default:
+            //IDE_FATAL("Unknown command: %02x\n", data);
         }
         break;
     }
@@ -1840,13 +1999,28 @@ void ide_write_prdt(uint32_t addr, uint32_t data)
             this->dma_command = data & 9;
             if ((data & 1) == 0)
                 return;
-            IDE_FATAL("TODO: run command\n");
+            switch (this->command_issued) {
+            case 0x25:
+            case 0xC8:
+                ide_read_dma_handler(this);
+                break;
+            case 0x35:
+            case 0xCA:
+                ide_write_dma_handler(this);
+                break;
+            }
         }
         break;
     }
     case 2:
         this->dma_status &= ~(data & 6);
         break;
+    case 4 ... 7: {
+        int shift = ((addr & 3) << 3);
+        this->prdt_address &= ~(0xFF << shift);
+        this->prdt_address |= data << shift;
+        break;
+    }
     default:
         IDE_FATAL("TODO: write prdt addr=%08x data=%02x\n", addr, data);
     }
