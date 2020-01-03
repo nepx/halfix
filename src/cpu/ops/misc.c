@@ -152,7 +152,7 @@ int rdmsr(uint32_t index, uint32_t* high, uint32_t* low)
     case 0x10:
         value = cpu_get_cycles() - cpu.tsc_fudge;
         break;
-    case 0x800000C0:
+    case 0xc0000080:
         value = cpu.ia32_efer;
     }
 
@@ -208,7 +208,7 @@ int wrmsr(uint32_t index, uint32_t high, uint32_t low)
     case 0x10:
         cpu.tsc_fudge = cpu_get_cycles() - msr_value;
         break;
-    case 0x800000C0: // https://wiki.osdev.org/CPU_Registers_x86-64#IA32_EFER
+    case 0xc0000080: // https://wiki.osdev.org/CPU_Registers_x86-64#IA32_EFER
         cpu.ia32_efer = msr_value;
         break;
     default:
