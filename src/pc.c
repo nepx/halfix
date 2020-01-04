@@ -220,10 +220,9 @@ int pc_init(struct pc_settings *pc)
     pit_init();
     pic_init(pc);
     kbd_init();
-    vga_init(pc->vga_memory_size ? pc->vga_memory_size : 2 * 1024 * 1024);
+    vga_init(pc);
     ide_init(pc);
 
-    // Now come the optional components -- PCI and APIC. Halfix can simulate an ISA PC very well, but OSes like Windows XP don't like that so much.
     // If pc.enable_<component> is set to zero, then the function calls will do nothing.
     pci_init(pc);
     apic_init(pc);
@@ -393,18 +392,17 @@ void pc_hlt_if_0(void)
     return;
 }
 
-#define SYNC_POINTS_PER_SECOND 32
+//#define INSNS_PER_FRAME 100000000 // Windows 7, Vista
+#define INSNS_PER_FRAME 300000000
 static int sync = 0;
-#ifndef DISABLE_CONSTANT_SAVING
-#endif
-
+static uint64_t last = 0;
 int pc_execute(void)
 {
     // This function is called repeatedly.
     int frames = 10, cycles_to_run, cycles_run, exit_reason, devices_need_servicing = 0;
     itick_t now;
     sync++;
-    if (sync == SYNC_POINTS_PER_SECOND)
+    if ((cpu_get_cycles() - last) > INSNS_PER_FRAME)
     {
 // Verify that timing is identical
 #ifndef DISABLE_CONSTANT_SAVING
@@ -414,6 +412,7 @@ int pc_execute(void)
 #endif
 #endif
         sync = 0;
+        last = cpu_get_cycles();
     }
     // Call the callback if needed, for async drive cases
     drive_check_complete();

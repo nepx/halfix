@@ -327,6 +327,8 @@ int parse_cfg(struct pc_settings* pc, char* data)
     pc->acpi_enabled = get_field_int(global, "acpi", 1);
     pc->apic_enabled = get_field_int(global, "apic", 1);
     pc->floppy_enabled = get_field_int(global, "floppy", 1);
+    pc->vbe_enabled = get_field_int(global, "vbe", 1);
+    pc->pci_vga_enabled = get_field_int(global, "pcivga", 0);
 
     // Now figure out disk image information
     int res = parse_disk(&pc->drives[0], get_section(global, "ata0-master"), 0);

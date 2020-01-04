@@ -1526,27 +1526,31 @@ static void vga_pci_init(void)
     io_register_mmio_write(vga.vgabios_addr, 0x20000, vga_rom_writeb, NULL, NULL);
 }
 
-void vga_init(int memory_size)
+void vga_init(struct pc_settings* pc)
 {
     io_register_reset(vga_reset);
     io_register_read(0x3B0, 48, vga_read, NULL, NULL);
     io_register_write(0x3B0, 48, vga_write, NULL, NULL);
-    io_register_read(0x1CE, 2, NULL, vga_read, NULL);
-    io_register_write(0x1CE, 2, NULL, vga_write, NULL);
+    if(pc->vbe_enabled) {
+        io_register_read(0x1CE, 2, NULL, vga_read, NULL);
+        io_register_write(0x1CE, 2, NULL, vga_write, NULL);
+    }
 
     state_register(vga_state);
 
     io_register_mmio_read(0xA0000, 0x20000, vga_mem_readb, NULL, NULL);
     io_register_mmio_write(0xA0000, 0x20000, vga_mem_writeb, NULL, NULL);
 
+    int memory_size = pc->vga_memory_size < (256 << 10) ? 256 << 10 : pc->vga_memory_size;
     io_register_mmio_read(VBE_LFB_BASE, memory_size, vga_mem_readb, NULL, NULL);
     io_register_mmio_write(VBE_LFB_BASE, memory_size, vga_mem_writeb, NULL, NULL);
 
     vga.vram_size = memory_size;
     vga_alloc_mem();
 
-    UNUSED(vga_pci_init);
-    //vga_pci_init();
+    if(pc->pci_vga_enabled){
+        vga_pci_init();
+    }
 }
 
 void* vga_get_raw_vram(void)

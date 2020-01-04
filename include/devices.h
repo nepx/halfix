@@ -11,7 +11,7 @@ void cmos_init(uint64_t now);
 void pit_init(void);
 void pic_init(struct pc_settings* pc);
 void kbd_init(void);
-void vga_init(int);
+void vga_init(struct pc_settings* pc);
 void ide_init(struct pc_settings* pc);
 void fdc_init(struct pc_settings* pc);
 void acpi_init(struct pc_settings* pc);
