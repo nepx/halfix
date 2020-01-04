@@ -1,0 +1,11 @@
+--- rombios-old.c	2017-02-16 13:43:52.000000000 -0800
++++ rombios-new.c	2020-01-03 19:44:06.379565299 -0800
+@@ -3103,7 +3103,7 @@
+     current++;
+     write_word_DS(&EbdaData->ata.trsfsectors,current);
+     count--;
+-    if(ioflag == 0) await_ide(NOT_BSY, iobase1, IDE_TIMEOUT);
++    await_ide(NOT_BSY, iobase1, IDE_TIMEOUT);
+     status = inb(iobase1 + ATA_CB_STAT);
+     if(ioflag == 0)
+     {
