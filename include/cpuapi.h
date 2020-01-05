@@ -86,6 +86,9 @@ int cpu_apic_connected(void);
 // Debug API
 void cpu_debug(void);
 
+// mmu.c
+uint32_t cpu_read_phys(uint32_t addr);
+
 #define MEM_RDONLY 1
 
 #endif
