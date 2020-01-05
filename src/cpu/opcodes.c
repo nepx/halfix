@@ -202,12 +202,16 @@ OPTYPE op_nop(struct decoded_instruction* i)
 
 OPTYPE op_jmp_r16(struct decoded_instruction* i)
 {
-    SET_VIRT_EIP(R16(I_RM(i->flags)));
+    uint32_t dest = R16(I_RM(i->flags));
+    if(dest >= cpu.seg_limit[CS]) EXCEPTION_GP(0);
+    SET_VIRT_EIP(dest);
     STOP();
 }
 OPTYPE op_jmp_r32(struct decoded_instruction* i)
 {
-    SET_VIRT_EIP(R32(I_RM(i->flags)));
+    uint32_t dest = R32(I_RM(i->flags));
+    if(dest >= cpu.seg_limit[CS]) EXCEPTION_GP(0);
+    SET_VIRT_EIP(dest);
     STOP();
 }
 OPTYPE op_jmp_e16(struct decoded_instruction* i)
@@ -2718,13 +2722,19 @@ OPTYPE op_mov_r32cr(struct decoded_instruction* i)
 {
     uint32_t flags = i->flags;
     R32(I_RM(flags)) = cpu.cr[I_REG(flags)];
-    NEXT(flags);
+    cpu.phys_eip += flags & 15;
+    // XXX - don't do this here
+    cpu.last_phys_eip = cpu.phys_eip - 4096;
+    STOP();
 }
 OPTYPE op_mov_crr32(struct decoded_instruction* i)
 {
     uint32_t flags = i->flags;
     cpu_prot_set_cr(I_REG(flags), R32(I_RM(flags)));
-    NEXT(flags);
+    cpu.phys_eip += flags & 15;
+    // Force a page refresh, required during Windows 8 boot.
+    cpu.last_phys_eip = cpu.phys_eip - 4096;
+    STOP();
 }
 OPTYPE op_mov_r32dr(struct decoded_instruction* i)
 {
