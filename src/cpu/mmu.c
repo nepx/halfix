@@ -332,6 +332,8 @@ int cpu_mmu_translate(uint32_t lin, int shift)
             return 0;
         pae_page_fault:
             cpu.cr[2] = lin;
+            CPU_LOG("CR2: %08x\n", cpu.cr[2]);
+            //if((lin & ~0xFFF) == 0x01058000) __asm__("int3");
             // i have no idea if this is right
             EXCEPTION_PF(fail);
         }

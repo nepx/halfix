@@ -2255,7 +2255,8 @@ static int decode_0F20(struct decoded_instruction* i)
         i->flags = flags;
         i->handler = op_mov_r32cr;
     }
-    return 0;
+    // End the trace here since we might be flushing the TLB
+    return 1;
 }
 static int decode_0F21(struct decoded_instruction* i)
 {
@@ -2287,7 +2288,7 @@ static int decode_0F22(struct decoded_instruction* i)
         i->flags = flags;
         i->handler = op_mov_crr32;
     }
-    return 0;
+    return 1;
 }
 static int decode_0F23(struct decoded_instruction* i)
 {
@@ -3417,6 +3418,12 @@ int cpu_decode(struct trace_info* info, struct decoded_instruction* i)
         i->handler = op_trace_end; \
         return 0;                  \
     } while (0)
+                    uint32_t next_page = (lin_eip + 15) & ~0xFFF;
+                    uint8_t tlb_tag = cpu.tlb_tags[next_page >> 12];
+                    if (TLB_ENTRY_INVALID8(next_page, tlb_tag, cpu.tlb_shift_read) || cpu.tlb_attrs[next_page >> 12] & TLB_ATTR_NX) {
+                        if (cpu_mmu_translate(next_page, cpu.tlb_shift_read | 8)) 
+                            EXCEPTION_HANDLER;
+                    }
                 // This is the only point at which an exception can be raised.
                 for (int j = 0; j < 15; j++)
                     cpu_read8(lin_eip + j, prefetch[j], cpu.tlb_shift_read);

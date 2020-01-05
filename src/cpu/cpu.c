@@ -211,6 +211,7 @@ void cpu_reset(void)
     // Reset TLB
     memset(cpu.tlb, 0, sizeof(void*) * (1 << 20));
     memset(cpu.tlb_tags, 0xFF, 1 << 20);
+    memset(cpu.tlb_attrs, 0xFF, 1 << 20);
     cpu_mmu_tlb_flush();
 }
 
@@ -301,8 +302,8 @@ void cpu_init_dma(uint32_t page){
 }
 
 void cpu_write_mem(uint32_t addr, void* data, uint32_t length){
-    if(addr <= 4){
-        switch(addr){
+    if(length <= 4){
+        switch(length){
             case 1:
                 cpu.mem8[addr] = *(uint8_t*)data;
 #ifdef INSTRUMENT
