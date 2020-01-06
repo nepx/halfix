@@ -45,7 +45,7 @@ void afree(void* ptr);
 
 typedef uint64_t itick_t;
 itick_t get_now(void);
-uint32_t ticks_per_second;
+extern uint32_t ticks_per_second;
 
 // Functions that mess around with timing
 void add_now(itick_t a);
