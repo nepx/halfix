@@ -6,35 +6,6 @@
 #include "state.h"
 #include "util.h"
 
-static struct cpu_config cpu_models[] = {
-    [CPU_CLASS_486] = {.vendor_name = "GenuineIntel",
-                       .level = 1,
-                       .features[FEATURE_EAX_1] = {
-                           .level = 1,
-                           .eax = 0x402, // Intel 486DX
-                           .ebx = 0,
-                           .ecx = 0,
-                           .edx = 1 // FPU
-                       },
-                       .features[FEATURE_EAX_80000000] = {.level = 0x80000000}},
-    [CPU_CLASS_PENTIUM] = {.vendor_name = "GenuineIntel", .level = 1, .features[FEATURE_EAX_1] = {
-                                                                          .level = 1,
-                                                                          .eax = 0x513, // Intel Pentium
-                                                                          .ebx = 0,
-                                                                          .ecx = 0,
-                                                                          .edx = 0x11 | (1 << 8) | (1 << 5) // FPU+TSC+RDTSC+CMPXCHG8B+MSR
-                                                                      },
-                           .features[FEATURE_EAX_80000000] = {.level = 0x80000000}},
-    [CPU_CLASS_PENTIUM_PRO] = {.vendor_name = "GenuineIntel", .level = 1, .features[FEATURE_EAX_1] = {
-                                                                              .level = 1,
-                                                                              .eax = 0x611, // Intel Pentium Pro
-                                                                              .ebx = 0,
-                                                                              .ecx = 0,
-                                                                              .edx = 0x11 | (1 << 8) | (1 << 5) | (1 << 15) | (1 << 13) // FPU+TSC+RDTSC+CMPXCHG8B+MSR+CMOV+PTE
-                                                                          },
-                               .features[FEATURE_EAX_80000000] = {.level = 0x80000000}},
-};
-
 static inline void pc_cmos_lowhi(int idx, int data)
 {
     if (data > 0xFFFF)
@@ -316,16 +287,6 @@ int pc_init(struct pc_settings *pc)
         return -1;
     if (pc->pci_enabled)
         pci_init_mem(cpu_get_ram_ptr());
-
-    // Initialize CPUID
-    if (pc->cpu_type >= CPU_CLASS_MAXIMUM)
-    {
-        fprintf(stderr, "Unknown CPU class: %d\n", pc->cpu_type);
-        return -1;
-    }
-    struct cpu_config *cfg = &cpu_models[pc->cpu_type];
-    if (cpu_set_cpuid(cfg) == -1)
-        return -1;
 
     // Check if BIOS and VGABIOS have sane values
     if (((uintptr_t)pc->bios.data | (uintptr_t)pc->vgabios.data) & 0xFFF)

@@ -17,6 +17,14 @@ enum
     DRIVE_TYPE_CDROM
 };
 
+enum {
+    CPU_TYPE_486,
+    CPU_TYPE_PENTIUM,
+    CPU_TYPE_PENTIUM_PRO,
+    CPU_TYPE_PENTIUM_4,
+    CPU_TYPE_CORE_DUO
+};
+
 // Important: do not free this struct or modify values in it after passing it to pc_init
 struct pc_settings
 {
@@ -31,7 +39,11 @@ struct pc_settings
         // Setting apic_enabled to zero will disable both the I/O APIC and the local APIC. Otherwise, the system will function identically to that of one without an APIC.
         apic_enabled,
         // Setting acpi_enabled to zero will disable the ACPI interface and make the system function identically to a system that is not ACPI-compliant
-        acpi_enabled;
+        acpi_enabled,
+        // Settting vbe_enabled to zero will disable the Bochs VBE extensions (it will not disable the VBE functions in the BIOS, although the BIOS won't be able to enable VBE)
+        vbe_enabled,
+        // Setting pci_vga_enabled to zero will disable PCI VGA accleration. Note that in some cases, it will make screen updating slower due to how the Halfix fetch-decode-execute loop is implemented
+        pci_vga_enabled;
 
     // Current time according to the CMOS clock
     uint64_t current_time;
@@ -57,15 +69,6 @@ enum
     BOOT_FLOPPY = 1,
     BOOT_DISK = 2,
     BOOT_CDROM = 3
-};
-
-enum
-{
-    CPU_CLASS_486 = 0,
-    CPU_CLASS_PENTIUM = 1,
-    CPU_CLASS_PENTIUM_PRO = 2,
-    CPU_CLASS_HALFIX_DEFAULT = 3,
-    CPU_CLASS_MAXIMUM
 };
 
 int pc_init(struct pc_settings *pc);
