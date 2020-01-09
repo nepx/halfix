@@ -1750,10 +1750,9 @@ int execute_0F60_67(struct decoded_instruction* i)
 // All shifts should fit in one byte. A non-zero value in any other byte signifies that the value is > 16
 static uint32_t get_shift(void* x, int bytes)
 {
-    uint32_t res = *(uint8_t*)x; // This is the byte we care about
-    for (int i = 1; i < bytes; i++)
-        res |= *(uint8_t*)(x + i) << 8; // If any other byte is non-zero, res will have some of bits 8...15 set.
-    return res;
+    uint8_t* dest = x;
+    for(int i=1;i<bytes;i++) if(dest[i]) return 0xFF;
+    return dest[0];
 }
 int execute_0FD0_D7(struct decoded_instruction* i)
 {
@@ -2574,37 +2573,37 @@ int execute_0FF1_F7(struct decoded_instruction* i)
         CHECK_MMX;
         EX(get_mmx_read_ptr(flags, i, 2));
         dest32 = get_mmx_reg_src(I_REG(flags));
-        pshift(dest32, PSHIFT_PSLLW, 4, i->imm16 >> 8);
+        pshift(dest32, PSHIFT_PSLLW, 4, get_shift(result_ptr, 8));
         break;
     case PSLLW_XGoXEo:
         CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
-        pshift(dest32, PSHIFT_PSLLW, 8, i->imm16 >> 8);
+        pshift(dest32, PSHIFT_PSLLW, 8, get_shift(result_ptr, 16));
         break;
     case PSLLD_MGqMEq:
         CHECK_MMX;
         EX(get_mmx_read_ptr(flags, i, 2));
         dest32 = get_mmx_reg_src(I_REG(flags));
-        pshift(dest32, PSHIFT_PSLLD, 4, i->imm16 >> 8);
+        pshift(dest32, PSHIFT_PSLLD, 4, get_shift(result_ptr, 8));
         break;
     case PSLLD_XGoXEo:
         CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
-        pshift(dest32, PSHIFT_PSLLD, 8, i->imm16 >> 8);
+        pshift(dest32, PSHIFT_PSLLD, 8, get_shift(result_ptr, 16));
         break;
     case PSLLQ_MGqMEq:
         CHECK_MMX;
         EX(get_mmx_read_ptr(flags, i, 2));
         dest32 = get_mmx_reg_src(I_REG(flags));
-        pshift(dest32, PSHIFT_PSLLQ, 4, i->imm16 >> 8);
+        pshift(dest32, PSHIFT_PSLLQ, 4, get_shift(result_ptr, 8));
         break;
     case PSLLQ_XGoXEo:
         CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
-        pshift(dest32, PSHIFT_PSLLQ, 8, i->imm16 >> 8);
+        pshift(dest32, PSHIFT_PSLLQ, 8, get_shift(result_ptr, 16));
         break;
     case PMULLUDQ_MGqMEq:
         CHECK_MMX;
