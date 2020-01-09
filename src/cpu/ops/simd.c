@@ -1194,8 +1194,8 @@ int execute_0F50_57(struct decoded_instruction* i)
         EX(get_sse_read_ptr(flags, i, 4, 1));
         src32 = result_ptr;
         result = 0;
-        result = src32[0] >> 31;
-        result |= src32[2] >> 30 & 2;
+        result = src32[1] >> 31;
+        result |= src32[3] >> 30 & 2;
         cpu.reg32[I_REG(flags)] = result;
         break;
     case SQRTPS_XGoXEo:
