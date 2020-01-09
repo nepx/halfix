@@ -1136,9 +1136,9 @@ int execute_0F28_2F(struct decoded_instruction* i)
         dest32 = get_sse_reg_dest(I_REG(flags));
         int result;
         if (i->imm8 & 16) // UCOMISD
-            result = float64_compare(*(uint64_t*)result_ptr, *(uint64_t*)&dest32[0], &status);
+            result = float64_compare(*(uint64_t*)&dest32[0], *(uint64_t*)result_ptr, &status);
         else
-            result = float64_compare_quiet(*(uint64_t*)result_ptr, *(uint64_t*)&dest32[0], &status);
+            result = float64_compare_quiet(*(uint64_t*)&dest32[0], *(uint64_t*)result_ptr, &status);
         int eflags = 0;
         switch (result) {
         case float_relation_unordered:
@@ -1146,6 +1146,9 @@ int execute_0F28_2F(struct decoded_instruction* i)
             break;
         case float_relation_less:
             eflags = EFLAGS_CF;
+            break;
+        case float_relation_greater:
+            eflags = 0;
             break;
         case float_relation_equal:
             eflags = EFLAGS_ZF;
