@@ -1690,7 +1690,7 @@ int execute_0F60_67(struct decoded_instruction* i)
     case PUNPCKLDQ_XGoXEo:
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
-        punpckl(dest32, result_ptr, 16, 8);
+        punpckl(dest32, result_ptr, 16, 4);
         break;
     case PACKSSWB_MGqMEq:
         EX(get_mmx_read_ptr(flags, i, 2));
