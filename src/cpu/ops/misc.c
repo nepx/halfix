@@ -51,6 +51,11 @@ void cpuid(void)
         cpu.reg32[ECX] = 0;
         cpu.reg32[EDX] = 0x007a7040;
         cpu.reg32[EBX] = 0;
+#elif defined(CORE_DUO_SUPPORT)
+        cpu.reg32[EAX] = 0x02b3b001;
+        cpu.reg32[ECX] = 0;
+        cpu.reg32[EDX] = 0x2c04307d;
+        cpu.reg32[EBX] = 0xF0;
 #else
         cpu.reg32[EAX] = 0x00410601;
         cpu.reg32[ECX] = 0;
@@ -58,6 +63,49 @@ void cpuid(void)
         cpu.reg32[EBX] = 0;
 #endif
         break;
+#ifdef CORE_DUO_SUPPORT
+    case 4:
+        switch (cpu.reg32[ECX]) {
+
+        case 0:
+            cpu.reg32[EAX] = 0x04000121;
+            cpu.reg32[EBX] = 0x01C0003F;
+            cpu.reg32[ECX] = 0x0000003F;
+            cpu.reg32[EDX] = 0x00000001;
+            break;
+        case 1:
+            cpu.reg32[EAX] = 0x04000122;
+            cpu.reg32[EBX] = 0x01C0003F;
+            cpu.reg32[ECX] = 0x0000003F;
+            cpu.reg32[EDX] = 0x00000001;
+            break;
+        case 2:
+            cpu.reg32[EAX] = 0x04004143;
+            cpu.reg32[EBX] = 0x01C0003F;
+            cpu.reg32[ECX] = 0x00000FFF;
+            cpu.reg32[EDX] = 0x00000001;
+            break;
+        default:
+            cpu.reg32[EAX] = 0;
+            cpu.reg32[EBX] = 0;
+            cpu.reg32[ECX] = 0;
+            cpu.reg32[EDX] = 0;
+            return;
+        }
+        break;
+    case 6:
+        cpu.reg32[EAX] = 1;
+        cpu.reg32[ECX] = 1;
+        cpu.reg32[EDX] = 0;
+        cpu.reg32[EBX] = 2;
+        break;
+    case 10:
+        cpu.reg32[EAX] = 0x07280201;
+        cpu.reg32[EBX] = 0x00000000;
+        cpu.reg32[ECX] = 0x00000000;
+        cpu.reg32[EDX] = 0x00000000;
+        break;
+#endif
     case 0x80000000:
 #ifdef P4_SUPPORT
         cpu.reg32[EAX] = 0x80000004;
@@ -78,13 +126,15 @@ void cpuid(void)
 #endif
         break;
     case 0x80000002 ... 0x80000004: {
-        static const char* brand_string = 
+        static const char* brand_string =
 #ifdef P4_SUPPORT
             "              Intel(R) Pentium(R) 4 CPU 1.80GHz"
+#elif defined(CORE_DUO_SUPPORT)
+            "Intel(R) Core(TM) Duo CPU      T2400  @ 1.83GHz"
 #else
             "Halfix Virtual CPU                             "
 #endif
-        ;
+            ;
         static const int reg_ids[] = { EAX, EBX, ECX, EDX }; // Note: not in ordinary A/C/D/B order
         int offset = (cpu.reg32[EAX] - 0x80000002) << 4;
         for (int i = 0; i < 16; i++) {
@@ -124,7 +174,8 @@ int rdmsr(uint32_t index, uint32_t* high, uint32_t* low)
     uint64_t value;
     switch (index) {
     case 0x1B:
-        if(!cpu_apic_connected()) EXCEPTION_GP(0);
+        if (!cpu_apic_connected())
+            EXCEPTION_GP(0);
         value = cpu.apic_base;
         break;
     case 0x250 ... 0x26F:
@@ -140,7 +191,7 @@ int rdmsr(uint32_t index, uint32_t* high, uint32_t* low)
         value = cpu.mtrr_deftype;
         break;
     default:
-        CPU_LOG("Unknown MSR read: 0x%x\n", index); 
+        CPU_LOG("Unknown MSR read: 0x%x\n", index);
         value = 0;
         break;
     case 0x174 ... 0x176:
@@ -160,7 +211,7 @@ int rdmsr(uint32_t index, uint32_t* high, uint32_t* low)
     *low = value & 0xFFFFFFFF;
 
 #ifdef INSTRUMENT
-    if(index == 0x10) {
+    if (index == 0x10) {
         cpu_instrument_rdtsc(*low, *high);
     }
     cpu_instrument_access_msr(index, *high, *low, 0);
