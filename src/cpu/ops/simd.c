@@ -1132,7 +1132,7 @@ int execute_0F28_2F(struct decoded_instruction* i)
         break;
     }
     case UCOMISD_XGqXEq: {
-        EX(get_sse_read_ptr(flags, i, 2, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 0));
         dest32 = get_sse_reg_dest(I_REG(flags));
         int result;
         if (i->imm8 & 16) // UCOMISD
