@@ -29,8 +29,8 @@ struct decoded_instruction* cpu_get_trace(void)
     if ((cpu.phys_eip ^ cpu.last_phys_eip) > 4095) {
         uint32_t virt_eip = VIRT_EIP(), lin_eip = virt_eip + cpu.seg_base[CS];
         uint8_t tlb_tag = cpu.tlb_tags[lin_eip >> 12];
-        if (TLB_ENTRY_INVALID8(lin_eip, tlb_tag, cpu.tlb_shift_read)) {
-            if (cpu_mmu_translate(lin_eip, cpu.tlb_shift_read))
+        if (TLB_ENTRY_INVALID8(lin_eip, tlb_tag, cpu.tlb_shift_read) || cpu.tlb_attrs[lin_eip >> 12] & TLB_ATTR_NX) {
+            if (cpu_mmu_translate(lin_eip, cpu.tlb_shift_read | 8))
                 return &temporary_placeholder;
         }
         cpu.phys_eip = PTR_TO_PHYS(cpu.tlb[lin_eip >> 12] + lin_eip);
