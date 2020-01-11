@@ -360,17 +360,8 @@ static void pit_reset(void)
 }
 static void timer_cb(void)
 {
-    //PIT_LOG("Periodic interval at %ld [period: %d]\n", get_now(), pit.chan[0].period);
-    switch (pit.chan[0].mode) {
-    case 2:
-        pic_lower_irq(0);
-        pic_raise_irq(0);
-        break;
-    default:
-        pic_lower_irq(0); // Might have problems with level-triggered interrupts, TODO
-        pic_raise_irq(0);
-        break;
-    }
+    pic_lower_irq(0);
+    pic_raise_irq(0);
 }
 
 // Get the number of ticks, in the future, that the PIT needs to wait.
