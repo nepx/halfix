@@ -1,4 +1,4 @@
-// Advanced Control and Power Interface
+// Advanced Configuration and Power Interface
 // Based off of the PIIX4 interface.
 // https://www.intel.com/Assets/PDF/datasheet/290562.pdf
 // https://www.intel.com/assets/pdf/specupdate/297738.pdf
@@ -78,7 +78,6 @@ static uint32_t acpi_pm_read(uint32_t addr)
     case 8:
         // Timer
         result = acpi_get_clock(get_now());
-        printf("Get clock: %08x\n", result);
         break;
     default:
         ACPI_FATAL("TODO: power management read: %04x\n", addr);
@@ -158,6 +157,10 @@ static int acpi_pci_write(uint8_t* ptr, uint8_t addr, uint8_t data)
 {
     switch (addr) {
     case 0 ... 3: // Vendor ID and stuff
+    case 4 ... 5:
+        ptr[addr] = data;
+        acpi.smiose = data & 1; // XXX: Correct? 
+        return 0;
     case 8 ... 0x3B:
         return 1; // Read only
     case 0x3C: // "Interrupt Line. The value in this register has no affect on PIIX4 hardware operations."
@@ -202,7 +205,6 @@ int acpi_next(itick_t now_tick)
     }
     if (acpi.pmsts_en & (1 << 16)) {
         // Find out when we overflow our 23 bit counter
-        now = ~acpi_get_clock(now_tick) & 0x00FFFFFF;
         acpi.pmsts_en |= 1;
         if (raise_irq) {
             pic_raise_irq(9);
@@ -211,7 +213,7 @@ int acpi_next(itick_t now_tick)
 
         acpi.last_pm_clock = acpi_get_clock(now_tick);
         // Now find transition time from now.
-        uint32_t ticks_left = ~now & 0x00FFFFFF;
+        uint32_t ticks_left = 0x1000000 - now;
         // Convert it into ticks
         return (double)ticks_left * (double)ticks_per_second / (double)ACPI_CLOCK_SPEED;
     } else {
