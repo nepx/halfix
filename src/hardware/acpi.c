@@ -161,6 +161,8 @@ static int acpi_pci_write(uint8_t* ptr, uint8_t addr, uint8_t data)
         ptr[addr] = data;
         acpi.smiose = data & 1; // XXX: Correct? 
         return 0;
+    case 6 ... 7: // PCI Device status register, most of the bits are hardwired. 
+        return 0;
     case 8 ... 0x3B:
         return 1; // Read only
     case 0x3C: // "Interrupt Line. The value in this register has no affect on PIIX4 hardware operations."
