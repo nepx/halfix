@@ -115,11 +115,43 @@ static void acpi_pm_write(uint32_t addr, uint32_t data)
 }
 static uint32_t acpi_sm_read(uint32_t addr)
 {
-    ACPI_FATAL("TODO: system management read: %04x\n", addr);
+    switch(addr & 0xF){
+        case 0:
+            // TODO: status register
+            return 0;
+        case 2:
+            // TODO: control
+            return 0;
+        case 3:
+            // TODO: command
+            return 0;
+        case 4:
+            // TODO: address
+            return 0;
+        case 5 ... 6:
+            //return acpi.smbus_data[~addr & 1];
+            // TODO: data
+            return 0;
+        default:
+            ACPI_FATAL("TODO: system management read: %04x\n", addr);
+    }
 }
 static void acpi_sm_write(uint32_t addr, uint32_t data)
 {
-    ACPI_FATAL("TODO: system management read: %04x data %04x\n", addr, data);
+    switch(addr & 0xF){
+        case 0:
+            break;
+        case 2:
+            break;
+        case 3:
+            break;
+        case 4:
+            break;
+        case 5 ... 6:
+            break;
+        default:
+            ACPI_FATAL("TODO: system management read: %04x data %04x\n", addr, data);
+    }
 }
 
 // Remap power management base addresses
