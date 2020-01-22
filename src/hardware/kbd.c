@@ -396,6 +396,10 @@ static void kbd_write(uint32_t port, uint32_t data)
                 kbd_add(KBD_QUEUE, 0xFA);
                 kbd_add(KBD_QUEUE, 0xAA);
                 break;
+            case 0xF0: // Get/set keyboard scancode set
+                kbd.command = data;
+                kbd_add(KBD_QUEUE, 0xFA); 
+                break;
             case 0x05: // Windows NT 4.0 uses this one, don't know what it does.
                 kbd_add(KBD_QUEUE, 0xFE); // RESEND
                 break;
@@ -481,6 +485,12 @@ static void kbd_write(uint32_t port, uint32_t data)
             break;
         case 0xED: // Set keyboard LEDs
             kbd_add(KBD_QUEUE, 0xFA);
+            kbd.keyboard_command = NO_COMMAND;
+            break;
+        case 0xF0: // Keyboard scancode set
+            kbd_add(KBD_QUEUE, 0xFA);
+            if(data == 0)
+                kbd_add(KBD_QUEUE, 2);
             kbd.keyboard_command = NO_COMMAND;
             break;
         case 0xF3: // Set typematic rate
