@@ -2117,7 +2117,13 @@ static int decode_0F01(struct decoded_instruction* i)
         case 4:
             i->handler = SIZEOP(op_smsw_r16, op_smsw_r32);
             break;
-        case 0 ... 3:
+        case 1:
+            i->flags = 0;
+            i->handler = op_nop;
+            break;
+        case 0:
+        case 2:
+        case 3:
         case 5:
         case 7:
             i->handler = op_ud_exception;
