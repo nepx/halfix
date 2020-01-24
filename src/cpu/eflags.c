@@ -53,7 +53,7 @@ int cpu_get_of(void)
     uint32_t lop1;
     switch (cpu.laux & LAUX_METHOD_MASK) {
     case MUL:
-        return (cpu.lop1 ^ cpu.lop2) != 0;
+        return cpu.lop1 != cpu.lop2;
     case BIT:
     case SAR8... SAR32:
         return 0;
@@ -185,7 +185,7 @@ int cpu_get_cf(void)
     uint32_t lop1;
     switch (cpu.laux & LAUX_METHOD_MASK) {
     case MUL:
-        return (cpu.lop1 ^ cpu.lop2) != 0;
+        return cpu.lop1 != cpu.lop2;
     case ADD8:
         return (cpu.lr & 0xFF) < (cpu.lop2 & 0xFF);
     case ADD16:
