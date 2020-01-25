@@ -6,6 +6,12 @@
 #include "state.h"
 #include "util.h"
 
+// Comment below line to disable automatic loading of savestate
+//#define SAVESTATE
+#define DISABLE_RESTORE
+// Comment below line to disable automatic saving.
+#define DISABLE_CONSTANT_SAVING
+
 static inline void pc_cmos_lowhi(int idx, int data)
 {
     if (data > 0xFFFF)
@@ -13,6 +19,26 @@ static inline void pc_cmos_lowhi(int idx, int data)
     cmos_set(idx, data);
     cmos_set(idx + 1, data >> 8);
 }
+
+// seabios firmware configuration
+#define FW_CFG_SIGNATURE        0x00
+#define FW_CFG_ID               0x01
+#define FW_CFG_UUID             0x02
+#define FW_CFG_RAM_SIZE         0x03
+#define FW_CFG_NOGRAPHIC        0x04
+#define FW_CFG_NB_CPUS          0x05
+#define FW_CFG_MACHINE_ID       0x06
+#define FW_CFG_KERNEL_ADDR      0x07
+#define FW_CFG_KERNEL_SIZE      0x08
+#define FW_CFG_KERNEL_CMDLINE   0x09
+#define FW_CFG_INITRD_ADDR      0x0a
+#define FW_CFG_INITRD_SIZE      0x0b
+#define FW_CFG_BOOT_DEVICE      0x0c
+#define FW_CFG_NUMA             0x0d
+#define FW_CFG_BOOT_MENU        0x0e
+#define FW_CFG_MAX_CPUS         0x0f
+#define FW_CFG_MAX_ENTRY        0x10
+static uint32_t bios_firmware_data, firmware_memory_size;
 
 static uint8_t cmos12v = 0;
 static void pc_init_cmos_disk(struct drive_info *drv, int id)
@@ -101,6 +127,20 @@ static void bios_writeb(uint32_t port, uint32_t data)
     int id;
     switch (port)
     {
+    case 0x510: // BIOS firmware configuration port
+        // bios_config_data
+        switch(data){
+            case FW_CFG_SIGNATURE:
+                bios_firmware_data = 0xFAB0FAB0;
+                break;
+            case FW_CFG_RAM_SIZE:
+                bios_firmware_data = firmware_memory_size;
+                break;
+            case FW_CFG_NB_CPUS:
+                bios_firmware_data = 1;
+                break;
+        }
+        break;
     case 0x8900:
     {
         static const unsigned char shutdown[8] = "Shutdown";
@@ -152,8 +192,15 @@ static uint32_t bios_readb(uint32_t port)
 {
     switch (port)
     {
+    case 0xB3:
+        return 0;
     case 0x92:
         return a20;
+    case 0x511: {
+        int temp = bios_firmware_data & 0xFF;
+        bios_firmware_data >>= 8;
+        return temp;
+    }
     default:
         return -1;
     }
@@ -208,6 +255,9 @@ int pc_init(struct pc_settings *pc)
     display_init();
 
     //io_register_read(0x61, 1, bios_readb, NULL, NULL);
+    io_register_read(0xB3, 1, bios_readb, NULL, NULL);
+    io_register_read(0x511, 1, bios_readb, NULL, NULL);
+    io_register_write(0x510, 1, NULL, bios_writeb, NULL);
     io_register_write(0x8900, 1, bios_writeb, NULL, NULL);
 
     // Random ports
@@ -283,6 +333,7 @@ int pc_init(struct pc_settings *pc)
     }
 
     // The rest is just CPU initialization
+    firmware_memory_size = pc->memory_size;
     if (cpu_init_mem(pc->memory_size) == -1)
         return -1;
     if (pc->pci_enabled)
@@ -301,7 +352,8 @@ int pc_init(struct pc_settings *pc)
     }
     int v = cpu_add_rom(0x100000 - pc->bios.length, pc->bios.length, pc->bios.data);
     v |= cpu_add_rom(-pc->bios.length, pc->bios.length, pc->bios.data);
-    v |= cpu_add_rom(0xC0000, pc->vgabios.length, pc->vgabios.data);
+    if(!pc->pci_vga_enabled)
+        v |= cpu_add_rom(0xC0000, pc->vgabios.length, pc->vgabios.data);
     if (v == -1)
     {
         fprintf(stderr, "Unable to register ROM areas\n");
@@ -354,7 +406,7 @@ void pc_hlt_if_0(void)
 }
 
 //#define INSNS_PER_FRAME 100000000 // Windows 7, Vista
-#define INSNS_PER_FRAME 300000000
+#define INSNS_PER_FRAME 100000000
 static int sync = 0;
 static uint64_t last = 0;
 int pc_execute(void)
