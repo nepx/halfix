@@ -4,6 +4,7 @@ TODO list:
      ~ BSOD: KERNEL_DATA_INPAGE_ERROR. most likely a hardware issue (hard drive?)
  [ ] boot Windows 10
  [ ] boot Ubuntu
+     ~ kernel panic on 16.04, something to do with decompression, happens on bochs too
  [ ] gui (perhaps Imgui?)
  [ ] swap floppy drives (NT 3.51 install)
  [ ] dynamic recompiler

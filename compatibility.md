@@ -2,6 +2,20 @@
 
 Most operating systems work fine with the default configuration (32 MB RAM, no floppy drive, APIC/PCI/ACPI enabled). However, you might need to increase the RAM size or enable floppy drives. 
 
+# BIOS
+
+## Bochs BIOS
+Works well, except a disk drive write delay bug. Patch is in `docs/rombios.patch`
+
+## LGPL'ed VGABIOS
+Works well, except Buildroot can't detect VESA
+
+## SeaBIOS
+Works with latest commits. 
+
+## ET4000 ROM
+Nothing appears on screen.
+
 ## DOS
 All versions should work, although they might not boot from floppy disks due to unimplemented commands. Installing must be done on DOSBox or Bochs because swapping floppy disks is not supported. 
 
@@ -38,7 +52,7 @@ Installs, boots, and runs. Very stable. I recommend running with 128 MB RAM.
 Takes forever to boot with the Pentium 4 CPU configuration. Set IPS to around 50,000,000 to get the nice Aero theme. Run with 512 MB of RAM. 
 
 ### Windows 7
-The disk image I created requires a Pentium 4 or better to boot (it hangs on a `#UD` exception on FXSAVE). Unstable, it crashed with a BSOD. Can't use CDs because not all commands are implemented. Run with 512 MB of RAM. 
+The disk image I created requires a Pentium 4 or better to boot (it hangs on a `#UD` exception on FXSAVE). Unstable, it sometimes crashes with a BSOD. Can't use CDs because not all commands are implemented. Run with 512 MB of RAM. 
 
 ### Windows 8
 BSODs with a `KERNEL_DATA_INPAGE_ERROR`. Probably a device problem. 
@@ -73,3 +87,11 @@ Boots fine, but mouse doesn't work. I suspect it has something to do with the ke
 
 ## ReactOS
 Works fine, from the LiveCD. VGA emulation is funky, though. Icons don't render. Hopefully enabling VESA will fix that. 
+
+## Buildroot
+
+Boots fine, no graphics (`No displays found!`). Most likely due to problems in VGA BIOS -- graphics don't work on Bochs either. 
+
+## Ubuntu
+
+Tried 16.04, fails with a kernel panic. Interestingly, the same kernel panic occurs in Bochs 2.6.10. I have yet to find out why because I can't find a way to scroll up in the text mode console. 
