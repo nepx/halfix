@@ -1224,7 +1224,7 @@ int execute_0F50_57(struct decoded_instruction* i)
         fp_exception = cpu_sse_handle_exceptions();
         break;
     case SQRTSD_XGqXEq:
-        EX(get_sse_read_ptr(flags, i, 2, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 0));
         src32 = result_ptr;
         dest32 = get_sse_reg_dest(I_REG(flags));
         *(uint64_t*)&dest32[0] = float64_sqrt(*(uint64_t*)&src32[0], &status);
@@ -2151,7 +2151,7 @@ int execute_0FC2_C6(struct decoded_instruction* i)
         break;
     case CMPSD_XGqXEqIb:
         CHECK_SSE;
-        EX(get_sse_read_ptr(flags, i, 2, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 0));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = dest32[1] = cmppd(*(float64*)(&dest32[0]), *(float64*)(result_ptr), imm);
         fp_exception = cpu_sse_handle_exceptions();
@@ -2235,7 +2235,7 @@ int execute_0F58_5F(struct decoded_instruction* i)
         fp_exception = cpu_sse_handle_exceptions();
         break;
     case ADDSD_XGqXEq:
-        EX(get_sse_read_ptr(flags, i, 2, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 0));
         dest64 = get_sse_reg_dest(I_REG(flags));
         dest64[0] = float64_add(dest64[0], *(float64*)(result_ptr), &status);
         fp_exception = cpu_sse_handle_exceptions();
@@ -2263,7 +2263,7 @@ int execute_0F58_5F(struct decoded_instruction* i)
         fp_exception = cpu_sse_handle_exceptions();
         break;
     case MULSD_XGqXEq:
-        EX(get_sse_read_ptr(flags, i, 2, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 0));
         dest64 = get_sse_reg_dest(I_REG(flags));
         dest64[0] = float64_mul(dest64[0], *(float64*)(result_ptr), &status);
         fp_exception = cpu_sse_handle_exceptions();
@@ -2288,7 +2288,7 @@ int execute_0F58_5F(struct decoded_instruction* i)
         fp_exception = cpu_sse_handle_exceptions();
         break;
     case CVTSS2SD_XGoXEd: // float --> double
-        EX(get_sse_read_ptr(flags, i, 1, 1));
+        EX(get_sse_read_ptr(flags, i, 1, 0));
         dest64 = get_sse_reg_dest(I_REG(flags));
         dest64[0] = float32_to_float64(*(float32*)result_ptr, &status);
         fp_exception = cpu_sse_handle_exceptions();
@@ -2349,7 +2349,7 @@ int execute_0F58_5F(struct decoded_instruction* i)
         fp_exception = cpu_sse_handle_exceptions();
         break;
     case SUBSD_XGqXEq:
-        EX(get_sse_read_ptr(flags, i, 2, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 0));
         dest64 = get_sse_reg_dest(I_REG(flags));
         dest64[0] = float64_sub(dest64[0], *(float64*)(result_ptr), &status);
         fp_exception = cpu_sse_handle_exceptions();
@@ -2377,7 +2377,7 @@ int execute_0F58_5F(struct decoded_instruction* i)
         fp_exception = cpu_sse_handle_exceptions();
         break;
     case MINSD_XGqXEq:
-        EX(get_sse_read_ptr(flags, i, 2, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 0));
         dest64 = get_sse_reg_dest(I_REG(flags));
         dest64[0] = float64_min(dest64[0], *(float64*)(result_ptr), &status);
         fp_exception = cpu_sse_handle_exceptions();
@@ -2405,7 +2405,7 @@ int execute_0F58_5F(struct decoded_instruction* i)
         fp_exception = cpu_sse_handle_exceptions();
         break;
     case DIVSD_XGqXEq:
-        EX(get_sse_read_ptr(flags, i, 2, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 0));
         dest64 = get_sse_reg_dest(I_REG(flags));
         dest64[0] = float64_div(dest64[0], *(float64*)(result_ptr), &status);
         fp_exception = cpu_sse_handle_exceptions();
@@ -2433,7 +2433,7 @@ int execute_0F58_5F(struct decoded_instruction* i)
         fp_exception = cpu_sse_handle_exceptions();
         break;
     case MAXSD_XGqXEq:
-        EX(get_sse_read_ptr(flags, i, 2, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 0));
         dest64 = get_sse_reg_dest(I_REG(flags));
         dest64[0] = float64_max(dest64[0], *(float64*)(result_ptr), &status);
         fp_exception = cpu_sse_handle_exceptions();
