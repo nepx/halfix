@@ -7,8 +7,9 @@
 
 #define EXCEPTION_HANDLER return 1
 
-// Recommended for Windows 7, REQUIRED for Windows NT 4.0
+// Uncomment this to make the CPU pretend it's a Pentium 4
 //#define P4_SUPPORT
+// Uncomment this to make the CPU pretend it's a Core Duo
 // Required for Windows 8
 #define CORE_DUO_SUPPORT
 
@@ -366,7 +367,6 @@ int popfd(void)
 int ltr(uint32_t selector)
 {
     // Load task register
-    printf("%04x\n", selector);
     uint32_t selector_offset = selector & 0xFFFC, tss_access, tss_addr;
     struct seg_desc tss_desc;
     // Cannot be NULL
