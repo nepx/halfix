@@ -229,7 +229,7 @@ int cpu_mmu_translate(uint32_t lin, int shift)
             // Note that we only support 3 GB of RAM at max, so we're OK with ignoring the top bits
             uint32_t pdp_addr = (cpu.cr[3] & ~31) | (lin >> 27 & 0x18),
                      pdpte = cpu_read_phys(pdp_addr);
-            int fail = 0;
+            int fail = (write << 1) | (user << 2);
             if ((pdpte & 1) == 0)
                 goto pae_page_fault;
 #if PAE_HANDLE_RESERVED
@@ -253,7 +253,7 @@ int cpu_mmu_translate(uint32_t lin, int shift)
 #endif
 
             int nx_enabled = cpu.ia32_efer >> 11 & 1, nx = (pde2 >> 31) & nx_enabled;
-            fail = (execute && nx_enabled) << 4 | (write << 1) | (user << 2);
+            fail |= (execute && nx_enabled) << 4;
 
             if ((pde & 1) == 0) {
                 fail |= 0;
@@ -332,6 +332,7 @@ int cpu_mmu_translate(uint32_t lin, int shift)
             return 0;
         pae_page_fault:
             cpu.cr[2] = lin;
+            //if(lin == 0xbfd8efff) __asm__("int3");
             CPU_LOG("CR2: %08x\n", cpu.cr[2]);
             //if((lin & ~0xFFF) == 0x01058000) __asm__("int3");
             // i have no idea if this is right
