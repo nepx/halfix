@@ -302,8 +302,18 @@ static void fpu_stack_fault(void)
     //if(fpu.status.float_exception_masks & FPU_EXCEPTION_INVALID_OPERATION) return 1;
     //return 0;
 }
-static int fpu_check_exceptions(void)
-{
+
+static uint32_t partial_sw, bits_to_clear;
+
+static void fpu_commit_sw(void){
+    // XXX this is a really, really bad kludge
+    fpu.status_word |= partial_sw;
+    fpu.status_word &= ~bits_to_clear | partial_sw;
+    bits_to_clear = 0;
+    partial_sw = 0;
+}
+
+static int fpu_check_exceptions2(int commit_sw){
     int flags = fpu.status.float_exception_flags;
     int unmasked_exceptions = (flags & ~fpu.status.float_exception_masks) & 0x3F;
 
@@ -325,7 +335,9 @@ static int fpu_check_exceptions(void)
         flags &= FPU_EXCEPTION_INVALID_OPERATION | FPU_EXCEPTION_ZERO_DIVIDE | FPU_EXCEPTION_DENORMALIZED;
     }
 
-    fpu.status_word |= flags;
+    if(commit_sw)
+        fpu.status_word |= flags;
+    else partial_sw |= flags;
 
     if (unmasked_exceptions) {
         fpu.status_word |= 0x8080;
@@ -335,6 +347,11 @@ static int fpu_check_exceptions(void)
     }
 
     return 0;
+}
+
+static int fpu_check_exceptions(void)
+{
+    return fpu_check_exceptions2(1);
 }
 
 static void fninit(void)
@@ -386,14 +403,21 @@ static int fpu_check_stack_overflow(int st)
 }
 
 // Fault if ST register is empty.
-static int fpu_check_stack_underflow(int st)
+static int fpu_check_stack_underflow(int st, int commit_sw)
 {
     int tag = fpu_get_tag(st);
-    SET_C1(0);
     if (tag == FPU_TAG_EMPTY) {
         fpu_stack_fault();
+        if(commit_sw)
+            SET_C1(1);
+        else 
+            partial_sw = 1 << 9;
         return 1;
     }
+    if(commit_sw)
+        SET_C1(0);
+    else 
+        bits_to_clear = 1 << 9;
     return 0;
 }
 
@@ -716,7 +740,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
         if (fpu_fwait())
             return 1;
         fpu_update_pointers(opcode);
-        if (fpu_check_stack_underflow(0) || fpu_check_stack_underflow(st_index))
+        if (fpu_check_stack_underflow(0, 1) || fpu_check_stack_underflow(st_index, 1))
             FPU_ABORT();
 
         switch (smaller_opcode & 7) {
@@ -756,7 +780,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
     case OP(0xDE, 2): { // Aliases of the DB opcodes
         if (fpu_fwait())
             FPU_ABORT();
-        if (fpu_check_stack_underflow(0) || fpu_check_stack_underflow(opcode & 7)) {
+        if (fpu_check_stack_underflow(0, 1) || fpu_check_stack_underflow(opcode & 7, 1)) {
             SET_C0(1);
             SET_C2(1);
             SET_C3(1);
@@ -772,7 +796,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
         if (fpu_fwait())
             FPU_ABORT();
         fpu_update_pointers(opcode);
-        if (fpu_check_stack_underflow(opcode & 7) || fpu_check_push())
+        if (fpu_check_stack_underflow(opcode & 7, 1) || fpu_check_push())
             FPU_ABORT();
         temp80 = fpu_get_st(opcode & 7);
         fpu_push(temp80);
@@ -783,7 +807,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
         if (fpu_fwait())
             FPU_ABORT();
         fpu_update_pointers(opcode);
-        if (fpu_check_stack_underflow(0) || fpu_check_stack_underflow(1))
+        if (fpu_check_stack_underflow(0, 1) || fpu_check_stack_underflow(1, 1))
             FPU_ABORT();
         temp80 = fpu_get_st(0);
         fpu_set_st(0, fpu_get_st(opcode & 7));
@@ -799,7 +823,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
             FPU_ABORT();
         fpu_update_pointers(opcode);
         if ((opcode & 7) != 5)
-            if (fpu_check_stack_underflow(0))
+            if (fpu_check_stack_underflow(0, 1))
                 FPU_ABORT();
         temp80 = fpu_get_st(0);
         switch (opcode & 7) {
@@ -860,14 +884,14 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
         int temp2, old_rounding;
         switch (opcode & 7) {
         case 0: // D9 F0: F2XM1 - Compute 2^ST(0) - 1
-            if (fpu_check_stack_underflow(0))
+            if (fpu_check_stack_underflow(0, 1))
                 FPU_ABORT();
             res = f2xm1(fpu_get_st(0), &fpu.status);
             if (!fpu_check_exceptions())
                 fpu_set_st(0, res);
             break;
         case 1: // D9 F1: FYL2X - Compute ST(1) * log2(ST(0)) and then pop
-            if (fpu_check_stack_underflow(0) || fpu_check_stack_underflow(1))
+            if (fpu_check_stack_underflow(0, 1) || fpu_check_stack_underflow(1, 1))
                 FPU_ABORT();
 
             old_rounding = fpu.status.float_rounding_precision;
@@ -881,14 +905,14 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
             }
             break;
         case 2: // D9 F2: FPTAN - Compute tan(ST(0)) partially
-            if (fpu_check_stack_underflow(0))
+            if (fpu_check_stack_underflow(0, 1))
                 FPU_ABORT();
             res = fpu_get_st(0);
             if (!ftan(&res, &fpu.status))
                 fpu_set_st(0, res);
             break;
         case 3: // D9 F3: FPATAN - Compute tan-1(ST(0)) partially
-            if (fpu_check_stack_underflow(0) || fpu_check_stack_underflow(1))
+            if (fpu_check_stack_underflow(0, 1) || fpu_check_stack_underflow(1, 1))
                 FPU_ABORT();
             res = fpatan(fpu_get_st(0), fpu_get_st(1), &fpu.status);
             if (!fpu_check_exceptions()) {
@@ -897,7 +921,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
             }
             break;
         case 4: // D9 F4: FXTRACT - Extract Exponent and mantissa of ST0
-            if (fpu_check_stack_underflow(0))
+            if (fpu_check_stack_underflow(0, 1))
                 FPU_ABORT();
             if (fpu_check_stack_overflow(-1))
                 FPU_ABORT();
@@ -950,7 +974,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
         fpu_update_pointers(opcode);
 
         // Check for FPU registers
-        if (fpu_check_stack_underflow(0))
+        if (fpu_check_stack_underflow(0, 1))
             FPU_ABORT();
 
         int flags, pop = 0;
@@ -958,7 +982,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
         uint64_t quotient;
         switch (opcode & 7) {
         case 0: // FPREM - Floating point partial remainder (8087/80287 compatible)
-            if (fpu_check_stack_underflow(1))
+            if (fpu_check_stack_underflow(1, 1))
                 FPU_ABORT();
             flags = floatx80_remainder(fpu_get_st(0), fpu_get_st(1), &dest, &quotient, &fpu.status);
             if (!fpu_check_exceptions()) {
@@ -984,7 +1008,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
             }
             break;
         case 1: // FYL2XP1 - Compute ST1 * log2(ST0 + 1) and pop
-            if (fpu_check_stack_underflow(1))
+            if (fpu_check_stack_underflow(1, 1))
                 FPU_ABORT();
             dest = fyl2xp1(fpu_get_st(0), fpu_get_st(1), &fpu.status);
             if (!fpu_check_exceptions()) {
@@ -1012,7 +1036,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
             dest = floatx80_round_to_int(fpu_get_st(0), &fpu.status);
             break;
         case 5: // FSCALE - Scale ST0
-            if (fpu_check_stack_underflow(0) || fpu_check_stack_underflow(1))
+            if (fpu_check_stack_underflow(0, 1) || fpu_check_stack_underflow(1, 1))
                 FPU_ABORT();
             dest = floatx80_scale(fpu_get_st(0), fpu_get_st(1), &fpu.status);
             break;
@@ -1043,7 +1067,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
         if (fpu_fwait())
             return 1;
         fpu_update_pointers(opcode);
-        if (fpu_check_stack_underflow(0) && fpu_check_stack_underflow(opcode & 7))
+        if (fpu_check_stack_underflow(0, 1) && fpu_check_stack_underflow(opcode & 7, 1))
             FPU_ABORT();
         if (cpu_get_cf() ^ (smaller_opcode >> 3 & 1))
             fpu_set_st(0, fpu_get_st(opcode & 7));
@@ -1053,7 +1077,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
         if (fpu_fwait())
             return 1;
         fpu_update_pointers(opcode);
-        if (fpu_check_stack_underflow(0) && fpu_check_stack_underflow(opcode & 7))
+        if (fpu_check_stack_underflow(0, 1) && fpu_check_stack_underflow(opcode & 7, 1))
             FPU_ABORT();
         if (cpu_get_zf() ^ (smaller_opcode >> 3 & 1))
             fpu_set_st(0, fpu_get_st(opcode & 7));
@@ -1063,7 +1087,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
         if (fpu_fwait())
             return 1;
         fpu_update_pointers(opcode);
-        if (fpu_check_stack_underflow(0) && fpu_check_stack_underflow(opcode & 7))
+        if (fpu_check_stack_underflow(0, 1) && fpu_check_stack_underflow(opcode & 7, 1))
             FPU_ABORT();
         if ((cpu_get_zf() || cpu_get_cf()) ^ (smaller_opcode >> 3 & 1))
             fpu_set_st(0, fpu_get_st(opcode & 7));
@@ -1073,7 +1097,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
         if (fpu_fwait())
             return 1;
         fpu_update_pointers(opcode);
-        if (fpu_check_stack_underflow(0) && fpu_check_stack_underflow(opcode & 7))
+        if (fpu_check_stack_underflow(0, 1) && fpu_check_stack_underflow(opcode & 7, 1))
             FPU_ABORT();
         if (cpu_get_pf() ^ (smaller_opcode >> 3 & 1))
             fpu_set_st(0, fpu_get_st(opcode & 7));
@@ -1083,7 +1107,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
             return 1;
         fpu_update_pointers(opcode);
         if ((opcode & 7) == 1) {
-            if (fpu_check_stack_underflow(0) || fpu_check_stack_underflow(1)) {
+            if (fpu_check_stack_underflow(0, 1) || fpu_check_stack_underflow(1, 1)) {
                 SET_C0(1);
                 SET_C2(1);
                 SET_C3(1);
@@ -1120,7 +1144,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
         fpu_update_pointers(opcode);
 
         cpu_set_eflags(cpu_get_eflags() & ~(EFLAGS_OF | EFLAGS_SF | EFLAGS_ZF | EFLAGS_AF | EFLAGS_PF | EFLAGS_CF));
-        if (fpu_check_stack_underflow(0) || fpu_check_stack_underflow(opcode & 7)) {
+        if (fpu_check_stack_underflow(0, 1) || fpu_check_stack_underflow(opcode & 7, 1)) {
             cpu_set_zf(1);
             cpu_set_pf(1);
             cpu_set_cf(1);
@@ -1137,7 +1161,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
         if (fpu_fwait())
             FPU_ABORT();
         fpu_update_pointers(opcode);
-        if (fpu_check_stack_underflow(0)) {
+        if (fpu_check_stack_underflow(0, 1)) {
             if (fpu_exception_masked(FPU_EXCEPTION_STACK_FAULT))
                 fpu_pop();
             FPU_ABORT();
@@ -1162,7 +1186,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
         if (fpu_fwait())
             return 1;
         fpu_update_pointers(opcode);
-        if (fpu_check_stack_underflow(0) || fpu_check_stack_underflow(opcode & 7)) {
+        if (fpu_check_stack_underflow(0, 1) || fpu_check_stack_underflow(opcode & 7, 1)) {
             SET_C0(1);
             SET_C2(1);
             SET_C3(1);
@@ -1179,7 +1203,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
         if (fpu_fwait())
             FPU_ABORT();
         fpu_update_pointers(opcode);
-        if (fpu_check_stack_underflow(0) || fpu_check_stack_underflow(opcode & 7)) {
+        if (fpu_check_stack_underflow(0, 1) || fpu_check_stack_underflow(opcode & 7, 1)) {
             if (!fpu_check_exceptions()) {
                 // Masked response
                 SET_C0(1);
@@ -1207,7 +1231,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
         // Clear all flags
         cpu_set_eflags(cpu_get_eflags() & ~(EFLAGS_OF | EFLAGS_SF | EFLAGS_ZF | EFLAGS_AF | EFLAGS_PF | EFLAGS_CF));
 
-        if (fpu_check_stack_underflow(0) || fpu_check_stack_underflow(opcode & 7)) {
+        if (fpu_check_stack_underflow(0, 1) || fpu_check_stack_underflow(opcode & 7, 1)) {
             cpu_set_zf(1);
             cpu_set_pf(1);
             cpu_set_cf(1);
@@ -1327,7 +1351,7 @@ int fpu_mem_op(struct decoded_instruction* i, uint32_t virtaddr, uint32_t seg)
         // Make sure we won't stack fault
         int op = smaller_opcode & 15;
         if ((op & 8) == 0) { // Don't do this for ST0
-            if (fpu_check_stack_underflow(0)) {
+            if (fpu_check_stack_underflow(0, 1)) {
                 if ((smaller_opcode & 14) == 2) {
                     // For FCOM/FCOMP, set condition codes to 1
                     SET_C0(1);
@@ -1383,12 +1407,14 @@ int fpu_mem_op(struct decoded_instruction* i, uint32_t virtaddr, uint32_t seg)
             return 1;
         fpu_update_pointers2(opcode, virtaddr, seg);
 
-        if (fpu_check_stack_underflow(0))
+        if (fpu_check_stack_underflow(0, 0))
             FPU_ABORT();
         temp32 = floatx80_to_float32(fpu_get_st(0), &fpu.status);
-        if (!fpu_check_exceptions()) {
+        if (!fpu_check_exceptions2(0)) {
             if (write_float32(linaddr, temp32))
                 FPU_EXCEP();
+            fpu_commit_sw();
+        printf("after: %08x\n", fpu.status_word);
             if (smaller_opcode & 1)
                 fpu_pop();
         }
@@ -1420,7 +1446,7 @@ int fpu_mem_op(struct decoded_instruction* i, uint32_t virtaddr, uint32_t seg)
             return 1;
         //fpu_debug();
         fpu_update_pointers2(opcode, virtaddr, seg);
-        if (fpu_check_stack_underflow(0))
+        if (fpu_check_stack_underflow(0, 0))
             FPU_ABORT();
         switch (smaller_opcode >> 4 & 3) { // Extract the upper 2 bits of the small opcode
         case 1: { // DB
@@ -1429,7 +1455,7 @@ int fpu_mem_op(struct decoded_instruction* i, uint32_t virtaddr, uint32_t seg)
                 res = floatx80_to_int32(fpu_get_st(0), &fpu.status);
             else
                 res = floatx80_to_int32_round_to_zero(fpu_get_st(0), &fpu.status);
-            if (!fpu_check_exceptions())
+            if (!fpu_check_exceptions2(0))
                 cpu_write32(linaddr, res, cpu.tlb_shift_write);
             break;
         }
@@ -1439,7 +1465,7 @@ int fpu_mem_op(struct decoded_instruction* i, uint32_t virtaddr, uint32_t seg)
                 res = floatx80_to_int64(fpu_get_st(0), &fpu.status);
             else
                 res = floatx80_to_int64_round_to_zero(fpu_get_st(0), &fpu.status);
-            if (!fpu_check_exceptions()) {
+            if (!fpu_check_exceptions2(0)) {
                 cpu_write32(linaddr, res, cpu.tlb_shift_write);
                 cpu_write32(linaddr + 4, res >> 32, cpu.tlb_shift_write);
             }
@@ -1451,15 +1477,16 @@ int fpu_mem_op(struct decoded_instruction* i, uint32_t virtaddr, uint32_t seg)
                 res = floatx80_to_int16(fpu_get_st(0), &fpu.status);
             else
                 res = floatx80_to_int16_round_to_zero(fpu_get_st(0), &fpu.status);
-            if (!fpu_check_exceptions())
+            if (!fpu_check_exceptions2(0))
                 cpu_write16(linaddr, res, cpu.tlb_shift_write);
             break;
         }
         }
-        if (!fpu_check_exceptions()) { // XXX eliminate this
+        if (!fpu_check_exceptions2(0)) { // XXX eliminate this
             if (smaller_opcode & 1)
                 fpu_pop();
         }
+        fpu_commit_sw();
         break;
     }
     case OP(0xD9, 4): { // FLDENV - Load floating point environment from memory
@@ -1483,7 +1510,7 @@ int fpu_mem_op(struct decoded_instruction* i, uint32_t virtaddr, uint32_t seg)
         if (fpu_fwait())
             return 1;
         fpu_update_pointers2(opcode, virtaddr, seg);
-        if (fpu_check_stack_underflow(0))
+        if (fpu_check_stack_underflow(0, 1))
             FPU_ABORT();
         if (fpu_store_f80(linaddr, fpu_get_st_ptr(0)))
             return 1;
@@ -1497,12 +1524,13 @@ int fpu_mem_op(struct decoded_instruction* i, uint32_t virtaddr, uint32_t seg)
         //fpu_debug();
         fpu_update_pointers2(opcode, virtaddr, seg);
 
-        if (fpu_check_stack_underflow(0))
+        if (fpu_check_stack_underflow(0, 0))
             FPU_ABORT();
         temp64 = floatx80_to_float64(fpu_get_st(0), &fpu.status);
-        if (!fpu_check_exceptions()) {
+        if (!fpu_check_exceptions2(0)) {
             if (write_float64(linaddr, temp64))
                 FPU_EXCEP();
+            fpu_commit_sw();
             if (smaller_opcode & 1)
                 fpu_pop();
         }
@@ -1618,13 +1646,14 @@ int fpu_mem_op(struct decoded_instruction* i, uint32_t virtaddr, uint32_t seg)
         if (fpu_fwait())
             return 1;
         fpu_update_pointers2(opcode, virtaddr, seg);
-        if (fpu_check_stack_underflow(0))
+        if (fpu_check_stack_underflow(0, 0))
             FPU_ABORT();
         uint64_t i64 = floatx80_to_int64(fpu_get_st(0), &fpu.status);
-        if (fpu_check_exceptions())
+        if (fpu_check_exceptions2(0))
             FPU_ABORT();
         cpu_write32(linaddr, (uint32_t)i64, cpu.tlb_shift_write);
         cpu_write32(linaddr + 4, (uint32_t)(i64 >> 32), cpu.tlb_shift_write);
+        fpu_commit_sw();
         fpu_pop();
         break;
     }
