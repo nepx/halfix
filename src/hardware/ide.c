@@ -1614,8 +1614,10 @@ void drive_debug(int64_t x){
     printf("\n");
 }
 
-static void ide_write_dma_handler(struct ide_controller* ctrl)
+static void ide_write_dma_handler(void* this, int status)
 {
+    struct ide_controller* ctrl = this;
+    UNUSED(status);
     uint32_t prdt_addr = ctrl->prdt_address,
              sectors = ide_get_sector_count(ctrl, ctrl->lba48),
              bytes_in_buffer = sectors * 512;
@@ -1663,16 +1665,6 @@ static void ide_write_dma_handler(struct ide_controller* ctrl)
     ide_raise_irq(ctrl);
 }
 
-static void ide_dma_cb(void* this, int result)
-{
-    if (result != 0) {
-        ide_abort_command(this);
-        return;
-    }
-    struct ide_controller* ctrl = this;
-    ctrl->dma_status |= 1;
-}
-
 static void ide_read_dma(struct ide_controller* ctrl, int lba48)
 {
     // Prefetch the sectors and write them to disk according to memory.
@@ -1683,10 +1675,9 @@ static void ide_read_dma(struct ide_controller* ctrl, int lba48)
 
 static void ide_write_dma(struct ide_controller* ctrl, int lba48)
 {
-    ctrl->status = ATA_STATUS_BSY | ATA_STATUS_DRDY;
+    ctrl->status = ATA_STATUS_DSC | ATA_STATUS_DRQ | ATA_STATUS_DRDY;
+    ctrl->dma_status |= 1;
     ctrl->lba48 = lba48;
-    // We need to prefetch in case we write a partial block
-    drive_prefetch(SELECTED(ctrl, info), ctrl, ide_get_sector_count(ctrl, lba48), ide_get_sector_offset(ctrl, lba48), ide_dma_cb);
 }
 
 // Write to an IDE port
@@ -2007,13 +1998,14 @@ void ide_write_prdt(uint32_t addr, uint32_t data)
             case 0x25:
             case 0xC8:
                 result = drive_prefetch(SELECTED(this, info), this, ide_get_sector_count(this, lba48), ide_get_sector_offset(this, lba48) << (drv_offset_t)9, ide_read_dma_handler);
-                IDE_LOG("result: %d id=%08x\n", result, (uint32_t)ide_get_sector_offset(this, lba48));
                 if(result == DRIVE_RESULT_SYNC) ide_read_dma_handler(this, 0);
                 else this->status |= ATA_STATUS_BSY;
                 break;
             case 0x35:
             case 0xCA:
-                ide_write_dma_handler(this);
+                result = drive_prefetch(SELECTED(this, info), this, ide_get_sector_count(this, lba48), ide_get_sector_offset(this, lba48) << (drv_offset_t)9, ide_write_dma_handler);
+                if(result == DRIVE_RESULT_SYNC) ide_write_dma_handler(this, 0);
+                else this->status |= ATA_STATUS_BSY;
                 break;
             }
         }
