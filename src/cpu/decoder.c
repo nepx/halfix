@@ -2214,7 +2214,7 @@ static const int decode_sse10_17_tbl[8 * 4] = {
     MOVHPS_XGqXEq, // 0F 16
     MOVHPS_XGqXEq, // 66 0F 16
     MOVHPS_XGqXEq, // F2 0F 16 - invalid
-    MOVHPS_XGqXEq, // F3 0F 16 - TODO: SSE3
+    MOVSHDUP_XGoXEo, // F3 0F 16
 
     MOVHPS_XEqXGq, // 0F 17
     MOVHPS_XEqXGq, // 66 0F 17

@@ -39,6 +39,7 @@ enum {
     // 0F 16
     MOVLHPS_XGqXEq,
     MOVHPS_XGqXEq,
+    MOVSHDUP_XGoXEo,
 
     // 0F 17
     MOVHPS_XEqXGq

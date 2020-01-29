@@ -839,7 +839,7 @@ int execute_0F10_17(struct decoded_instruction* i)
     CHECK_SSE;
     // All opcodes from 0F 10 through 0F 17
     uint32_t *dest32, *src32, flags = i->flags;
-    switch (i->imm8 & 15) {
+    switch (i->imm8 & 31) {
     case MOVUPS_XGoXEo:
         // xmm128 <<== r/m128
         EX(get_sse_read_ptr(flags, i, 4, 0));
@@ -973,6 +973,14 @@ int execute_0F10_17(struct decoded_instruction* i)
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[2] = *(uint32_t*)(result_ptr);
         dest32[3] = *(uint32_t*)(result_ptr + 4);
+        break;
+    case MOVSHDUP_XGoXEo:
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        dest32[0] = *(uint32_t*)(result_ptr + 4);
+        dest32[1] = *(uint32_t*)(result_ptr + 4);
+        dest32[2] = *(uint32_t*)(result_ptr + 12);
+        dest32[3] = *(uint32_t*)(result_ptr + 12);
         break;
     case MOVHPS_XEqXGq:
         EX(get_sse_write_ptr(flags, i, 2, 1));
