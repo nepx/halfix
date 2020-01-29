@@ -912,7 +912,7 @@ int execute_0F10_17(struct decoded_instruction* i)
     case MOVLPS_XGqXEq:
         // xmm64 <== r/m64
         // Upper bits are NOT cleared
-        EX(get_sse_read_ptr(flags, i, 2, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 0));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = *(uint32_t*)(result_ptr);
         dest32[1] = *(uint32_t*)(result_ptr + 4);
