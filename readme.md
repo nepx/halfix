@@ -18,7 +18,7 @@ For debug builds, run `node makefile.js` without any arguments. For a debug Emsc
 
 It is recommended -- but not required -- that you chunk up the disk images. Run `node tools/imgsplit.js [path-to-your-disk-image]` and modify the configuration file as required. Note that the Emscripten version only accepts chunked disk images. 
 
-Check the [https://github.com/nepx/halfix/wiki](project wiki) for more details. 
+Check the [project wiki](https://github.com/nepx/halfix/wiki) for more details. 
 
 **Summary**:
 
