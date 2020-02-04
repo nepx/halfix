@@ -504,6 +504,7 @@ static void ide_atapi_no_transfer(struct ide_controller* ctrl)
 // Abort an IDE command and mess around with the sense keys and "additional sense codes"
 static void ide_atapi_abort(struct ide_controller* ctrl, int sense_key, int asc)
 {
+    IDE_LOG("ATAPI abort!!\n");
     ctrl->error = sense_key << 4;
     ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_ERR;
     ide_atapi_no_transfer(ctrl);
@@ -612,6 +613,7 @@ static void ide_atapi_run_command(struct ide_controller* ctrl)
     ctrl->atapi_command = command[0];
 
     int dont_xor = -1;
+    IDE_LOG("Command issued: %02x\n", command[0]);
 
     switch (command[0]) {
     case 0x00: // Test if ready
@@ -1721,7 +1723,7 @@ static void ide_write(uint32_t port, uint32_t data)
             IDE_LOG("Sending command when BSY bit is set\n");
             break;
         }
-        ctrl->error = 0;
+        ctrl->status &= ~ATA_STATUS_ERR;
         ctrl->command_issued = data;
         switch (data) {
         case 8: // ATAPI Reset
@@ -1944,12 +1946,11 @@ static void ide_write(uint32_t port, uint32_t data)
         case 0xF5: // No clue, but Windows XP writes to this register
         case 0xDA: // Windows 98 boot
         case 0xDE: // Windows 2000 boot
-        default:
             IDE_LOG("Command %02x unknown, aborting!\n", data);
             ide_abort_command(ctrl);
             break;
-        //default:
-            //IDE_FATAL("Unknown command: %02x\n", data);
+        default:
+            IDE_FATAL("Unknown command: %02x\n", data);
         }
         break;
     }
