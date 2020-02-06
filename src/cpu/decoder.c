@@ -1542,6 +1542,12 @@ static int decode_C5(struct decoded_instruction* i)
 static int decode_C6(struct decoded_instruction* i)
 {
     uint8_t modrm = rb();
+    if(modrm >> 3 & 7) {
+        // TODO: RTX instructions
+        i->flags = 0;
+        i->handler = op_ud_exception;
+        return 1;
+    }
     i->flags = parse_modrm(i, modrm, 1);
     if (modrm >= 0xC0)
         i->handler = op_mov_r8i8;
@@ -1553,6 +1559,12 @@ static int decode_C6(struct decoded_instruction* i)
 static int decode_C7(struct decoded_instruction* i)
 {
     uint8_t modrm = rb();
+    if(modrm >> 3 & 7) {
+        // TODO: RTX instructions
+        i->flags = 0;
+        i->handler = op_ud_exception;
+        return 1;
+    }
     i->flags = parse_modrm(i, modrm, 0);
     if (modrm >= 0xC0)
         i->handler = SIZEOP(op_mov_r16i16, op_mov_r32i32);
