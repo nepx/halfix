@@ -127,7 +127,7 @@ static int get_read_ptr(uint32_t flags, struct decoded_instruction* i, int dword
 {
     uint32_t linaddr = cpu_get_linaddr(flags, i);
     if (linaddr & ((dwords << 2) - 1)) {
-        if (unaligned_exception) 
+        if (unaligned_exception)
             EXCEPTION_GP(0);
         for (int i = 0, j = 0; i < dwords; i++, j += 4)
             cpu_read32(linaddr + j, temp.d128[i], cpu.tlb_shift_read);
@@ -289,12 +289,13 @@ static inline uint16_t pack_i32_to_i16(uint32_t x)
     }
     return x;
 }
-static uint16_t pack_u16_to_u8(uint16_t x)
+static uint16_t pack_i16_to_u8(int16_t x)
 {
     if (x >= 0xFF)
         return 0xFF;
-    else
-        return x;
+    else if (x < 0)
+        return 0;
+    return x;
 }
 static inline uint8_t pack_i16_to_i8(uint16_t x)
 {
@@ -490,13 +491,13 @@ static void cpu_pslldq(uint64_t* a, int shift, int mask)
         return;
     }
     // This is a 128 bit SHL shift for xmm registers only
-    if(shift == 64){
+    if (shift == 64) {
         a[1] = a[0];
         a[0] = 0;
-    }else if(shift > 64){
+    } else if (shift > 64) {
         a[1] = a[0] << (shift - 32);
         a[0] = 0;
-    }else {
+    } else {
         a[0] <<= shift; // Bottom bits should be 0
         a[0] |= a[1] >> (64L - shift);
         a[1] <<= shift;
@@ -510,13 +511,13 @@ static void cpu_psrldq(uint64_t* a, int shift, int mask)
         return;
     }
     // This is a 128 bit SHR shift for xmm registers only
-    if(shift == 64){
+    if (shift == 64) {
         a[0] = a[1];
         a[1] = 0;
-    }else if(shift > 64){
+    } else if (shift > 64) {
         a[0] = a[1] >> (shift - 32);
         a[1] = 0;
-    }else {
+    } else {
         a[0] >>= shift;
         a[0] |= a[1] << (64L - shift);
         a[1] >>= shift;
@@ -575,8 +576,8 @@ static void packuswb(void* dest, void* src, int wordcount)
     uint8_t res[16];
     uint16_t *dest16 = dest, *src16 = src;
     for (int i = 0; i < wordcount; i++) {
-        res[i] = pack_u16_to_u8(dest16[i]);
-        res[i | wordcount] = pack_u16_to_u8(src16[i]);
+        res[i] = pack_i16_to_u8(dest16[i]);
+        res[i | wordcount] = pack_i16_to_u8(src16[i]);
     }
     memcpy(dest, res, wordcount << 1);
 }
@@ -608,10 +609,10 @@ static void pmuluw(void* dest, void* src, int wordcount, int shift)
 static void pmuludq(void* dest, void* src, int dwordcount)
 {
     uint32_t *dest32 = dest, *src32 = src;
-    for (int i = 0; i < dwordcount; i+=2) {
+    for (int i = 0; i < dwordcount; i += 2) {
         uint64_t result = (uint64_t)dest32[i] * (uint64_t)src32[i];
         dest32[i] = result;
-        dest32[i+1] = result >> 32L;
+        dest32[i + 1] = result >> 32L;
     }
 }
 static int pmovmskb(uint8_t* src, int bytecount)
@@ -985,11 +986,11 @@ int execute_0F10_17(struct decoded_instruction* i)
     case MOVHPS_XEqXGq:
         EX(get_sse_write_ptr(flags, i, 2, 1));
         src32 = get_sse_reg_dest(I_REG(flags));
-        if(I_OP2(flags)){
+        if (I_OP2(flags)) {
             // register --> register moves: upper two quadwords
             *(uint32_t*)(result_ptr + 8) = src32[0];
             *(uint32_t*)(result_ptr + 12) = src32[1];
-        }else{
+        } else {
             // register --> memory
             *(uint32_t*)(result_ptr) = src32[2];
             *(uint32_t*)(result_ptr + 4) = src32[3];
@@ -1593,16 +1594,16 @@ int execute_0F70_76(struct decoded_instruction* i)
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = *(uint32_t*)(result_ptr);
-        dest32[1] = *(uint32_t*)(result_ptr+4);
+        dest32[1] = *(uint32_t*)(result_ptr + 4);
         imm = i->imm16 >> 8;
-        pshuf(dest32 + 2, result_ptr+8, imm, 1);
+        pshuf(dest32 + 2, result_ptr + 8, imm, 1);
         break;
     case PSHUFLW_XGoXEoIb:
         CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
-        dest32[2] = *(uint32_t*)(result_ptr+8);
-        dest32[3] = *(uint32_t*)(result_ptr+12);
+        dest32[2] = *(uint32_t*)(result_ptr + 8);
+        dest32[3] = *(uint32_t*)(result_ptr + 12);
         imm = i->imm16 >> 8;
         pshuf(dest32, result_ptr, imm, 1);
         break;
@@ -1762,7 +1763,9 @@ int execute_0F60_67(struct decoded_instruction* i)
 static uint32_t get_shift(void* x, int bytes)
 {
     uint8_t* dest = x;
-    for(int i=1;i<bytes;i++) if(dest[i]) return 0xFF;
+    for (int i = 1; i < bytes; i++)
+        if (dest[i])
+            return 0xFF;
     return dest[0];
 }
 int execute_0FD0_D7(struct decoded_instruction* i)
@@ -2276,10 +2279,10 @@ int execute_0F58_5F(struct decoded_instruction* i)
         dest64[0] = float64_mul(dest64[0], *(float64*)(result_ptr), &status);
         fp_exception = cpu_sse_handle_exceptions();
         break;
-    case CVTPS2PD_XGoXEo: {// float --> double
+    case CVTPS2PD_XGoXEo: { // float --> double
         EX(get_sse_read_ptr(flags, i, 2, 1));
         dest64 = get_sse_reg_dest(I_REG(flags));
-        // The second dword might get overwritten by the first. 
+        // The second dword might get overwritten by the first.
         float32 temp = *(float32*)(result_ptr + 4);
         dest64[0] = float32_to_float64(*(float32*)result_ptr, &status);
         dest64[1] = float32_to_float64(temp, &status);
@@ -2578,7 +2581,7 @@ int execute_0FE0_E7(struct decoded_instruction* i)
 int execute_0FF1_F7(struct decoded_instruction* i)
 {
     uint32_t flags = i->flags, *dest32, linaddr;
-    uint8_t* mask, *src8;
+    uint8_t *mask, *src8;
     switch (i->imm8) {
     case PSLLW_MGqMEq:
         CHECK_MMX;
@@ -2657,8 +2660,9 @@ int execute_0FF1_F7(struct decoded_instruction* i)
         linaddr = cpu.reg32[EDI] + cpu.seg_base[I_SEG_BASE(flags)];
         src8 = get_mmx_reg_src(I_REG(flags));
         mask = get_mmx_reg_src(I_RM(flags));
-        for(int i=0;i<8;i++){
-            if(mask[i] & 0x80) cpu_write8(linaddr+i,src8[i], cpu.tlb_shift_write);
+        for (int i = 0; i < 8; i++) {
+            if (mask[i] & 0x80)
+                cpu_write8(linaddr + i, src8[i], cpu.tlb_shift_write);
         }
         break;
     case MASKMOVDQ_XEoXGo:
@@ -2666,8 +2670,9 @@ int execute_0FF1_F7(struct decoded_instruction* i)
         linaddr = cpu.reg32[EDI] + cpu.seg_base[I_SEG_BASE(flags)];
         src8 = get_sse_reg_dest(I_REG(flags));
         mask = get_sse_reg_dest(I_RM(flags));
-        for(int i=0;i<16;i++){
-            if(mask[i] & 0x80) cpu_write8(linaddr+i,src8[i], cpu.tlb_shift_write);
+        for (int i = 0; i < 16; i++) {
+            if (mask[i] & 0x80)
+                cpu_write8(linaddr + i, src8[i], cpu.tlb_shift_write);
         }
         break;
     }
