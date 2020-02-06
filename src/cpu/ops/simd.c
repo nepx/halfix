@@ -515,7 +515,7 @@ static void cpu_psrldq(uint64_t* a, int shift, int mask)
         a[0] = a[1];
         a[1] = 0;
     } else if (shift > 64) {
-        a[0] = a[1] >> (shift - 32);
+        a[0] = a[1] >> (shift - 64L);
         a[1] = 0;
     } else {
         a[0] >>= shift;
@@ -1558,7 +1558,7 @@ static void pshift(void* dest, int opcode, int wordcount, int imm)
         cpu_psrlq(dest, imm & 63, mask, wordcount);
         break;
     case PSHIFT_PSRLDQ:
-        imm <<= 3;
+        printf("%d\n", imm);
         if (imm >= 128)
             mask = 0;
         cpu_psrldq(dest, imm & 127, mask);
@@ -1569,7 +1569,6 @@ static void pshift(void* dest, int opcode, int wordcount, int imm)
         cpu_psllq(dest, imm & 63, mask, wordcount);
         break;
     case PSHIFT_PSLLDQ:
-        imm <<= 3;
         if (imm >= 128)
             mask = 0;
         cpu_pslldq(dest, imm & 127, mask);

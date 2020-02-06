@@ -2349,14 +2349,14 @@ static const int decode_sse28_2F_tbl[8 * 4] = {
 
     // Note: CVTT* (convert with truncate) are handled in the same opcode
     CVTPS2PI_MGqXEq, // 0F 2C
-    CVTSS2SI_GdXEd, // 66 0F 2C
+    CVTPD2PI_MGqXEo, // 66 0F 2C
     CVTSD2SI_GdXEq, // F2 0F 2C
-    CVTPD2PI_MGqXEo, // F3 0F 2C
+    CVTSS2SI_GdXEd, // F3 0F 2C
 
     CVTPS2PI_MGqXEq, // 0F 2D
-    CVTSS2SI_GdXEd, // 66 0F 2D
+    CVTPD2PI_MGqXEo, // 66 0F 2D
     CVTSD2SI_GdXEq, // F2 0F 2D
-    CVTPD2PI_MGqXEo, // F3 0F 2D
+    CVTSS2SI_GdXEd, // F3 0F 2D
 
     UCOMISS_XGdXEd, // 0F 2E
     UCOMISD_XGqXEq, // 66 0F 2E
@@ -2670,12 +2670,17 @@ static int decode_sse70_76(struct decoded_instruction* i){
     int op = decode_sse70_76_tbl[opcode << 2 | sse_prefix], combined_op = (modrm >> 3 & 7) | ((opcode - 1) & 3) << 3;
     
     // Get immediate, if necessary
-    if(op < PCMPEQB_MGqMEq) op |= rb() << 8;
+    int or = 0;
+    if(op < PCMPEQB_MGqMEq) or = rb();
     if((op & 15) == PSHIFT_MGqIb)
         op |= rm_table_pshift_mmx[combined_op] << 4;
-    else if((op & 15) == PSHIFT_XEoIb)
-        op |= rm_table_pshift_sse[combined_op] << 4;
-
+    else if((op & 15) == PSHIFT_XEoIb) {
+        int y = rm_table_pshift_sse[combined_op];
+        op |= y << 4;
+        if(y == PSHIFT_PSRLDQ || y == PSHIFT_PSLLDQ)
+            or <<= 3;
+    }
+    op |= or << 8;
     i->imm16 = op;
     return 0;
 }
