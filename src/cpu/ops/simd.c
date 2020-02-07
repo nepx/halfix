@@ -1779,9 +1779,9 @@ int execute_0FD0_D7(struct decoded_instruction* i)
         break;
     case PSRLW_XGoXEo:
         CHECK_SSE;
-        EX(get_sse_read_ptr(flags, i, 4, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
-        pshift(dest32, PSHIFT_PSRLW, 8, get_shift(result_ptr, 16));
+        pshift(dest32, PSHIFT_PSRLW, 8, get_shift(result_ptr, 8));
         break;
     case PSRLD_MGqMEq:
         CHECK_MMX;
@@ -1791,9 +1791,9 @@ int execute_0FD0_D7(struct decoded_instruction* i)
         break;
     case PSRLD_XGoXEo:
         CHECK_SSE;
-        EX(get_sse_read_ptr(flags, i, 4, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
-        pshift(dest32, PSHIFT_PSRLD, 8, get_shift(result_ptr, 16));
+        pshift(dest32, PSHIFT_PSRLD, 8, get_shift(result_ptr, 8));
         break;
     case PSRLQ_MGqMEq:
         CHECK_MMX;
@@ -1803,9 +1803,9 @@ int execute_0FD0_D7(struct decoded_instruction* i)
         break;
     case PSRLQ_XGoXEo:
         CHECK_SSE;
-        EX(get_sse_read_ptr(flags, i, 4, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
-        pshift(dest32, PSHIFT_PSRLQ, 8, get_shift(result_ptr, 16));
+        pshift(dest32, PSHIFT_PSRLQ, 8, get_shift(result_ptr, 8));
         break;
     case PADDQ_MGqMEq:
         CHECK_MMX;
@@ -2590,9 +2590,9 @@ int execute_0FF1_F7(struct decoded_instruction* i)
         break;
     case PSLLW_XGoXEo:
         CHECK_SSE;
-        EX(get_sse_read_ptr(flags, i, 4, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
-        pshift(dest32, PSHIFT_PSLLW, 8, get_shift(result_ptr, 16));
+        pshift(dest32, PSHIFT_PSLLW, 8, get_shift(result_ptr, 8));
         break;
     case PSLLD_MGqMEq:
         CHECK_MMX;
@@ -2602,9 +2602,9 @@ int execute_0FF1_F7(struct decoded_instruction* i)
         break;
     case PSLLD_XGoXEo:
         CHECK_SSE;
-        EX(get_sse_read_ptr(flags, i, 4, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
-        pshift(dest32, PSHIFT_PSLLD, 8, get_shift(result_ptr, 16));
+        pshift(dest32, PSHIFT_PSLLD, 8, get_shift(result_ptr, 8));
         break;
     case PSLLQ_MGqMEq:
         CHECK_MMX;
@@ -2614,9 +2614,9 @@ int execute_0FF1_F7(struct decoded_instruction* i)
         break;
     case PSLLQ_XGoXEo:
         CHECK_SSE;
-        EX(get_sse_read_ptr(flags, i, 4, 1));
+        EX(get_sse_read_ptr(flags, i, 2, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
-        pshift(dest32, PSHIFT_PSLLQ, 8, get_shift(result_ptr, 16));
+        pshift(dest32, PSHIFT_PSLLQ, 8, get_shift(result_ptr, 8));
         break;
     case PMULLUDQ_MGqMEq:
         CHECK_MMX;
