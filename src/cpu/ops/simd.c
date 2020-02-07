@@ -1558,7 +1558,6 @@ static void pshift(void* dest, int opcode, int wordcount, int imm)
         cpu_psrlq(dest, imm & 63, mask, wordcount);
         break;
     case PSHIFT_PSRLDQ:
-        printf("%d\n", imm);
         if (imm >= 128)
             mask = 0;
         cpu_psrldq(dest, imm & 127, mask);
@@ -2548,14 +2547,16 @@ int execute_0FE0_E7(struct decoded_instruction* i)
         dest32[3] = 0;
         fp_exception = cpu_sse_handle_exceptions();
         break;
-    case CVTDQ2PD_XGoXEq:
+    case CVTDQ2PD_XGoXEq: {
         CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
-        *(uint64_t*)(&dest32[0]) = int32_to_float64(*(uint32_t*)result_ptr);
-        *(uint64_t*)(&dest32[2]) = int32_to_float64(*(uint32_t*)(result_ptr + 8));
+        uint32_t dword1 = *(uint32_t*)result_ptr, dword2 = *(uint32_t*)(result_ptr + 4);
+        *(uint64_t*)(&dest32[0]) = int32_to_float64(dword1);
+        *(uint64_t*)(&dest32[2]) = int32_to_float64(dword2);
         fp_exception = cpu_sse_handle_exceptions();
         break;
+    }
     case MOVNTQ_MEqMGq:
         CHECK_MMX;
         EX(get_mmx_write_ptr(flags, i, 2));
