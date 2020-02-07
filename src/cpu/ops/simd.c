@@ -1068,11 +1068,11 @@ int execute_0F28_2F(struct decoded_instruction* i)
         dest32 = get_mmx_reg_dest(I_REG(flags));
         src32 = result_ptr;
         if (i->imm8 & 16) {
-            dest32[0] = float32_to_int32_round_to_zero(src32[0], &status);
-            dest32[1] = float32_to_int32_round_to_zero(src32[1], &status);
-        } else {
             dest32[0] = float32_to_int32(src32[0], &status);
             dest32[1] = float32_to_int32(src32[1], &status);
+        } else {
+            dest32[0] = float32_to_int32_round_to_zero(src32[0], &status);
+            dest32[1] = float32_to_int32_round_to_zero(src32[1], &status);
         }
         fp_exception = cpu_sse_handle_exceptions();
         break;
@@ -1082,9 +1082,9 @@ int execute_0F28_2F(struct decoded_instruction* i)
         dest32 = get_reg_dest(I_REG(flags));
         src32 = result_ptr;
         if (i->imm8 & 16)
-            dest32[0] = float32_to_int32_round_to_zero(src32[0], &status);
-        else
             dest32[0] = float32_to_int32(src32[0], &status);
+        else
+            dest32[0] = float32_to_int32_round_to_zero(src32[0], &status);
         fp_exception = cpu_sse_handle_exceptions();
         break;
     case CVTPD2PI_MGqXEo:
