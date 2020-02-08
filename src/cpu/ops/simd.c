@@ -1246,6 +1246,9 @@ int execute_0F50_57(struct decoded_instruction* i)
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = rsqrt(*(uint32_t*)result_ptr);
         fp_exception = cpu_sse_handle_exceptions();
+#ifdef INSTRUMENT
+        cpu_instrument_approximate_sse(I_REG(flags), 1);
+#endif
         break;
     case RSQRTPS_XGoXEo:
         EX(get_sse_read_ptr(flags, i, 4, 1));
@@ -1255,12 +1258,18 @@ int execute_0F50_57(struct decoded_instruction* i)
         dest32[2] = rsqrt(*(uint32_t*)(result_ptr + 8));
         dest32[3] = rsqrt(*(uint32_t*)(result_ptr + 12));
         fp_exception = cpu_sse_handle_exceptions();
+#ifdef INSTRUMENT
+        cpu_instrument_approximate_sse(I_REG(flags), 4);
+#endif
         break;
     case RCPSS_XGdXEd:
         EX(get_sse_read_ptr(flags, i, 1, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = rcp(*(uint32_t*)result_ptr);
         fp_exception = cpu_sse_handle_exceptions();
+#ifdef INSTRUMENT
+        cpu_instrument_approximate_sse(I_REG(flags), 1);
+#endif
         break;
     case RCPPS_XGoXEo:
         EX(get_sse_read_ptr(flags, i, 4, 1));
@@ -1270,6 +1279,9 @@ int execute_0F50_57(struct decoded_instruction* i)
         dest32[2] = rcp(*(uint32_t*)(result_ptr + 8));
         dest32[3] = rcp(*(uint32_t*)(result_ptr + 12));
         fp_exception = cpu_sse_handle_exceptions();
+#ifdef INSTRUMENT
+        cpu_instrument_approximate_sse(I_REG(flags), 4);
+#endif
         break;
     case ANDPS_XGoXEo:
         EX(get_sse_read_ptr(flags, i, 4, 1));

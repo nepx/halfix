@@ -49,4 +49,8 @@ void cpu_instrument_dma(uint32_t addr, void* data, uint32_t length);
 // Called when the TLB gets full and needs to be refilled
 void cpu_instrument_tlb_full(void);
 
+// Called when a SSE instruction approximates the result (RCPPS, etc.). 
+// This is because this result is not exactly specified in the Intel documentation, so it's a potential source of non-determinism.
+void cpu_instrument_approximate_sse(int dest, int dwords);
+
 #endif
