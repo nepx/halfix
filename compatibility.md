@@ -42,11 +42,23 @@ Boots and runs.
 ### Windows NT 4.0
 Installs, boots, and runs. Very stable. Can self-virtualize if SP6 is installed. 
 
+During install, **DON'T** let the installer auto-detect the video device! Manually change the VGA option by opening the following menu:
+
+![nt1](docs/pics/nt1.png)
+
+Pick the Standard VGA option. 
+
+![nt2](docs/pics/nt2.png)
+
+The emulated video card is based on the ET4000, so that's what it detects. Currently, none of the SVGA extensions are implemented, and Windows gets confused and switches the screen off. 
+
+Disable Pentium 4 and Core Duo support in `src/cpu/ops/misc.c`. There's a well-known CPU detection bug that causes NT to triple fault during installation. You can re-enable higher-level CPU emulation after installation. 
+
 ### Windows 2000
 Boots and runs. 
 
 ### Windows XP
-Installs, boots, and runs. Very stable. I recommend running with 128 MB RAM. 
+Installs, boots, and runs. Very stable. I recommend running with 128 MB RAM, although 32 MB works fine too. 
 
 ### Windows Vista
 Takes forever to boot with the Pentium 4 CPU configuration. Set IPS to around 50,000,000 to get the nice Aero theme. Run with 512 MB of RAM. 
@@ -55,10 +67,10 @@ Takes forever to boot with the Pentium 4 CPU configuration. Set IPS to around 50
 The disk image I created requires a Pentium 4 or better to boot (it hangs on a `#UD` exception on FXSAVE). Unstable, it sometimes crashes with a BSOD. Can't use CDs because not all commands are implemented. Run with 512 MB of RAM. 
 
 ### Windows 8
-BSODs with a `KERNEL_DATA_INPAGE_ERROR`. Probably a device problem. 
+BSODs with a `KERNEL_DATA_INPAGE_ERROR`. Probably a device problem. To test, enable the Core Duo emulation support. 
 
 ### Windows 10
-Haven't tried.
+Boots to desktop. Some stability problems because some SSE instructions cause `#GP(0)` exceptions when they aren't supposed to. Haven't really tested it. 
 
 ## OS/2 
 
@@ -73,6 +85,8 @@ Don't jiggle the mouse during boot. It confuses the keyboard controller, which t
 
 ## Linux
 
+A recurring theme here is that the mouse and/or keyboard is not detected by the Linux kernel. I'm pretty sure that it's a hardware issue. 
+
 ### ISO Linux
 Boots from CD and runs. 
 
@@ -80,7 +94,7 @@ Boots from CD and runs.
 Boots from CD and runs. Slightly longer boot time than Windows XP. 
 
 ### Debian
-No PAE. Kernel doesn't like that. 
+Haven't tested with the new PAE improvements because I accidentally deleted my disk image. 
 
 ### Red Star OS 2
 Boots fine, but mouse doesn't work. I suspect it has something to do with the keyboard controller outport. 
@@ -94,4 +108,10 @@ Boots fine, no graphics (`No displays found!`). Most likely due to problems in V
 
 ## Ubuntu
 
-Tried 16.04, fails with a kernel panic. Interestingly, the same kernel panic occurs in Bochs 2.6.10. I have yet to find out why because I can't find a way to scroll up in the text mode console. 
+Tried 16.04 LiveCD, fails with a kernel panic. Interestingly, the same kernel panic occurs in Bochs 2.6.10. I have yet to find out why because I can't find a way to scroll up in the text mode console. 
+
+However, installing Ubuntu to a hard disk on QEMU and booting in Halfix works fine. No mouse and keyboard support, but the desktop renders. Run with the Core Duo emulation. 
+
+Due to bugs in IDE emulation, don't try running the OS with a CD-ROM inserted. 
+
+I have not tried versions besides 16.04.

@@ -44,7 +44,7 @@ Check the [project wiki](https://github.com/nepx/halfix/wiki) for more details.
 
 ## Compatibility
 
-It boots a wide range of operating system software, including all versions of DOS, most versions of Windows (from 1.01 to Vista and 7), newer versions of OS/2 Warp (3 and 4.5), ReactOS, and some varieties of Linux (ISO Linux, Damn Small Linux, Red Star OS 2, Buildroot). 
+It boots a wide range of operating system software, including all versions of DOS, most versions of Windows (excluding Windows 8), newer versions of OS/2 Warp (3 and 4.5), ReactOS, and some varieties of Linux (ISO Linux, Damn Small Linux, Red Star OS 2, Buildroo, Ubuntu). 
 
 See [Compatibility](compatibility.md) for more details.
 
@@ -87,6 +87,14 @@ The same Windows 98 disk image as in the [Halfix in Halfix screenshot](docs/pics
 CPU-Z on Windows XP
 
 ![CPU-Z](docs/pics/cpu-z.png)
+
+Windows 10
+
+![Win10](docs/pics/win10.png)
+
+Ubuntu
+
+![Ubuntu](docs/pics/ubuntu.png)
 
 ## Transferring Files
 
