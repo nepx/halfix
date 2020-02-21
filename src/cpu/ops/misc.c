@@ -94,6 +94,14 @@ void cpuid(void)
             return;
         }
         break;
+#ifdef CORE_DUO_SUPPORT
+    case 5: 
+        cpu.reg32[EAX] = 0x00000040;
+        cpu.reg32[ECX] = 0x00000003;
+        cpu.reg32[EDX] = 0x00022220;
+        cpu.reg32[EBX] = 0x00000040;
+        break;
+#endif
     case 6:
         cpu.reg32[EAX] = 1;
         cpu.reg32[ECX] = 1;
@@ -146,16 +154,30 @@ void cpuid(void)
         break;
     }
     case 0x80000005: // TLB/cache information
+#ifndef CORE_DUO_SUPPORT
         cpu.reg32[EAX] = 0x01ff01ff;
         cpu.reg32[ECX] = 0x40020140;
         cpu.reg32[EBX] = 0x01ff01ff;
         cpu.reg32[EDX] = 0x40020140;
+#else
+        cpu.reg32[EAX] = 0;
+        cpu.reg32[ECX] = 0;
+        cpu.reg32[EBX] = 0;
+        cpu.reg32[EDX] = 0;
+#endif
         break;
     case 0x80000006: // TLB/cache information
+#ifndef CORE_DUO_SUPPORT
         cpu.reg32[EAX] = 0;
         cpu.reg32[ECX] = 0x02008140;
         cpu.reg32[EBX] = 0x42004200;
         cpu.reg32[EDX] = 0;
+#else
+        cpu.reg32[EAX] = 0;
+        cpu.reg32[ECX] = 0x08006040;
+        cpu.reg32[EBX] = 0;
+        cpu.reg32[EDX] = 0;
+#endif
         break;
     case 0x80000008:
         cpu.reg32[EAX] = 0x2028; // TODO: 0x2024 for 36-bit address space?
