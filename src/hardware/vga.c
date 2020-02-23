@@ -742,11 +742,11 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
     }
     case 0x3D4:
     case 0x3B4: // CRT index
-        vga.crt_index = data & 0x1F;
+        vga.crt_index = data & 0x3F;
         break;
     case 0x3D5:
     case 0x3B5: { // CRT data
-        static uint8_t mask[32] = {
+        static uint8_t mask[64] = {
             // 0-7 are changed based on CR11 bit 7
             MASK(0b00000000), // 0
             MASK(0b00000000), // 1
