@@ -2,19 +2,27 @@
 
 Most operating systems work fine with the default configuration (32 MB RAM, no floppy drive, APIC/PCI/ACPI enabled). However, you might need to increase the RAM size or enable floppy drives. 
 
-# BIOS
+## BIOS
 
-## Bochs BIOS
+The ones below work fine. I haven't tried any of the other ones. 
+
+### Bochs BIOS
 Works well, except a disk drive write delay bug. Patch is in `docs/rombios.patch`
 
-## LGPL'ed VGABIOS
+### LGPL'ed VGABIOS
 Works well, except Buildroot can't detect VESA
 
-## SeaBIOS
-Works with latest commits. 
+![LGPL'ed VGABIOS](docs/pics/lgpl-vgabios.png)
 
-## ET4000 ROM
-Nothing appears on screen.
+### SeaBIOS
+Works with latest commits. Use with SeaVGABIOS for maximum compatibility. 
+
+![SeaBIOS](docs/pics/seabios.png)
+
+### ET4000 ROM
+Appears to work. Use in conjunction with Bochs BIOS. 
+
+![ET4000](docs/pics/et4000.png)
 
 ## DOS
 All versions should work, although they might not boot from floppy disks due to unimplemented commands. Installing must be done on DOSBox or Bochs because swapping floppy disks is not supported. 
