@@ -285,7 +285,7 @@ var Module = {
             v++;
             return v;
         }
-        Module["TOTAL_MEMORY"] = roundUp(mem + 32 + vgamem) * 1024 * 1024 | 0;
+        //Module["TOTAL_MEMORY"] = roundUp(mem + 32 + vgamem) * 1024 * 1024 | 0;
         config.push("memory=" + mem + "M");
         config.push("vgamemory=" + vgamem + "M");
         buildDrive(config, "a", 0, "master");
@@ -617,4 +617,12 @@ var Module = {
 
         gc();
     };
+
+    // Various convienience functions
+    $("ctrlaltdel").addEventListener("mousedown", function(){
+        wrap("display_send_ctrl_alt_del")(1);
+    });
+    $("ctrlaltdel").addEventListener("mouseup", function(){
+        wrap("display_send_ctrl_alt_del")(0);
+    });
 })();
