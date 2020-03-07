@@ -59,11 +59,6 @@ char* state_get_path_base(void);
 
 #define FIELD(y) state_field(obj, sizeof(y), #y, &y)
 
-// Comment below line to disable automatic loading of savestate
-//#define SAVESTATE
-//#define DISABLE_RESTORE
-// Comment below line to disable automatic saving.
-#define DISABLE_CONSTANT_SAVING
 
 #ifdef EMSCRIPTEN
 #define DISABLE_CONSTANT_SAVING
