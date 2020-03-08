@@ -2,9 +2,8 @@ TODO list:
  [x] boot Windows 7
  [ ] boot Windows 8
      ~ BSOD: KERNEL_DATA_INPAGE_ERROR. most likely a hardware issue (hard drive?)
- [ ] boot Windows 10
- [ ] boot Ubuntu
-     ~ kernel panic on 16.04, something to do with decompression, happens on bochs too
+ [x] boot Windows 10
+ [x] boot Ubuntu
  [ ] gui (perhaps Imgui?)
  [ ] swap floppy drives (NT 3.51 install)
  [ ] dynamic recompiler
@@ -19,6 +18,7 @@ TODO list:
      ~ tried this before, kvm did not work well with SDL
  [ ] usb
  [ ] debugger interface
+ [ ] better logging
 
 Things to fix:
  [ ] make cpu_get_trace a lot faster (10% execution time is spent there)
