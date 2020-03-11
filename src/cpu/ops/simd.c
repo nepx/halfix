@@ -2234,7 +2234,7 @@ int execute_0F58_5F(struct decoded_instruction* i)
     int fp_exception = 0;
     switch (i->imm8 & 31) {
     case ADDPS_XGoXEo:
-        EX(get_sse_read_ptr(flags, i, 4, 1));
+        EX(get_sse_read_ptr(flags, i, 4, 0));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = float32_add(dest32[0], *(float32*)(result_ptr), &status);
         dest32[1] = float32_add(dest32[1], *(float32*)(result_ptr + 4), &status);
@@ -2243,13 +2243,13 @@ int execute_0F58_5F(struct decoded_instruction* i)
         fp_exception = cpu_sse_handle_exceptions();
         break;
     case ADDSS_XGdXEd:
-        EX(get_sse_read_ptr(flags, i, 1, 1));
+        EX(get_sse_read_ptr(flags, i, 1, 0));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = float32_add(dest32[0], *(float32*)(result_ptr), &status);
         fp_exception = cpu_sse_handle_exceptions();
         break;
     case ADDPD_XGoXEo:
-        EX(get_sse_read_ptr(flags, i, 4, 1));
+        EX(get_sse_read_ptr(flags, i, 4, 0));
         dest64 = get_sse_reg_dest(I_REG(flags));
         dest64[0] = float64_add(dest64[0], *(float64*)(result_ptr), &status);
         dest64[1] = float64_add(dest64[1], *(float64*)(result_ptr + 8), &status);
@@ -2262,7 +2262,7 @@ int execute_0F58_5F(struct decoded_instruction* i)
         fp_exception = cpu_sse_handle_exceptions();
         break;
     case MULPS_XGoXEo:
-        EX(get_sse_read_ptr(flags, i, 4, 1));
+        EX(get_sse_read_ptr(flags, i, 4, 0));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = float32_mul(dest32[0], *(float32*)(result_ptr), &status);
         dest32[1] = float32_mul(dest32[1], *(float32*)(result_ptr + 4), &status);
@@ -2271,13 +2271,13 @@ int execute_0F58_5F(struct decoded_instruction* i)
         fp_exception = cpu_sse_handle_exceptions();
         break;
     case MULSS_XGdXEd:
-        EX(get_sse_read_ptr(flags, i, 1, 1));
+        EX(get_sse_read_ptr(flags, i, 1, 0));
         dest32 = get_sse_reg_dest(I_REG(flags));
         dest32[0] = float32_mul(dest32[0], *(float32*)(result_ptr), &status);
         fp_exception = cpu_sse_handle_exceptions();
         break;
     case MULPD_XGoXEo:
-        EX(get_sse_read_ptr(flags, i, 4, 1));
+        EX(get_sse_read_ptr(flags, i, 4, 0));
         dest64 = get_sse_reg_dest(I_REG(flags));
         dest64[0] = float64_mul(dest64[0], *(float64*)(result_ptr), &status);
         dest64[1] = float64_mul(dest64[1], *(float64*)(result_ptr + 8), &status);
