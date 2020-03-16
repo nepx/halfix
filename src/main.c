@@ -18,7 +18,7 @@ static struct pc_settings pc;
 int parse_cfg(struct pc_settings* pc, char* data);
 
 struct option {
-    const char *name, *alias;
+    const char *alias, *name;
     int flags, id;
     const char* help;
 };
