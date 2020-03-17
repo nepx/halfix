@@ -842,7 +842,7 @@ static void ide_atapi_run_command(struct ide_controller* ctrl)
                     ide_raise_irq(ctrl);
                     break;
                 } else
-                    sectors = tmp;
+                    sectors = tmp - 1;
             }
 
             if (sectors == 0) {
@@ -1942,6 +1942,7 @@ static void ide_write(uint32_t port, uint32_t data)
                 }
             }
             break;
+        case 0x2F:
         case 0xF0:
         case 0xF5: // No clue, but Windows XP writes to this register
         case 0xDA: // Windows 98 boot
