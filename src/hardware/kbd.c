@@ -348,7 +348,6 @@ static void kbd_write(uint32_t port, uint32_t data)
             //kbd.command = NO_COMMAND;
             break;
         case 0xD1 ... 0xD4: // Outport utilities
-            if(data == 0xD3) kbd_add(KBD_QUEUE, 0xFA);
             kbd.status |= STATUS_CMD;
             kbd.command = data;
             break;
@@ -470,6 +469,10 @@ static void kbd_write(uint32_t port, uint32_t data)
                     kbd.mouse_stream_inactive = data & 1;
                     kbd_add(AUX_QUEUE, 0xFA);
                     break;
+                case 0xF6: // Set defaults
+                    kbd_reset_port(1);
+                    kbd_add(AUX_QUEUE, 0xFA);
+                    break;
                 case 0xFF: // Reset
                     kbd_reset_port(1);
                     kbd_add(AUX_QUEUE, 0xFA);
@@ -477,6 +480,12 @@ static void kbd_write(uint32_t port, uint32_t data)
                     kbd_add(AUX_QUEUE, 0x00);
                     break;
                 case 0xBB: // ?? OS/2 Warp 4.5 uses this command
+                    break;
+                case 0xE1: // ?? TinyCore Linux uses this command
+                case 0x0A:
+                case 0x88:
+                case 0:
+                    kbd_add(AUX_QUEUE, 0xFE);
                     break;
                 default:
                     KBD_FATAL("Unknown mouse command %02x\n", data);
