@@ -156,7 +156,8 @@ static struct ide_controller {
         atapi_cylinder_count,
         // Total number of bytes we've sent in this frame
         atapi_frame_bytes_to_transfer,
-        atapi_frame_bytes_transferred;
+        atapi_frame_bytes_transferred,
+        atapi_total_bytes_transferred;
     uint8_t atapi_command;
 
     uint8_t atapi_can_eject_cdrom;
@@ -172,7 +173,7 @@ static void ide_state(void)
 {
 
     // <<< BEGIN AUTOGENERATE "state" >>>
-    struct bjson_object* obj = state_obj("ide[NUMBER]", (45) * 2);
+    struct bjson_object* obj = state_obj("ide[NUMBER]", (46) * 2);
     state_field(obj, 4, "ide[0].selected", &ide[0].selected);
     state_field(obj, 4, "ide[1].selected", &ide[1].selected);
     state_field(obj, 4, "ide[0].lba", &ide[0].lba);
@@ -257,13 +258,15 @@ static void ide_state(void)
     state_field(obj, 4, "ide[1].atapi_frame_bytes_to_transfer", &ide[1].atapi_frame_bytes_to_transfer);
     state_field(obj, 4, "ide[0].atapi_frame_bytes_transferred", &ide[0].atapi_frame_bytes_transferred);
     state_field(obj, 4, "ide[1].atapi_frame_bytes_transferred", &ide[1].atapi_frame_bytes_transferred);
+    state_field(obj, 4, "ide[0].atapi_total_bytes_transferred", &ide[0].atapi_total_bytes_transferred);
+    state_field(obj, 4, "ide[1].atapi_total_bytes_transferred", &ide[1].atapi_total_bytes_transferred);
     state_field(obj, 1, "ide[0].atapi_command", &ide[0].atapi_command);
     state_field(obj, 1, "ide[1].atapi_command", &ide[1].atapi_command);
     state_field(obj, 1, "ide[0].atapi_can_eject_cdrom", &ide[0].atapi_can_eject_cdrom);
     state_field(obj, 1, "ide[1].atapi_can_eject_cdrom", &ide[1].atapi_can_eject_cdrom);
     state_field(obj, 1, "ide[0].atapi_dma_enabled", &ide[0].atapi_dma_enabled);
     state_field(obj, 1, "ide[1].atapi_dma_enabled", &ide[1].atapi_dma_enabled);
-    // <<< END AUTOGENERATE "state" >>>
+// <<< END AUTOGENERATE "state" >>>
 
     char filename[1000];
     for (int i = 0; i < 2; i++) {
@@ -857,6 +860,7 @@ static void ide_atapi_run_command(struct ide_controller* ctrl)
             // Total number of bytes to transfer
             ctrl->atapi_cylinder_count = (ctrl->cylinder_high << 8 & 0xFF00) | (ctrl->cylinder_low & 0xFF);
             ctrl->atapi_bytes_to_transfer = bytecount = ctrl->atapi_sector_size * ctrl->atapi_sectors_to_read;
+            ctrl->atapi_total_bytes_transferred = 0;
 
             // Reset cylinder low/high values
             ctrl->cylinder_low = 0;
@@ -1000,6 +1004,7 @@ static void ide_pio_read_callback(struct ide_controller* ctrl)
                 IDE_FATAL("Expected: %x Got: %x\n", ctrl->pio_length, old_pio);
             }
             ctrl->atapi_frame_bytes_transferred += ctrl->pio_length;
+            ctrl->atapi_total_bytes_transferred += ctrl->pio_length;
             if (ctrl->atapi_frame_bytes_transferred >= ctrl->atapi_frame_bytes_to_transfer) {
                 // We are done with this series of reads
                 ctrl->atapi_bytes_to_transfer -= ctrl->atapi_frame_bytes_transferred;
@@ -1015,7 +1020,7 @@ static void ide_pio_read_callback(struct ide_controller* ctrl)
                     // Check if there is still more to be read
                     ide_raise_irq(ctrl);
                     int continue_frame = 0;
-                    if ((continue_frame = ctrl->atapi_frame_bytes_transferred % ctrl->atapi_sector_size)) {
+                    if ((continue_frame = ctrl->atapi_total_bytes_transferred % ctrl->atapi_sector_size)) {
                         // No, we stopped in the middle of a frame. This could happen if the cylinder count is not a multiple of sector size.
                         ctrl->atapi_lba--; // Go back one sector and read the one we just finished.
                         ctrl->atapi_sectors_to_read++;
