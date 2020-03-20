@@ -266,7 +266,7 @@ static void ide_state(void)
     state_field(obj, 1, "ide[1].atapi_can_eject_cdrom", &ide[1].atapi_can_eject_cdrom);
     state_field(obj, 1, "ide[0].atapi_dma_enabled", &ide[0].atapi_dma_enabled);
     state_field(obj, 1, "ide[1].atapi_dma_enabled", &ide[1].atapi_dma_enabled);
-// <<< END AUTOGENERATE "state" >>>
+    // <<< END AUTOGENERATE "state" >>>
 
     char filename[1000];
     for (int i = 0; i < 2; i++) {
@@ -1609,12 +1609,14 @@ static void ide_read_dma_handler(void* this, int status)
     ide_raise_irq(ctrl);
 }
 
-void drive_debug(int64_t x){
+void drive_debug(int64_t x)
+{
     uint32_t offset = x & 511;
     uint8_t buf[512];
     int res = drive_read(SELECTED((&ide[0]), info), NULL, buf, 512, x & ~511, NULL);
-    if(res == DRIVE_RESULT_SYNC)IDE_LOG("Cannot read\n");
-    for(int i=0;i<16;i++) {
+    if (res == DRIVE_RESULT_SYNC)
+        IDE_LOG("Cannot read\n");
+    for (int i = 0; i < 16; i++) {
         printf("%02x ", buf[offset]);
         offset++;
     }
@@ -1922,6 +1924,7 @@ static void ide_write(uint32_t port, uint32_t data)
             case 130: // ?
             case 0x66: // Windows XP writes to this one
             case 0x95:
+            case 0xAA: // ReactOS
             case 0:
                 ctrl->status = ATA_STATUS_DSC | ATA_STATUS_DRDY;
                 ide_raise_irq(ctrl);
@@ -1947,6 +1950,14 @@ static void ide_write(uint32_t port, uint32_t data)
                 }
             }
             break;
+        case 0xF8: { // Read max address, normal, seagate: Idle Immediate
+            if (SELECTED(ctrl, type) != DRIVE_TYPE_DISK)
+                ide_abort_command(ctrl);
+            uint32_t multiple_count = SELECTED(ctrl, info)->sectors - 1;
+            ide_set_sector_offset(ctrl, 0, multiple_count);
+            break;
+        }
+        case 0xF9: // Set max, ReactOS
         case 0x2F:
         case 0xF0:
         case 0xF5: // No clue, but Windows XP writes to this register
@@ -2005,14 +2016,18 @@ void ide_write_prdt(uint32_t addr, uint32_t data)
             case 0x25:
             case 0xC8:
                 result = drive_prefetch(SELECTED(this, info), this, ide_get_sector_count(this, lba48), ide_get_sector_offset(this, lba48) << (drv_offset_t)9, ide_read_dma_handler);
-                if(result == DRIVE_RESULT_SYNC) ide_read_dma_handler(this, 0);
-                else this->status |= ATA_STATUS_BSY;
+                if (result == DRIVE_RESULT_SYNC)
+                    ide_read_dma_handler(this, 0);
+                else
+                    this->status |= ATA_STATUS_BSY;
                 break;
             case 0x35:
             case 0xCA:
                 result = drive_prefetch(SELECTED(this, info), this, ide_get_sector_count(this, lba48), ide_get_sector_offset(this, lba48) << (drv_offset_t)9, ide_write_dma_handler);
-                if(result == DRIVE_RESULT_SYNC) ide_write_dma_handler(this, 0);
-                else this->status |= ATA_STATUS_BSY;
+                if (result == DRIVE_RESULT_SYNC)
+                    ide_write_dma_handler(this, 0);
+                else
+                    this->status |= ATA_STATUS_BSY;
                 break;
             }
         }
