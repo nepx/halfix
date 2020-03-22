@@ -2,6 +2,8 @@
 
 Most operating systems work fine with the default configuration (32 MB RAM, no floppy drive, APIC/PCI/ACPI enabled). However, you might need to increase the RAM size or enable floppy drives. 
 
+Note that some operating systems won't work in the browser version because support for disks larger than 4 GB haven't been implemented yet. 
+
 ## BIOS
 
 The ones below work fine. I haven't tried any of the other ones. 
@@ -18,6 +20,8 @@ Works well, except Buildroot can't detect VESA
 Works with latest commits. Use with SeaVGABIOS for maximum compatibility. 
 
 ![SeaBIOS](docs/pics/seabios.png)
+
+CD-ROM boots don't work yet because of bugs in the ATAPI emulation. 
 
 ### ET4000 ROM
 Appears to work. Use in conjunction with Bochs BIOS. 
@@ -72,10 +76,12 @@ Installs, boots, and runs. Very stable. I recommend running with 128 MB RAM, alt
 Takes forever to boot with the Pentium 4 CPU configuration. Set IPS to around 50,000,000 to get the nice Aero theme. Run with 512 MB of RAM. 
 
 ### Windows 7
-The disk image I created requires a Pentium 4 or better to boot (it hangs on a `#UD` exception on FXSAVE). Unstable, it sometimes crashes with a BSOD. Can't use CDs because not all commands are implemented. Run with 512 MB of RAM. 
+The disk image I created requires a Pentium 4 or better to boot (it hangs on a `#UD` exception on FXSAVE). Boots to desktop and is somewhat usable. Can't use CDs because not all commands are implemented. Run with 512 MB of RAM. 
 
 ### Windows 8
 BSODs with a `KERNEL_DATA_INPAGE_ERROR`. Probably a device problem. To test, enable the Core Duo emulation support. 
+
+See [this issue](https://github.com/nepx/halfix/issues/1). 
 
 ### Windows 10
 Boots to desktop. Some stability problems because some SSE instructions cause `#GP(0)` exceptions when they aren't supposed to. Haven't really tested it. 
@@ -93,7 +99,7 @@ Don't jiggle the mouse during boot. It confuses the keyboard controller, which t
 
 ## Linux
 
-A recurring theme here is that the mouse and/or keyboard is not detected by the Linux kernel. I'm pretty sure that it's a hardware issue. 
+~~A recurring theme here is that the mouse and/or keyboard is not detected by the Linux kernel. I'm pretty sure that it's a hardware issue.~~ Fixed in [this commit](https://github.com/nepx/halfix/commit/779b81c98e049be78aacb3c7f0d6882f9a16cc37). 
 
 ### ISO Linux
 Boots from CD and runs. 
@@ -104,22 +110,27 @@ Boots from CD and runs. Slightly longer boot time than Windows XP.
 ### Debian
 Haven't tested with the new PAE improvements because I accidentally deleted my disk image. 
 
+### TinyCore Linux
+Boots fine. Run with 64 MB of RAM. On browser version, desktop icons don't render. 
+
 ### Red Star OS 2
-Boots fine, but mouse doesn't work. I suspect it has something to do with the keyboard controller outport. 
+Boots fine. Slightly laggy, but usable. Installed using QEMU. 
 
-## ReactOS
-Works fine, from the LiveCD. VGA emulation is funky, though. Icons don't render. Hopefully enabling VESA will fix that. 
-
-## Buildroot
+### Buildroot
 
 Boots fine, no graphics (`No displays found!`). Most likely due to problems in VGA BIOS -- graphics don't work on Bochs either. 
 
-## Ubuntu
+### Ubuntu
 
 Tried 16.04 LiveCD, fails with a kernel panic. Interestingly, the same kernel panic occurs in Bochs 2.6.10. I have yet to find out why because I can't find a way to scroll up in the text mode console. 
 
-However, installing Ubuntu to a hard disk on QEMU and booting in Halfix works fine. No mouse and keyboard support, but the desktop renders. Run with the Core Duo emulation. 
+However, installing Ubuntu to a hard disk on QEMU and booting in Halfix works fine. Very, very slow, and complains that an internal exception has occurred (probably a SSE alignment exception gone wrong) but otherwise works. Run with the Core Duo emulation. 
 
 Due to bugs in IDE emulation, don't try running the OS with a CD-ROM inserted. 
 
 I have not tried versions besides 16.04.
+
+## ReactOS
+Works fine, from the LiveCD. VGA emulation is funky, though. Icons don't render when booted with VGA. However, they do render fine when VESA is enabled.
+
+I have not tried versions besides 0.4.12. 

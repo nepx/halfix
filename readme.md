@@ -14,37 +14,57 @@ I made this mostly for fun, and because it was a great way to learn about the x8
 
 You will need `node.js`, a C99-compatible compiler, `libsdl`, `zlib`, and Emscripten (only if you're targeting the browser). Make sure that the required libraries are in a place where the compiler can get them. No prior configuration is required. 
 
-For debug builds, run `node makefile.js` without any arguments. For a debug Emscripten build, pass `emscripten` to the file. For release builds, run `node makefile.js release`. 
+```bash
+# Debug, native
+node makefile.js
+# Debug, Emscripten, asm.js
+node makefile.js emscripten
+# Debug, Emscripten, WebAssembly
+node makefile.js emscripten --enable-wasm
 
-It is recommended -- but not required -- that you chunk up the disk images. Run `node tools/imgsplit.js [path-to-your-disk-image]` and modify the configuration file as required. Note that the Emscripten version only accepts chunked disk images. 
+# Release, native
+node makefile.js release
+# Release, Emscripten, asm.js
+node makefile.js emscripten release
+# Release, Emscripten, WebAssembly
+node makefile.js emscripten --enable-wasm release
+
+# For more options and fine tuning
+node makefile.js --help
+
+# Chunk an image 
+node tools/imgsplit.js os.img
+
+# Run in browser
+http-server
+```
 
 Check the [project wiki](https://github.com/nepx/halfix/wiki) for more details. 
 
-**Summary**:
+## System Specifications
 
-```
- $ node makefile.js release
- $ node tools/imgsplit.js os.img
- $ ./halfix
-```
-
-## Emulated Hardware
-
- - 32-bit x86 CPU, Pentium 4-compatible (FPU, MMX, SSE, SSE2, SSE3 planned)
- - Intel 8259 Programmable Interrupt Controller
- - Intel 8254 Programmable Interval Timer
- - Intel 8237 Direct Memory Access Controller
- - Intel 8042 "PS/2" Controller with attached keyboard and mouse
- - Generic VGA graphics card with Bochs VBE extensions
- - Generic IDE controller (hard drive and CD-ROM)
- - i440FX chipset (this doesn't work quite so well yet)
- - Intel 82093AA I/O APIC
+ - CPU: Intel Core Duo-compatible (FPU, MMX, SSE, SSE2, some SSE3)
+ - RAM: Configurable - anywhere from 1 MB to 3584 MB
+ - Devices:
+   - Intel 8259 Programmable Interrupt Controller
+   - Intel 8254 Programmable Interval Timer
+   - Intel 8237 Direct Memory Access Controller
+   - Intel 8042 "PS/2" Controller with attached keyboard and mouse
+   - i440FX chipset (this doesn't work quite so well yet)
+     - 82441FX PMC
+     - 82371SB ISA-to-PCI bus
+     - 82371SB IDE controller
+     - ACPI interface
+   - Intel 82093AA I/O APIC
+ - Display: Generic VGA graphics card (ET4000-compatible) with Bochs VBE extensions, optionally PCI-enabled
+ - Mass Storage: 
+   - Generic IDE controller (hard drive and CD-ROM) 
+   - Intel 82077AA Floppy drive controller (incomplete)
  - Dummy PC speaker (no sound)
- - Floppy drive controller (incomplete)
 
 ## Compatibility
 
-It boots a wide range of operating system software, including all versions of DOS, most versions of Windows (excluding Windows 8), newer versions of OS/2 Warp (3 and 4.5), ReactOS, and some varieties of Linux (ISO Linux, Damn Small Linux, Red Star OS 2, Buildroo, Ubuntu). 
+It boots a wide range of operating system software, including all versions of DOS, most versions of Windows (excluding Windows 8), newer versions of OS/2 Warp (3 and 4.5), ReactOS, and some varieties of Linux (ISO Linux, Damn Small Linux, Red Star OS 2, Buildroot, Ubuntu). 
 
 See [Compatibility](compatibility.md) for more details.
 
@@ -117,6 +137,15 @@ driver=sync
 ```
 
 Now boot up your operating system and copy the files from the CD-ROM to the hard drive. 
+
+## Known Issues
+ - SSE3 is not fully supported
+ - Performance isn't terrible, but it isn't fantastic either (70-100 MIPS native, 10-30 MIPS browser)
+ - Timing is completely off
+ - Windows 8 doesn't boot (see [this issue](https://github.com/nepx/halfix/issues/1))
+ - FPU exceptions are probably very incorrect
+ - Most devices aren't complete, but enough is implemented to boot modern OSes. 
+ - The configuration file parser isn't very good
 
 ## License
 
