@@ -3163,7 +3163,6 @@ OPTYPE op_mfence(struct decoded_instruction* i)
 }
 OPTYPE op_fxsave(struct decoded_instruction* i)
 {
-    // Does nothing at the moment
     uint32_t flags = i->flags, linaddr = cpu_get_linaddr(flags, i);
     if (fpu_fxsave(linaddr))
         EXCEP();
@@ -3171,7 +3170,6 @@ OPTYPE op_fxsave(struct decoded_instruction* i)
 }
 OPTYPE op_fxrstor(struct decoded_instruction* i)
 {
-    // Does nothing at the moment
     uint32_t flags = i->flags, linaddr = cpu_get_linaddr(flags, i);
     if (fpu_fxrstor(linaddr))
         EXCEP();
