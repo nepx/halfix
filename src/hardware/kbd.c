@@ -459,6 +459,8 @@ static void kbd_write(uint32_t port, uint32_t data)
                     break;
                 case 0xEA: // Set stream mode
                     kbd.mouse_stream_mode = 1;
+                    kbd_add(AUX_QUEUE, 0xFA);
+                    break;
                 case 0xF2: // Get mouse ID
                     kbd_add(AUX_QUEUE, 0xFA);
                     kbd_add(AUX_QUEUE, 0);
