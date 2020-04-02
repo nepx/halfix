@@ -1414,7 +1414,6 @@ int fpu_mem_op(struct decoded_instruction* i, uint32_t virtaddr, uint32_t seg)
             if (write_float32(linaddr, temp32))
                 FPU_EXCEP();
             fpu_commit_sw();
-        printf("after: %08x\n", fpu.status_word);
             if (smaller_opcode & 1)
                 fpu_pop();
         }
@@ -1683,7 +1682,7 @@ int fpu_fxsave(uint32_t linaddr)
     if (fpu_nm_check())
         return 1;
 
-    if(cpu_access_verify(linaddr, linaddr + 511, cpu.tlb_shift_write)) return 1;
+    if(cpu_access_verify(linaddr, linaddr + 288 - 1, cpu.tlb_shift_write)) return 1;
     cpu_write16(linaddr + 0, fpu.control_word, cpu.tlb_shift_write);
     cpu_write16(linaddr + 2, fpu_get_status_word(), cpu.tlb_shift_write);
     // "Abridge" tag word
@@ -1729,7 +1728,7 @@ int fpu_fxrstor(uint32_t linaddr)
         EXCEPTION_GP(0);
     if (fpu_nm_check())
         return 1;
-    if(cpu_access_verify(linaddr, linaddr + 511, cpu.tlb_shift_read)) return 1;
+    if(cpu_access_verify(linaddr, linaddr + 288 - 1, cpu.tlb_shift_read)) return 1;
 
     uint32_t mxcsr;
     cpu_read32(linaddr + 24, mxcsr, cpu.tlb_shift_read);
