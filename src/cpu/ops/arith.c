@@ -183,22 +183,31 @@ void cpu_shift8(int op, uint8_t* dest, uint8_t src)
             break;
         case 4: // SHL
         case 6: // SAL (same thing as SHL)
-            cpu.lop1 = *dest;
-            cpu.lop2 = src & 31;
-            res = cpu.lr = (int8_t)(*dest << cpu.lop2);
-            cpu.laux = SHL8;
+            src &= 31;
+            if(src) {
+                cpu.lop1 = *dest;
+                cpu.lop2 = src & 31;
+                res = cpu.lr = (int8_t)(*dest << cpu.lop2);
+                cpu.laux = SHL8;
+            } else res = *dest;
             break;
         case 5: // SHR
-            cpu.lop1 = *dest;
-            cpu.lop2 = src & 31;
-            res = cpu.lr = (int8_t)(*dest >> cpu.lop2);
-            cpu.laux = SHR8;
+            src &= 31;
+            if(src) {
+                cpu.lop1 = *dest;
+                cpu.lop2 = src;
+                res = cpu.lr = (int8_t)(*dest >> cpu.lop2);
+                cpu.laux = SHR8;
+            } else res = *dest;
             break;
         case 7: // SAR
-            cpu.lop1 = *dest;
-            cpu.lop2 = src & 31;
-            res = cpu.lr = (int8_t)((((int8_t)(*dest)) >> cpu.lop2));
-            cpu.laux = SAR8;
+            src &= 31;
+            if(src) {
+                cpu.lop1 = *dest;
+                cpu.lop2 = src;
+                res = cpu.lr = (int8_t)((((int8_t)(*dest)) >> cpu.lop2));
+                cpu.laux = SAR8;
+            } else res = *dest;
             break;
         }
         *dest = res;
@@ -258,22 +267,31 @@ void cpu_shift16(int op, uint16_t* dest, uint16_t src)
             break;
         case 4:
         case 6:
-            cpu.lop1 = *dest;
-            cpu.lop2 = src & 31;
-            res = cpu.lr = (int16_t)(*dest << cpu.lop2);
-            cpu.laux = SHL16;
-            break;
+            src &= 31;
+            if(src) {
+                cpu.lop1 = *dest;
+                cpu.lop2 = src;
+                res = cpu.lr = (int16_t)(*dest << cpu.lop2);
+                cpu.laux = SHL16;
+                break;
+            } else res = *dest;
         case 5:
-            cpu.lop1 = *dest;
-            cpu.lop2 = src & 31;
-            res = cpu.lr = (int16_t)(*dest >> cpu.lop2);
-            cpu.laux = SHR16;
+            src &= 31;
+            if(src) {
+                cpu.lop1 = *dest;
+                cpu.lop2 = src;
+                res = cpu.lr = (int16_t)(*dest >> cpu.lop2);
+                cpu.laux = SHR16;
+            } else res = *dest;
             break;
         case 7:
-            cpu.lop1 = *dest;
-            cpu.lop2 = src & 31;
-            res = cpu.lr = (int16_t)((((int16_t)(*dest)) >> cpu.lop2));
-            cpu.laux = SAR16;
+            src &= 31;
+            if(src) {
+                cpu.lop1 = *dest;
+                cpu.lop2 = src;
+                res = cpu.lr = (int16_t)((((int16_t)(*dest)) >> cpu.lop2));
+                cpu.laux = SAR16;
+            } else res = *dest;
             break;
         }
         *dest = res;
@@ -337,22 +355,31 @@ void cpu_shift32(int op, uint32_t* dest, uint32_t src)
             break;
         case 4:
         case 6:
-            cpu.lop1 = *dest;
-            cpu.lop2 = src & 31;
-            res = cpu.lr = *dest << cpu.lop2;
-            cpu.laux = SHL32;
+            src &= 31;
+            if(src) {
+                cpu.lop1 = *dest;
+                cpu.lop2 = src;
+                res = cpu.lr = *dest << cpu.lop2;
+                cpu.laux = SHL32;
+            } else res = *dest;
             break;
         case 5:
-            cpu.lop1 = *dest;
-            cpu.lop2 = src & 31;
-            res = cpu.lr = *dest >> cpu.lop2;
-            cpu.laux = SHR32;
+            src &= 31;
+            if(src) {
+                cpu.lop1 = *dest;
+                cpu.lop2 = src;
+                res = cpu.lr = *dest >> cpu.lop2;
+                cpu.laux = SHR32;
+            } else res = *dest;
             break;
         case 7:
-            cpu.lop1 = *dest;
-            cpu.lop2 = src & 31;
-            res = cpu.lr = ((int32_t)(*dest)) >> cpu.lop2;
-            cpu.laux = SAR32;
+            src &= 31;
+            if(src) {
+                cpu.lop1 = *dest;
+                cpu.lop2 = src;
+                res = cpu.lr = ((int32_t)(*dest)) >> cpu.lop2;
+                cpu.laux = SAR32;
+            } else res = *dest;
             break;
         }
         *dest = res;
