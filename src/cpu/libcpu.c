@@ -326,6 +326,8 @@ int cpu_set_state(int id, uint32_t value)
     case CPU_A20:
         cpu_set_a20(value & 1);
         break;
+    case CPU_CR:
+        return cpu_prot_set_cr(id >> 4 & 15, value);
     }
 return 0;
 }

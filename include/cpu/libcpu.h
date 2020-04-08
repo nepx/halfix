@@ -85,6 +85,9 @@ enum {
     CPU_CPL,
     CPU_SEG,
 
+#define MAKE_CR_ID(id) (id << 4) | (CPU_CR)
+    CPU_CR,
+
 // Use this macro to pass a descriptor to cpu_set_state
 #define MAKE_SEG_ID(id) (id << 4) | (CPU_SEG)
     CPU_A20
