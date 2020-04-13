@@ -186,9 +186,12 @@ static int do_task_switch(int sel, struct seg_desc* info, int type, int eip)
     if (type == TASK_JMP || type == TASK_IRET) {
         if (tr_base == RESULT_INVALID)
             ABORT(); // should not be invalid
-        cpu_read32(base + 4, desc_tbl, TLB_SYSTEM_READ);
-        desc_tbl &= ~0x200;
-        cpu_write32(base + 4, desc_tbl, TLB_SYSTEM_WRITE);
+
+        uint32_t segid = SELECTOR_LDT(sel) ? SEG_LDTR : SEG_GDTR,
+            addr = cpu.seg_base[segid] + ((cpu.seg[SEG_TR] & ~7)) + 5; 
+        cpu_read8(addr, desc_tbl, TLB_SYSTEM_READ);
+        desc_tbl &= ~2;
+        cpu_write8(addr, desc_tbl, TLB_SYSTEM_WRITE);
         if (type == TASK_IRET)
             old_eflags &= ~EFLAGS_NT;
     }
@@ -221,7 +224,7 @@ static int do_task_switch(int sel, struct seg_desc* info, int type, int eip)
         cpu_read32(base + 0x20, eip, TLB_SYSTEM_READ);
         cpu_read32(base + 0x24, eflags, TLB_SYSTEM_READ);
         for (int i = 0; i < 8; i++)
-            cpu_read32(base + 0x24 + (i * 4), reg32[i], TLB_SYSTEM_READ);
+            cpu_read32(base + 0x28 + (i * 4), reg32[i], TLB_SYSTEM_READ);
         for (int i = 0; i < 6; i++)
             cpu_read16(base + 0x48 + (i * 2), seg[i], TLB_SYSTEM_READ);
         cpu_read32(base + 0x60, ldt, TLB_SYSTEM_READ);
@@ -245,9 +248,11 @@ static int do_task_switch(int sel, struct seg_desc* info, int type, int eip)
     if (type == TASK_JMP || type == TASK_IRET) {
         if (tr_base == RESULT_INVALID)
             ABORT(); // should not be invalid
-        cpu_read32(base + 4, desc_tbl, TLB_SYSTEM_READ);
-        desc_tbl |= 0x200;
-        cpu_write32(base + 4, desc_tbl, TLB_SYSTEM_WRITE);
+        uint32_t segid = SELECTOR_LDT(sel) ? SEG_LDTR : SEG_GDTR,
+            addr = cpu.seg_base[segid] + ((sel & ~7)) + 5; 
+        cpu_read8(addr, desc_tbl, TLB_SYSTEM_READ);
+        desc_tbl |= 2;
+        cpu_write8(addr, desc_tbl, TLB_SYSTEM_WRITE);
     }
 
     // Write back state
@@ -875,6 +880,19 @@ int jmpf(uint32_t eip, uint32_t cs, uint32_t eip_after)
                 return 1;
             break;
         }
+        case AVAILABLE_TSS_286:
+        case AVAILABLE_TSS_386:
+            // DPL >= CPL and DPL > RPL or else #GP
+            if(dpl < cpu.cpl || dpl < rpl)
+                EXCEPTION_GP(offset);
+
+            // Must be present
+            if(!(access & ACCESS_P))
+                EXCEPTION_NP(offset);
+
+            if (do_task_switch(cs, &info, TASK_JMP, eip_after))
+                return 1;
+            break;
         case TASK_GATE: {
             // DPL >= CPL and DPL > RPL or else #GP
             if (dpl < cpu.cpl || dpl < rpl)
