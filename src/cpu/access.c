@@ -159,7 +159,8 @@ int cpu_access_verify(uint32_t addr, uint32_t end, int shift)
             if (cpu_mmu_translate(addr, shift))
                 return 1;
         }
-    }
+    } else // Without this case, causes problems during Ubuntu boot
+        end = addr;
 
     // Check the second page, or the first one if it's a single page access
     tag = cpu.tlb_tags[end >> 12];
