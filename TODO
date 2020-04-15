@@ -8,6 +8,8 @@ TODO list:
  [ ] swap floppy drives (NT 3.51 install)
  [ ] dynamic recompiler
  [ ] network support
+ [ ] allow hard disks to be modified via command line option
+     ~ currently, it's controlled by a macro in src/drive.c
  [ ] more robust savestate support
      ~ savestates work well, but they're only for debugging purposes. 
  [ ] vesa 4bpp
@@ -24,3 +26,15 @@ Things to fix:
  [ ] make cpu_get_trace a lot faster (10% execution time is spent there)
  [ ] byte align fields in struct decoded_instruction? (tests indicate byte alignment is 10-15% faster)
  [ ] remove state_hash from trace cache
+
+CPU bugs:
+ [ ] mtrr is not properly supported
+ [ ] ia32 efer is rather hacky
+ [ ] more msr support
+ [ ] sse3 support
+
+Hardware bugs:
+ [ ] cd-rom boot on seabios doesn't work
+     ~ "Error trying to fetch already-fetched ATAPI data"
+ [ ] write to end of disk image file doesn't work when disk image isn't a multiple of 256K large
+     ~ "Unable to read 262144 bytes from image file" 
