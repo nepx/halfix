@@ -173,7 +173,7 @@ static int do_task_switch(int sel, struct seg_desc* info, int type, int eip)
 
     int old_tr_type = ACCESS_TYPE(cpu.seg_access[SEG_TR]),
         old_tr_limit = tss_limits[old_tr_type >> 3 & 1];
-    uint32_t tr_base = cpu_seg_descriptor_address(SEG_GDTR, cpu.seg[SEG_TR]),
+    uint32_t tr_base = cpu.seg_base[SEG_TR],
              desc_tbl,
              old_eflags = cpu_get_eflags();
     // Pre-translate these addresses to prevent ourselves from faulting
@@ -181,7 +181,6 @@ static int do_task_switch(int sel, struct seg_desc* info, int type, int eip)
         return 1;
     if (cpu_access_verify(tr_base, tr_base + old_tr_limit, TLB_SYSTEM_WRITE))
         return 1;
-
     // If instruction is JMP or IRET, then clear busy flag
     if (type == TASK_JMP || type == TASK_IRET) {
         if (tr_base == RESULT_INVALID)
@@ -202,8 +201,8 @@ static int do_task_switch(int sel, struct seg_desc* info, int type, int eip)
         cpu_write32(tr_base + 0x24, old_eflags, TLB_SYSTEM_WRITE);
         for (int i = 0; i < 8; i++)
             cpu_write32(tr_base + 0x28 + (i * 4), cpu.reg32[i], TLB_SYSTEM_WRITE);
-        for (int i = 0; i < 4; i++)
-            cpu_write32(tr_base + 0x48 + (i * 2), cpu.seg[i], TLB_SYSTEM_WRITE);
+        for (int i = 0; i < 6; i++)
+            cpu_write32(tr_base + 0x48 + (i * 4), cpu.seg[i], TLB_SYSTEM_WRITE);
     } else {
         cpu_write16(tr_base + 0x0E, eip, TLB_SYSTEM_WRITE);
         cpu_write16(tr_base + 0x10, old_eflags, TLB_SYSTEM_WRITE);
@@ -226,14 +225,14 @@ static int do_task_switch(int sel, struct seg_desc* info, int type, int eip)
         for (int i = 0; i < 8; i++)
             cpu_read32(base + 0x28 + (i * 4), reg32[i], TLB_SYSTEM_READ);
         for (int i = 0; i < 6; i++)
-            cpu_read16(base + 0x48 + (i * 2), seg[i], TLB_SYSTEM_READ);
+            cpu_read16(base + 0x48 + (i * 4), seg[i], TLB_SYSTEM_READ);
         cpu_read32(base + 0x60, ldt, TLB_SYSTEM_READ);
     } else {
         // Don't set CR3
         cpu_read16(base + 0x0E, eip, TLB_SYSTEM_READ);
         cpu_read16(base + 0x10, eflags, TLB_SYSTEM_READ);
         for (int i = 0; i < 8; i++) {
-            cpu_read16(base + 0x12 + (i * 4), reg32[i], TLB_SYSTEM_READ);
+            cpu_read16(base + 0x12 + (i * 2), reg32[i], TLB_SYSTEM_READ);
             reg32[i] |= 0xFFFF0000;
         }
         for (int i = 0; i < 4; i++)
@@ -361,6 +360,13 @@ static int do_task_switch(int sel, struct seg_desc* info, int type, int eip)
                 return 1;
             break;
         default:
+            if(!sel_offs) {
+                // If selector is null, then ignore and invalidate
+                cpu.seg_base[i] = 0;
+                cpu.seg_limit[i] = 0;
+                cpu.seg_access[i] = 0;
+                continue;
+            }
             if (cpu_seg_load_descriptor(sel, &seg_info, EX_TS, sel_offs))
                 return 1;
             seg_access = DESC_ACCESS(&seg_info);
@@ -383,11 +389,10 @@ static int do_task_switch(int sel, struct seg_desc* info, int type, int eip)
             default:
                 EXCEPTION_TS(sel_offs);
             }
-            break;
             if (cpu_seg_load_protected(i, sel, &seg_info))
                 return 1;
+            break;
         }
-        break;
     }
     return 0;
 }
@@ -873,7 +878,7 @@ int jmpf(uint32_t eip, uint32_t cs, uint32_t eip_after)
 
             // Truncate EIP to 16-bits if 16-bit call gate
             gate_eip &= type == CALL_GATE_386 ? -1 : 0xFFFF;
-            printf("Gate EIP: %08x\n", gate_eip);
+            //printf("Gate EIP: %08x\n", gate_eip);
 
             // Jump succeded, load in CS (same privilege) and EIP
             if (cpu_load_csip_protected(gate_cs_offset | cpu.cpl, &gate_info, gate_eip))
@@ -1329,6 +1334,7 @@ int iret(uint32_t tss_eip, int is32)
                     if (is32) {
                         pop32(esp);
                         pop32(ss);
+                        ss &= 0xFFFF;
                     } else {
                         pop16(esp);
                         pop16(ss);
