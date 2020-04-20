@@ -120,6 +120,11 @@ Boots fine. Slightly laggy, but usable. Installed using QEMU.
 
 Boots fine, no graphics (`No displays found!`). Most likely due to problems in VGA BIOS -- graphics don't work on Bochs either. 
 
+### Mandrake Linux
+Tried 5.1, fails to install (accessing sectors at end of file), otherwise boots fine. 
+
+Kernel panic during install with 512 MB of RAM, PCIVGA, and SeaBIOS. 
+
 ### Ubuntu
 
 Tried 16.04 LiveCD, fails with a kernel panic. Interestingly, the same kernel panic occurs in Bochs 2.6.10. I have yet to find out why because I can't find a way to scroll up in the text mode console. 
@@ -134,3 +139,6 @@ I have not tried versions besides 16.04.
 Works fine, from the LiveCD. VGA emulation is funky, though. Icons don't render when booted with VGA. However, they do render fine when VESA is enabled.
 
 I have not tried versions besides 0.4.12. 
+
+## 9Front
+Boots fine. Keyboard is a bit laggy, but works. Tested with 512 MB RAM, Bochs BIOS. 
