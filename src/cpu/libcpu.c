@@ -9,14 +9,14 @@
 #include "util.h"
 
 #ifdef _WIN32
-#  define EXPORT __declspec(dllexport)
-#  define IMPORT __declspec(dllimport)
+#define EXPORT __declspec(dllexport)
+#define IMPORT __declspec(dllimport)
 #elif defined(EMSCRIPTEN)
 #include <emscripten.h>
-#  define EXPORT EMSCRIPTEN_KEEPALIVE
+#define EXPORT EMSCRIPTEN_KEEPALIVE
 #else
-#  define EXPORT __attribute__ ((visibility ("default")))
-#  define IMPORT __attribute__ ((visibility ("default")))
+#define EXPORT __attribute__((visibility("default")))
+#define IMPORT __attribute__((visibility("default")))
 #endif
 
 #define LIBCPUPTR_LOG(x, ...) LOG("LIBCPU", x, ##__VA_ARGS__)
@@ -50,13 +50,18 @@ static mmio_write_handler mmio_write = dummy_mmio_write;
 static io_read_handler io_read8 = dummy_read, io_read16 = dummy_read, io_read32 = dummy_read;
 static io_write_handler io_write8 = dummy_write, io_write16 = dummy_write, io_write32 = dummy_write;
 static abort_handler onabort = dummy, pic_ack = dummy, fpu_irq = dummy;
-static mem_refill_handler mrh = NULL;
+static mem_refill_handler mrh = NULL, mrh_lin = NULL;
 static int apic_enabled;
 
 EXPORT
 void cpu_register_mem_refill_handler(mem_refill_handler h)
 {
     mrh = h;
+}
+EXPORT
+void cpu_register_lin_refill_handler(mem_refill_handler h)
+{
+    mrh_lin = h;
 }
 
 EXPORT
@@ -182,7 +187,8 @@ void io_writed(uint32_t addr, uint32_t data)
 }
 
 EXPORT
-int cpu_core_run(int cycles){
+int cpu_core_run(int cycles)
+{
     return cpu_run(cycles);
 }
 
@@ -220,11 +226,23 @@ void io_register_reset(io_reset cb)
 
 void* get_phys_ram_ptr(uint32_t addr, int write)
 {
-    printf("%p\n", mrh);
     if (mrh == NULL) {
         return cpu.mem + addr;
     } else
         return mrh(addr, write);
+}
+void* get_lin_ram_ptr(uint32_t addr, int flags, int* fault)
+{
+    if (mrh_lin == NULL) {
+        *fault = 0;
+        return NULL;
+    } else {
+#define EXCEPTION_HANDLER return NULL
+        void* dest = mrh_lin(addr, flags);
+        *fault = dest == NULL;
+        return dest;
+#undef EXCEPTION_HANDLER
+    }
 }
 
 void pic_lower_irq(void)
@@ -283,10 +301,14 @@ uint32_t cpu_get_state(int id)
         return PHYS_EIP();
     case CPU_CPL:
         return cpu.cpl;
+    case CPU_STATE_HASH:
+        return cpu.state_hash;
     case CPU_SEG:
         return cpu.seg[id >> 4 & 15];
     case CPU_A20:
         return cpu.a20_mask >> 20 & 1;
+    case CPU_CR:
+        return cpu.cr[id >> 4 & 7];
     }
     return 0;
 }
@@ -311,13 +333,17 @@ int cpu_set_state(int id, uint32_t value)
         cpu.cpl = value & 3;
         cpu_prot_update_cpl();
         break;
+    case CPU_STATE_HASH:
+        cpu.state_hash = value;
+        break;
     case CPU_SEG:
         if (cpu.cr[0] & CR0_PE) {
             if (cpu.eflags & EFLAGS_VM)
                 cpu_seg_load_virtual(id >> 4 & 15, value);
             else {
                 struct seg_desc desc;
-                if(cpu_seg_load_descriptor(value, &desc, EX_GP, value & 0xFFFC)) return 1;
+                if (cpu_seg_load_descriptor(value, &desc, EX_GP, value & 0xFFFC))
+                    return 1;
                 return cpu_seg_load_protected(id >> 4 & 15, value, &desc);
             }
         } else
@@ -329,19 +355,35 @@ int cpu_set_state(int id, uint32_t value)
     case CPU_CR:
         return cpu_prot_set_cr(id >> 4 & 15, value);
     }
-return 0;
+    return 0;
+}
+EXPORT
+void cpu_init_32bit(void)
+{
+    cpu.a20_mask = -1;
+    cpu.cr[0] = 1; // How you do paging is up to you
+    // Initialize EFLAGS with IF
+    cpu.eflags = 0x202;
+    // Set ESP to 32-bit
+    cpu.esp_mask = -1;
+    // Set translation mode to 32-bit
+    cpu.state_hash = 0;
+    cpu.memory_size = -1;
 }
 
 static uint8_t mem[4096];
-static void dummy_write2(uint32_t addr, uint32_t data){
+static void dummy_write2(uint32_t addr, uint32_t data)
+{
     printf("Port: %02x Data: %04x\n", addr, data);
 }
-static void* mem_stuff(uint32_t addr, int write){
+static void* mem_stuff(uint32_t addr, int write)
+{
     UNUSED(write);
     return mem + addr;
 }
 
-static void test(void){
+static void test(void)
+{
     cpu_init();
     uint32_t* regs = cpu_get_state_ptr(CPUPTR_GPR);
     mem[0] = 0xB8;
@@ -354,6 +396,13 @@ static void test(void){
     cpu_run(2);
     printf("EAX: %08x\n", regs[0]);
 }
+
+EXPORT
+void libcpu_init(void)
+{
+    cpu_init();
+}
+
 int main()
 {
     UNUSED(test);

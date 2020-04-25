@@ -7,8 +7,10 @@
 
 #ifdef LIBCPU
 void* get_phys_ram_ptr(uint32_t addr, int write);
+void* get_lin_ram_ptr(uint32_t addr, int flags, int* fault);
 #else
 #define get_phys_ram_ptr(a, b) (cpu.mem + a)
+#define get_lin_ram_ptr(a, b) NULL
 #endif
 
 void cpu_mmu_tlb_flush(void)
@@ -41,7 +43,7 @@ void cpu_mmu_tlb_flush_nonglobal(void)
     cpu.tlb_entry_count = cpu.tlb_entry_count; // We may still have global entries.
 }
 
-static void cpu_set_tlb_entry(uint32_t lin, uint32_t phys, int user, int write, int global, int nx)
+static void cpu_set_tlb_entry(uint32_t lin, uint32_t phys, void* ptr, int user, int write, int global, int nx)
 {
     // Mask out the A20 gate line here so that we don't have to do it after every access
     phys &= cpu.a20_mask;
@@ -80,7 +82,9 @@ static void cpu_set_tlb_entry(uint32_t lin, uint32_t phys, int user, int write, 
     uint32_t entry = lin >> 12;
     cpu.tlb_entry_indexes[cpu.tlb_entry_count++] = entry;
     cpu.tlb_attrs[entry] = (nx ? TLB_ATTR_NX : 0) | (global ? 0 : TLB_ATTR_NON_GLOBAL);
-    cpu.tlb[entry] = (void*)(((uintptr_t)(get_phys_ram_ptr(phys, write))) - lin);
+    if (!ptr)
+        ptr = get_phys_ram_ptr(phys, write);
+    cpu.tlb[entry] = (void*)(((uintptr_t)ptr) - lin);
     cpu.tlb_tags[entry] = system_read | system_write | user_read | user_write;
 }
 
@@ -105,8 +109,22 @@ static void cpu_write_phys(uint32_t addr, uint32_t data)
 // Converts linear to physical address.
 int cpu_mmu_translate(uint32_t lin, int shift)
 {
+#ifdef LIBCPU
+    int fault;
+    void* ptr = get_lin_ram_ptr(lin & ~0xFFF, shift, &fault);
+    if (!ptr) {
+        if (fault)
+            EXCEPTION_PF(0);
+        // Otherwise, continue
+    } else {
+        int write = shift >> 1 & 1, user = shift >> 2 & 1;
+        cpu_set_tlb_entry(lin & ~0xFFF, lin & ~0xFFF, ptr, write, user, 0, 0);
+
+        return 0;
+    }
+#endif
     if (!(cpu.cr[0] & CR0_PG)) {
-        cpu_set_tlb_entry(lin & ~0xFFF, lin & ~0xFFF, 1, 1, 0, 0);
+        cpu_set_tlb_entry(lin & ~0xFFF, lin & ~0xFFF, NULL, 1, 1, 0, 0);
         return 0; // No page faults at all!
     } else {
         int execute = shift & 8;
@@ -149,7 +167,7 @@ int cpu_mmu_translate(uint32_t lin, int shift)
 #endif
                 }
                 uint32_t phys = (page_directory_entry & 0xFFC00000) | (lin & 0x3FF000);
-                cpu_set_tlb_entry(lin & ~0xFFF, phys, user, write, page_directory_entry & 0x100, 0);
+                cpu_set_tlb_entry(lin & ~0xFFF, phys, NULL, user, write, page_directory_entry & 0x100, 0);
             } else {
                 page_table_entry = cpu_read_phys(page_table_entry_addr);
 
@@ -206,7 +224,7 @@ int cpu_mmu_translate(uint32_t lin, int shift)
 #endif
                 }
                 //if(lin == 0xe1001332) __asm__("int3");
-                cpu_set_tlb_entry(lin & ~0xFFF, page_table_entry & ~0xFFF, user, write, page_table_entry & 0x100, 0);
+                cpu_set_tlb_entry(lin & ~0xFFF, page_table_entry & ~0xFFF, NULL, user, write, page_table_entry & 0x100, 0);
             }
             return 0;
         // A page fault has occurred
@@ -270,7 +288,7 @@ int cpu_mmu_translate(uint32_t lin, int shift)
             }
             if ((user << 2) & flags) {
                 CPU_LOG("#PF: User trying to write to supervisor page\n");
-                    fail |= 1;
+                fail |= 1;
                 goto pae_page_fault;
             }
 
@@ -285,7 +303,7 @@ int cpu_mmu_translate(uint32_t lin, int shift)
 #endif
                 }
                 uint32_t phys = (pde & 0xFFE00000) | (lin & 0x1FF000);
-                cpu_set_tlb_entry(lin & ~0xFFF, phys, user, write, pde & 0x100, nx);
+                cpu_set_tlb_entry(lin & ~0xFFF, phys, NULL, user, write, pde & 0x100, nx);
             } else {
                 uint32_t pte_addr = (pde & ~0xFFF) | (lin >> 9 & 0xFF8),
                          pte = cpu_read_phys(pte_addr), pte2 = cpu_read_phys(pte_addr + 4);
@@ -327,7 +345,7 @@ int cpu_mmu_translate(uint32_t lin, int shift)
                 printf("PDE: %08x PDE.addr: %08x\n", pde, pde_addr);
                 printf("PTE: %08x PTE.addr: %08x\n", pte, pte_addr);
 #endif
-                cpu_set_tlb_entry(lin & ~0xFFF, pte & ~0xFFF, user, write, pte & 0x100, nx);
+                cpu_set_tlb_entry(lin & ~0xFFF, pte & ~0xFFF, NULL, user, write, pte & 0x100, nx);
             }
             return 0;
         pae_page_fault:
