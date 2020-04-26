@@ -242,6 +242,7 @@ var Module = {
             return;
         config.push("[fd" + drvid + "]");
         config.push("file=" + fd);
+        config.push("inserted=1");
     }
 
     /**
@@ -272,6 +273,9 @@ var Module = {
         config.push("apic=" + getBooleanByName("apicenabled"));
         config.push("acpi=" + getBooleanByName("acpienabled"));
         config.push("now=" + getDoubleByName("now", new Date().getTime()));
+        var floppyRequired = (!!getParameterByName("fda") || !!getParameterByName("fdb")) | 0;
+        console.log(floppyRequired);
+        config.push("floppy=" + floppyRequired);
         var mem = getIntegerByName("mem", 32),
             vgamem = getIntegerByName("vgamem", 4);
 
