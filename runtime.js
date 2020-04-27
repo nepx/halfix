@@ -5,13 +5,14 @@
 //  ?hd[a|b|c|d]=imgdir  -  Set hard disk image (none by default)
 //  ?cd[a|b|c|d]=imgdir  -  Set CD-ROM disk image (none by default)
 //  ?fd[a|b]=imgdir  -  Set floppy disk image (none by default)
-//  ?pcienabled=true  -  Enable PCI support (disabled by default)
-//  ?apicenabled=true  -  Enable APIC support (disabled by default)
+//  ?pcienabled=true  -  Enable PCI support (enabled by default)
+//  ?apicenabled=true  -  Enable APIC support (enabled by default)
 //  ?bios=file.bin  -  Load BIOS image from "file.bin" (default: bios.bin)
 //  ?vgabios=file.bin  - Load VGA BIOS image from "file.bin" (default: vgabios.bin)
 //  ?now=time  - Set emulator time seen in emulator (default: 29 July 2019)
 //  ?mem=32  - Set size of emulated RAM (default: 32 MB)
 //  ?fast=[0|1]  - Ignore HLT timings, run as fast as possible (default: 0)
+//  ?pcivga=true  - Enable PCI VGA support (this allows more systems to detect VESA screens, but is severely limited)
 
 function $(e) {
     return document.getElementById(e);
@@ -198,9 +199,10 @@ var Module = {
         i32;
 
 
-    function getBooleanByName(x) {
+    function getBooleanByName(x, d) {
         var param = getParameterByName(x);
-        if (typeof param !== "string") return 1;
+        d = typeof d === "undefined" ? 1 : d;
+        if (typeof param !== "string") return d | 0;
         return (param === "true") | 0;
     }
 
@@ -273,6 +275,7 @@ var Module = {
         config.push("pci=" + getBooleanByName("pcienabled"));
         config.push("apic=" + getBooleanByName("apicenabled"));
         config.push("acpi=" + getBooleanByName("acpienabled"));
+        config.push("pcivga=" + getBooleanByName("pcivga", 0));
         config.push("now=" + getDoubleByName("now", new Date().getTime()));
         var floppyRequired = (!!getParameterByName("fda") || !!getParameterByName("fdb")) | 0;
         console.log(floppyRequired);
