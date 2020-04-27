@@ -86,6 +86,12 @@ double emscripten_get_cycles(void){
     return (double)cpu_get_cycles();
 }
 
+void pc_set_fast(int yes);
+EMSCRIPTEN_KEEPALIVE
+void emscripten_set_fast(int val){
+    pc_set_fast(val);
+}
+
 // does nothing
 int main()
 {

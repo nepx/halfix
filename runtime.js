@@ -11,6 +11,7 @@
 //  ?vgabios=file.bin  - Load VGA BIOS image from "file.bin" (default: vgabios.bin)
 //  ?now=time  - Set emulator time seen in emulator (default: 29 July 2019)
 //  ?mem=32  - Set size of emulated RAM (default: 32 MB)
+//  ?fast=[0|1]  - Ignore HLT timings, run as fast as possible (default: 0)
 
 function $(e) {
     return document.getElementById(e);
@@ -618,6 +619,9 @@ var Module = {
         var area = alloc(cfg.length + 1);
         strcpy(area, cfg);
         Module["_parse_cfg"](pc, area);
+
+        var fast = getIntegerByName("fast", 0);
+        Module["_emscripten_set_fast"](fast);
 
         gc();
     };

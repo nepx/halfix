@@ -21,30 +21,29 @@ static inline void pc_cmos_lowhi(int idx, int data)
 }
 
 // seabios firmware configuration
-#define FW_CFG_SIGNATURE        0x00
-#define FW_CFG_ID               0x01
-#define FW_CFG_UUID             0x02
-#define FW_CFG_RAM_SIZE         0x03
-#define FW_CFG_NOGRAPHIC        0x04
-#define FW_CFG_NB_CPUS          0x05
-#define FW_CFG_MACHINE_ID       0x06
-#define FW_CFG_KERNEL_ADDR      0x07
-#define FW_CFG_KERNEL_SIZE      0x08
-#define FW_CFG_KERNEL_CMDLINE   0x09
-#define FW_CFG_INITRD_ADDR      0x0a
-#define FW_CFG_INITRD_SIZE      0x0b
-#define FW_CFG_BOOT_DEVICE      0x0c
-#define FW_CFG_NUMA             0x0d
-#define FW_CFG_BOOT_MENU        0x0e
-#define FW_CFG_MAX_CPUS         0x0f
-#define FW_CFG_MAX_ENTRY        0x10
+#define FW_CFG_SIGNATURE 0x00
+#define FW_CFG_ID 0x01
+#define FW_CFG_UUID 0x02
+#define FW_CFG_RAM_SIZE 0x03
+#define FW_CFG_NOGRAPHIC 0x04
+#define FW_CFG_NB_CPUS 0x05
+#define FW_CFG_MACHINE_ID 0x06
+#define FW_CFG_KERNEL_ADDR 0x07
+#define FW_CFG_KERNEL_SIZE 0x08
+#define FW_CFG_KERNEL_CMDLINE 0x09
+#define FW_CFG_INITRD_ADDR 0x0a
+#define FW_CFG_INITRD_SIZE 0x0b
+#define FW_CFG_BOOT_DEVICE 0x0c
+#define FW_CFG_NUMA 0x0d
+#define FW_CFG_BOOT_MENU 0x0e
+#define FW_CFG_MAX_CPUS 0x0f
+#define FW_CFG_MAX_ENTRY 0x10
 static uint32_t bios_firmware_data, firmware_memory_size;
 
 static uint8_t cmos12v = 0;
-static void pc_init_cmos_disk(struct drive_info *drv, int id)
+static void pc_init_cmos_disk(struct drive_info* drv, int id)
 {
-    if (drv->type == DRIVE_TYPE_DISK)
-    {
+    if (drv->type == DRIVE_TYPE_DISK) {
         int shift = id << 2; // choose between 0 (first) or 4 (second)
         cmos12v |= 15 << (shift ^ 4);
         cmos_set(0x12, cmos12v);
@@ -75,7 +74,7 @@ static void pc_init_cmos_disk(struct drive_info *drv, int id)
     }
 }
 
-static inline void pc_init_cmos(struct pc_settings *pc)
+static inline void pc_init_cmos(struct pc_settings* pc)
 {
     // Set CMOS defaults
     // http://stanislavs.org/helppc/cmos_ram.html
@@ -125,35 +124,29 @@ static int bios_ptr[2];
 static void bios_writeb(uint32_t port, uint32_t data)
 {
     int id;
-    switch (port)
-    {
+    switch (port) {
     case 0x510: // BIOS firmware configuration port
         // bios_config_data
-        switch(data){
-            case FW_CFG_SIGNATURE:
-                bios_firmware_data = 0xFAB0FAB0;
-                break;
-            case FW_CFG_RAM_SIZE:
-                bios_firmware_data = firmware_memory_size;
-                break;
-            case FW_CFG_NB_CPUS:
-                bios_firmware_data = 1;
-                break;
+        switch (data) {
+        case FW_CFG_SIGNATURE:
+            bios_firmware_data = 0xFAB0FAB0;
+            break;
+        case FW_CFG_RAM_SIZE:
+            bios_firmware_data = firmware_memory_size;
+            break;
+        case FW_CFG_NB_CPUS:
+            bios_firmware_data = 1;
+            break;
         }
         break;
-    case 0x8900:
-    {
+    case 0x8900: {
         static const unsigned char shutdown[8] = "Shutdown";
         static int idx = 0;
-        if (data == shutdown[idx++])
-        {
-            if (idx == 8)
-            {
+        if (data == shutdown[idx++]) {
+            if (idx == 8) {
                 LOG("PC", "Shutdown requested\n");
                 pc_hlt_if_0();
-            }
-            else
-            {
+            } else {
                 idx = 0;
             }
         }
@@ -172,8 +165,7 @@ static void bios_writeb(uint32_t port, uint32_t data)
             return;
         id = port >> 8 & 1;
         bios_data[id][bios_ptr[id]++] = data;
-        if (bios_ptr[id] == 100 || data == '\n')
-        {
+        if (bios_ptr[id] == 100 || data == '\n') {
             bios_data[id][bios_ptr[id]] = 0;
             fprintf(stderr, "%sBIOS says: '%s'\n", id ? "VGA" : "", bios_data[id]);
             printf("%sBIOS says: '%s'\n", id ? "VGA" : "", bios_data[id]);
@@ -190,8 +182,7 @@ void pc_set_a20(int state)
 uint8_t p61_data;
 static uint32_t bios_readb(uint32_t port)
 {
-    switch (port)
-    {
+    switch (port) {
     case 0xB3:
         return 0;
     case 0x92:
@@ -226,7 +217,7 @@ static uint32_t default_mmio_readb(uint32_t a)
 // XXX Very very bad hack to make timing work (see util.c)
 void util_state(void);
 
-int pc_init(struct pc_settings *pc)
+int pc_init(struct pc_settings* pc)
 {
     if (cpu_init() == -1)
         return -1;
@@ -313,21 +304,18 @@ int pc_init(struct pc_settings *pc)
     io_register_write(0x4AE8, 8, bios_writeb, NULL, NULL);
 #endif
 
-    if (!pc->pci_enabled)
-    {
+    if (!pc->pci_enabled) {
         io_register_write(0xCF8, 8, bios_writeb, bios_writeb, bios_writeb);
         io_register_read(0xCF8, 8, bios_readb, bios_readb, bios_readb);
     }
 
-    if (!pc->apic_enabled)
-    {
+    if (!pc->apic_enabled) {
         io_register_mmio_write(0xFEE00000, 1 << 20, default_mmio_writeb, NULL, NULL);
         io_register_mmio_read(0xFEE00000, 1 << 20, default_mmio_readb, NULL, NULL);
     }
 
     // Check writes to ROM
-    if (!pc->pci_enabled)
-    {
+    if (!pc->pci_enabled) {
         // PCI can control ROM areas using the Programmable Attribute Map Registers, so this will be handled there
         io_register_mmio_write(0xC0000, 0x40000, default_mmio_writeb, NULL, NULL);
     }
@@ -340,22 +328,19 @@ int pc_init(struct pc_settings *pc)
         pci_init_mem(cpu_get_ram_ptr());
 
     // Check if BIOS and VGABIOS have sane values
-    if (((uintptr_t)pc->bios.data | (uintptr_t)pc->vgabios.data) & 0xFFF)
-    {
+    if (((uintptr_t)pc->bios.data | (uintptr_t)pc->vgabios.data) & 0xFFF) {
         fprintf(stderr, "BIOS and VGABIOS need to be aligned on a 4k boundary\n");
         return -1;
     }
-    if (!pc->bios.length || !pc->vgabios.length)
-    {
+    if (!pc->bios.length || !pc->vgabios.length) {
         fprintf(stderr, "BIOS/VGABIOS length is zero\n");
         return 0;
     }
     int v = cpu_add_rom(0x100000 - pc->bios.length, pc->bios.length, pc->bios.data);
     v |= cpu_add_rom(-pc->bios.length, pc->bios.length, pc->bios.data);
-    if(!pc->pci_vga_enabled)
+    if (!pc->pci_vga_enabled)
         v |= cpu_add_rom(0xC0000, pc->vgabios.length, pc->vgabios.data);
-    if (v == -1)
-    {
+    if (v == -1) {
         fprintf(stderr, "Unable to register ROM areas\n");
         return -1;
     }
@@ -376,24 +361,22 @@ static uint32_t devices_get_next_raw(itick_t now)
     next[1] = pit_next(now);
     next[2] = apic_next(now);
     next[3] = acpi_next(now);
-    for (int i = 0; i < 4; i++)
-    {
+    for (int i = 0; i < 4; i++) {
         if (next[i] < min)
             min = next[i];
     }
     return min;
 }
 
-static uint32_t devices_get_next(itick_t now, int *devices_need_servicing)
+static uint32_t devices_get_next(itick_t now, int* devices_need_servicing)
 {
     int min = devices_get_next_raw(now);
-    if ((unsigned int)min > 200000)
-    {
+    if (cpu_get_exit_reason() == EXIT_STATUS_HLT)
+        return min;
+    if ((unsigned int)min > 200000) {
         *devices_need_servicing = min - 200000;
         return 200000;
-    }
-    else
-    {
+    } else {
         *devices_need_servicing = 0;
         return min;
     }
@@ -406,17 +389,25 @@ void pc_hlt_if_0(void)
 }
 
 //#define INSNS_PER_FRAME 100000000 // Windows 7, Vista
-#define INSNS_PER_FRAME 100000000
+#define INSNS_PER_FRAME 50000000
 static int sync = 0;
 static uint64_t last = 0;
+
+#ifdef EMSCRIPTEN
+// Don't feel like wasting your time while waiting for HLT loops to complete? solution is below
+static int fast = 0;
+
+void pc_set_fast(int yes){
+    fast = yes;
+}
+#endif
 int pc_execute(void)
 {
     // This function is called repeatedly.
     int frames = 10, cycles_to_run, cycles_run, exit_reason, devices_need_servicing = 0;
     itick_t now;
     sync++;
-    if ((cpu_get_cycles() - last) > INSNS_PER_FRAME)
-    {
+    if ((cpu_get_cycles() - last) > INSNS_PER_FRAME) {
 // Verify that timing is identical
 #ifndef DISABLE_CONSTANT_SAVING
         state_store_to_file("savestates/halfix_state");
@@ -427,13 +418,19 @@ int pc_execute(void)
         sync = 0;
         last = cpu_get_cycles();
     }
+
+#ifdef EMSCRIPTEN
+    uint64_t cur_now;
+    if (fast)
+        cur_now = cpu_get_cycles();
+#endif
+
     // Call the callback if needed, for async drive cases
     drive_check_complete();
-    do
-    {
+    do {
         now = get_now();
         cycles_to_run = devices_get_next(now, &devices_need_servicing);
-        // Run a number of cycles.
+// Run a number of cycles.
 
 #if 0
         uint64_t before = get_now();
@@ -446,21 +443,34 @@ int pc_execute(void)
             //abort();
         }
 #endif
-        if ((exit_reason = cpu_get_exit_reason()))
-        {
+        if ((exit_reason = cpu_get_exit_reason())) {
             // We exited the loop because of a HLT instruction or an async function needs to be called.
             // Now skip forward a number of cycles, and determine how many ms we should sleep for
-            int cycles_to_move_forward, wait_time;
+            int cycles_to_move_forward, wait_time, moveforward;
             cycles_to_move_forward = cycles_to_run - cycles_run;
 
-            if (exit_reason == EXIT_STATUS_HLT)
-                cycles_to_move_forward += devices_need_servicing;
+            if (exit_reason == EXIT_STATUS_HLT) {
+                moveforward = devices_get_next(get_now(), NULL);
+                cycles_to_move_forward += moveforward;
+            }
             add_now(cycles_to_move_forward);
             wait_time = (cycles_to_move_forward * 1000) / ticks_per_second;
-            if (wait_time != 0)
-                return wait_time;
+#ifdef EMSCRIPTEN
+            if (!fast) {
+                if (wait_time != 0)
+                    return wait_time;
+            }
+#endif
             // Just continue since wait time is negligable
         }
+#ifdef EMSCRIPTEN
+        if (fast) {
+            if ((cpu_get_cycles() - cur_now) > 2000000)
+                return 0;
+            else
+                frames = -1;
+        }
+#endif
     } while (frames--);
     return 0;
 }
