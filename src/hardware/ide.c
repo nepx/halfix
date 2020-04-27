@@ -60,7 +60,12 @@
 #define ATAPI_ERROR_EOM 0x02 // Command specific
 #define ATAPI_ERROR_ILI 0x01 // Command specific
 
+#define DISABLE_MULTIPLE_SECTORS
+#ifdef DISABLE_MULTIPLE_SECTORS
+#define MAX_MULTIPLE_SECTORS 1
+#else
 #define MAX_MULTIPLE_SECTORS 16 // According to QEMU and Bochs
+#endif
 
 // We keep all fields inside one big struct to make it easy for the autogen savestate
 static struct ide_controller {
@@ -322,6 +327,7 @@ static void ide_abort_command(struct ide_controller* ctrl)
     ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_DSC | ATA_STATUS_ERR;
     ctrl->error = ATA_ERROR_ABRT;
     ctrl->pio_position = 0;
+    ctrl->dma_status |= 2; // Failed
     ide_raise_irq(ctrl);
 }
 
@@ -565,10 +571,14 @@ static void ide_atapi_read_complete(void* thisptr, int x)
 static void ide_atapi_read(struct ide_controller* ctrl)
 {
     IDE_LOG("   atapi read sector=%d\n", ctrl->atapi_lba);
+    // XXX -- make sure that ctrl->atapi_lba * ctrl->atapi_sector_size can be over 0xFFFFFFFF
     int res = drive_read(SELECTED(ctrl, info), ctrl, ctrl->pio_buffer, ctrl->atapi_sector_size, ctrl->atapi_lba * ctrl->atapi_sector_size, ide_atapi_read_complete);
 
     // We have already prefetched this data
     if (res != DRIVE_RESULT_SYNC) {
+        printf(" == Internal IDE inconsistency == ");
+        printf("Fetch offset: %08x [blk%08x.bin]\n", ctrl->atapi_lba * ctrl->atapi_sector_size, (ctrl->atapi_lba * ctrl->atapi_sector_size) / (256 << 10));
+        printf("Fetch bytes: %d\n", ctrl->atapi_sector_size);
         IDE_FATAL("Error trying to fetch already-fetched ATAPI data\n");
     }
 
@@ -874,7 +884,8 @@ static void ide_atapi_run_command(struct ide_controller* ctrl)
 
             // Prefetch all the data beforehand
             IDE_LOG("Prefetch: %d start=%08x end=%08x\n", ctrl->atapi_cylinder_count, ctrl->atapi_lba * ctrl->atapi_sector_size, ctrl->atapi_lba * ctrl->atapi_sector_size + ctrl->atapi_bytes_to_transfer);
-            int res = drive_prefetch(SELECTED(ctrl, info), ctrl, ctrl->atapi_cylinder_count, ctrl->atapi_lba * ctrl->atapi_sector_size, ide_atapi_read_cb);
+            //fprintf(stderr, "cylinder bytes=%d [0x%x] offs=%08x [blk%08x.bin] real bytes=0x%x\n", ctrl->atapi_cylinder_count, ctrl->atapi_cylinder_count, ctrl->atapi_lba * ctrl->atapi_sector_size, (ctrl->atapi_lba * ctrl->atapi_sector_size) / (256 * 1024), ctrl->atapi_bytes_to_transfer);
+            int res = drive_prefetch(SELECTED(ctrl, info), ctrl, ctrl->atapi_bytes_to_transfer, ctrl->atapi_lba * ctrl->atapi_sector_size, ide_atapi_read_cb);
             if (res == DRIVE_RESULT_ASYNC) {
                 ctrl->status |= ATA_STATUS_BSY | ATA_STATUS_DRDY | ATA_STATUS_DSC;
             } else if (res == DRIVE_RESULT_SYNC) {
@@ -1042,6 +1053,9 @@ static void ide_pio_read_callback(struct ide_controller* ctrl)
 
                 // We have already prefetched this data
                 if (res != DRIVE_RESULT_SYNC) {
+                    fprintf(stderr, " == Internal IDE inconsistency == ");
+                    fprintf(stderr, "Fetch offset: %08x [blk%08x.bin]\n", ctrl->atapi_lba * ctrl->atapi_sector_size, (ctrl->atapi_lba * ctrl->atapi_sector_size) / (256 << 10));
+                    fprintf(stderr, "Fetch bytes: %d\n", ctrl->atapi_sector_size);
                     IDE_FATAL("Error trying to fetch already-fetched ATAPI data\n");
                 }
 
@@ -1498,7 +1512,7 @@ static void ide_identify(struct ide_controller* ctrl)
         ide_pio_store_word(ctrl, 25 << 1, 4);
         ide_pio_store_word(ctrl, 26 << 1, 4);
         ide_pio_store_string(ctrl, "HALFIX 123456", 27 << 1, 40, 1, 1);
-        ide_pio_store_word(ctrl, 47 << 1, 128);
+        ide_pio_store_word(ctrl, 47 << 1, MAX_MULTIPLE_SECTORS); // Max multiple sectors
         ide_pio_store_word(ctrl, 48 << 1, 1); // DWORD IO supported
         ide_pio_store_word(ctrl, 49 << 1, 1 << 9); // LBA supported (TODO: DMA)
         ide_pio_store_word(ctrl, 50 << 1, 0);
@@ -1771,9 +1785,10 @@ static void ide_write(uint32_t port, uint32_t data)
         case 0x29: // Read multiple, using LBA48
         case 0xC4: // Read multiple
             IDE_LOG("Command: READ MULTIPLE [w/%s LBA]\n", data == 0x29 ? "" : "o");
-            if (ctrl->multiple_sectors_count == 0 || SELECTED(ctrl, type) != DRIVE_TYPE_DISK)
+            if (ctrl->multiple_sectors_count == 0 || SELECTED(ctrl, type) != DRIVE_TYPE_DISK){
+                IDE_LOG("READ MULTIPLE failed\n");
                 ide_abort_command(ctrl);
-            else
+            }else
                 ide_read_sectors(ctrl, data == 0x29, ctrl->multiple_sectors_count);
             break;
         case 0x20: // Read, with retry
@@ -1900,6 +1915,7 @@ static void ide_write(uint32_t port, uint32_t data)
             IDE_LOG("Command: SET FEATURES [idx=%02x]\n", ctrl->feature);
             switch (ctrl->feature) {
             case 3: // Set transfer mode
+#ifndef DISABLE_MULTIPLE_SECTORS
                 switch (ctrl->sector_count) {
                 case 0 ... 15: // PIO
                     ctrl->mdma = 0;
@@ -1920,6 +1936,10 @@ static void ide_write(uint32_t port, uint32_t data)
                 ctrl->status = ATA_STATUS_DRDY | ATA_STATUS_DSC;
                 ide_raise_irq(ctrl);
                 break;
+#else
+                ide_abort_command(ctrl);
+                break;
+#endif
             case 2: // ?
             case 130: // ?
             case 0x66: // Windows XP writes to this one
@@ -1941,9 +1961,10 @@ static void ide_write(uint32_t port, uint32_t data)
                 ide_abort_command(ctrl);
             else {
                 int multiple_count = ctrl->sector_count & 0xFF;
-                if (multiple_count > MAX_MULTIPLE_SECTORS || (multiple_count & (multiple_count - 1)) != 0)
+                if (multiple_count > MAX_MULTIPLE_SECTORS || (multiple_count & (multiple_count - 1)) != 0) {
+                    IDE_LOG("SET MULTIPLE MODE command failed");
                     ide_abort_command(ctrl);
-                else {
+                } else {
                     ctrl->multiple_sectors_count = multiple_count;
                     ctrl->status = ATA_STATUS_DRDY;
                     ide_raise_irq(ctrl);
