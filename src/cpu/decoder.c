@@ -1619,7 +1619,7 @@ static int decode_CE(struct decoded_instruction* i)
 {
     i->flags = 0;
     i->handler = op_into;
-    return 1;
+    return 0;
 }
 static int decode_CF(struct decoded_instruction* i)
 {
