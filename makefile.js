@@ -63,15 +63,6 @@ for (var i = 0; i < argv.length; i++) {
             child_process.execSync("rm build/objs/*.o");
             process.exit(0);
             break;
-        case "bochscompare":
-            flags.push("-DINSTRUMENT");
-            build_type = "bochscompare";
-            end_flags.push("-ldl");
-            break;
-        case "bochs":
-            build_type = "bochs";
-            end_flags.push("-ldl");
-            break;
         case "libcpu":
             build_type = "libcpu";
             files[0] = {};
@@ -129,10 +120,6 @@ for (var i = 0; i < argv.length; i++) {
                 //"-s", "SAFE_HEAP=1"    
             );
             for (var j = 0; j < my_flags.length; j++) end_flags.push(my_flags[j]);
-            break;
-        case "bochs":
-            build_type = "bochs";
-            end_flags.push("-ldl");
             break;
         case "--enable-wasm":
             wasm = 1;
