@@ -30,13 +30,13 @@ for (var i = 0; i < files.length; i++) {
 
 var bits = os.arch() === "x64" ? 64 : 32; // Add your architecture here!
 var flags = ["-Wall", "-Wextra", "-Werror", "-g3", "-std=c99"];
-var end_flags = [];
+var end_flags = [], fincc_flags = [];
 
 // flags.push.apply(flags, "-I/usr/include/SDL -D_GNU_SOURCE=1
 // -D_REENTRANT".split(" "));
 // flags.push.apply(flags, "-L/usr/lib/x86_64-linux-gnu -lSDL -lSDLmain".split("
 // "));
-end_flags = "-lSDL -lSDLmain -lm -lz -lcurl".split(" ");
+end_flags = "-lSDL -lSDLmain -lm -lz".split(" ");
 
 var build32 = false;
 var verbose = false;
@@ -47,6 +47,8 @@ var build_type = "native";
 var optimization = "-O0";
 
 var result = null;
+
+var wasm = 0;
 
 var argv = process.argv.slice(2);
 for (var i = 0; i < argv.length; i++) {
@@ -60,6 +62,33 @@ for (var i = 0; i < argv.length; i++) {
             console.log("Removing all built files in build/");
             child_process.execSync("rm build/objs/*.o");
             process.exit(0);
+            break;
+        case "bochscompare":
+            flags.push("-DINSTRUMENT");
+            build_type = "bochscompare";
+            end_flags.push("-ldl");
+            break;
+        case "bochs":
+            build_type = "bochs";
+            end_flags.push("-ldl");
+            break;
+        case "libcpu":
+            build_type = "libcpu";
+            files[0] = {};
+            files[2] = {};
+            flags.push("-fPIC", "-shared");
+            console.log(build_type);
+            flags.push("-DLIBCPU");
+            break;
+        case "libcpu-wasm":
+            build_type = "libcpu";
+            result = "libcpu.wasm";
+            files[0] = {};
+            files[2] = {};
+            flags.push("-fPIC");
+            cc = fincc = "emcc";
+            flags.push("-s", "SIDE_MODULE=1");
+            flags.push("-DLIBCPU");
             break;
         case "release":
             argv.push("--optimization-level", "3");
@@ -94,16 +123,25 @@ for (var i = 0; i < argv.length; i++) {
             // List appropriate flags
             var my_flags = "";
             my_flags = my_flags.split(" ");
-            end_flags.push("-s", "NO_FILESYSTEM=1");
+            end_flags.push("-s", "NO_FILESYSTEM=1",
+                "-s", "TOTAL_MEMORY=256MB"
+                //"-s", "ASSERTIONS=1",
+                //"-s", "SAFE_HEAP=1"    
+            );
             for (var j = 0; j < my_flags.length; j++) end_flags.push(my_flags[j]);
             break;
+        case "bochs":
+            build_type = "bochs";
+            end_flags.push("-ldl");
+            break;
         case "--enable-wasm":
-            my_flags += "-s WASM=1";
-                end_flags.push(
-                    "-s", "\"EXTRA_EXPORTED_RUNTIME_METHODS=['dynCall_vii']\"");
+            wasm = 1;
+            break;
+        case "--cc":
+            cc = fincc = argv[++i];
             break;
         case "--disable-debug":
-        flags.splice(flags.indexOf("-g3"), 1);
+            flags.splice(flags.indexOf("-g3"), 1);
             break;
         case "--help":
             console.log("Actions:");
@@ -135,11 +173,33 @@ for (var i = 0; i < argv.length; i++) {
 }
 if (!result) result = "halfix";
 
+
+if (build_type === "emscripten") {
+    end_flags.push("-s", "WASM=" + wasm);
+    end_flags.push(
+        "-s", "\"EXTRA_EXPORTED_RUNTIME_METHODS=['dynCall_vii']\"");
+    console.log(end_flags);
+}
+
 // https://github.com/emscripten-core/emscripten/issues/5659
 if (build_type === "emscripten")
-    for (var i = 0; i < flags.length; i++)
+    for (var i = 0; i < flags.length; i++) {
         if (flags[i] === "-std=c99") flags[i] = "-std=gnu99";
+        if (end_flags.indexOf("WASM=1") !== -1) {
+            if (flags[i] === "-g3") flags[i] = "-g4";
+            end_flags.push("--source-map-base", "http://localhost:8080/home/jkim13/Desktop/halfix/");
+        }
+    }
 
+if (result.indexOf(".js") !== -1 && build_type == "libcpu") {
+    for (var i = 0; i < flags.length; i++)
+        if (flags[i] === "-shared") flags[i] = "";
+    flags.push("-s", "STANDALONE_WASM=1");
+}
+if (result.indexOf(".js") !== -1 || result.indexOf(".wasm") !== -1) {
+    end_flags.splice(end_flags.indexOf("-lSDLmain"), 1);
+    end_flags.splice(end_flags.indexOf("-lz"), 1);
+}
 flags.push("-D" + build_type.toUpperCase() + "_BUILD");
 
 /*
@@ -183,6 +243,8 @@ function find_file_append() {
     if (flags.indexOf("-pie") !== -1) id |= 64;
     if (flags.indexOf("-DINSTRUMENT") !== -1) id |= 128;
     if (flags.indexOf("-O") !== -1) id |= 256;
+    if (flags.indexOf("-DLIBCPU") !== -1) id |= 512;
+    if (flags.indexOf("SIDE_MODULE=1") !== -1) id |= 1024;
 
     // Hash the name of the build
     var x = 0;
@@ -438,12 +500,12 @@ function done_compiling() {
         " compiled successfully!");
     console.log(
         "Files that errored: " + errored.length === 0 ? "NONE" :
-        errored.join(", "));
+            errored.join(", "));
     if (errored.length === 0) {
         // Final build step!
         // XXX: Fix for your platform
         if (fincc !== "ar")
-            var cmdstring = fincc + " " + flags.join(" ") + " -o " + result + " ";
+            var cmdstring = fincc + " " + fincc_flags.join(" ") + flags.join(" ") + " -o " + result + " ";
         else
             var cmdstring = fincc + " rv -o " + result + " ";
         for (var i = 0; i < all_files.length; i++) {
@@ -500,7 +562,7 @@ function recompute_indiv(obj, file) {
 end_flags
 
 function
-recompute_dependencies() {
+    recompute_dependencies() {
     // Simply recompute all dependencies for our files
     for (var i = 0; i < files.length; i++) {
         recompute_indiv(files[i], files[i].__name);
