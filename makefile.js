@@ -173,8 +173,7 @@ if (build_type === "emscripten")
     for (var i = 0; i < flags.length; i++) {
         if (flags[i] === "-std=c99") flags[i] = "-std=gnu99";
         if (end_flags.indexOf("WASM=1") !== -1) {
-            if (flags[i] === "-g3") flags[i] = "-g4";
-            end_flags.push("--source-map-base", "http://localhost:8080/home/jkim13/Desktop/halfix/");
+            //if (flags[i] === "-g3") flags[i] = "-g4";
         }
     }
 
