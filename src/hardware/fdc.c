@@ -683,6 +683,9 @@ static void fdc_write(uint32_t port, uint32_t data)
             reset_cmd_fifo();
         }
         break;
+    case 0x3f7:
+        if(data != 0) FLOPPY_FATAL("unknown value written to configuration control register: %02x\n", data);
+        break;
     default:
         FLOPPY_FATAL("Unknown port write: %04x data: %02x\n", port, data);
     }
