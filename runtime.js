@@ -21,12 +21,36 @@ function $(e) {
 var printElt = $("log"),
     netstat = $("netstat"),
     totalbytesElt = $("totalbytes");
+const SAVE_LOGS = false;
+var arr = [];
 var Module = {
     "canvas": $("screen"),
     "print": function (ln) {
         printElt.value += ln + "\n";
+    },
+    "printErr": function (ln) {
+        if(SAVE_LOGS)
+            arr.push(ln);
     }
 };
+
+function save(filename, data) {
+    var blob = new Blob([data], {type: 'text/csv'});
+    if(window.navigator.msSaveOrOpenBlob) {
+        window.navigator.msSaveBlob(blob, filename);
+    }
+    else{
+        var elem = window.document.createElement('a');
+        elem.href = window.URL.createObjectURL(blob);
+        elem.download = filename;        
+        document.body.appendChild(elem);
+        elem.click();        
+        document.body.removeChild(elem);
+    }
+}
+function saveLog(){
+    save("test.txt", arr.join("\n"));
+}
 
 (function () {
     // ============================================================================
@@ -503,13 +527,10 @@ var Module = {
         this.cb = cb;
         this.arg1 = arg1;
 
-        console.log(this.request_queue);
-
         loadFiles(this.request_queue, function (err, data) {
             if (err) throw err;
 
             var rql = me.request_queue.length;
-            //console.log(me.request_queue_ids);
             for (var i = 0; i < rql; i = i + 1 | 0)
                 me.blocks[me.request_queue_ids[i]] = data[i];
 
@@ -636,4 +657,12 @@ var Module = {
     $("ctrlaltdel").addEventListener("mouseup", function(){
         wrap("display_send_ctrl_alt_del")(0);
     });
+    $("savebutton").addEventListener("click", function(){
+        wrap("emscripten_savestate")();
+    });
+
+    window["saveFile"] = function(pathstr, fileidx, len){
+        var path = readstr(pathstr);
+        console.log(path, fileidx, len);
+    };
 })();
