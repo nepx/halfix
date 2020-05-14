@@ -99,6 +99,12 @@ function parse_obj(cur_object) {
 }
 parse_obj(state);
 
+function format(x, arg) {
+    var str = arg.toString(16);
+    while (str.length < 8) str = "0" + str;
+    return x.replace("%08x", str);
+}
+
 var ide_data = {};
 function ide_parse(ide_ident) {
     var ide = state[ide_ident];
@@ -121,7 +127,16 @@ function ide_parse(ide_ident) {
         paths: paths,
         block_array: block_array
     };
-    ide_data[ide_ident] = obj
+    ide_data[ide_ident] = obj;
+
+    for (var i = 0; i < block_array.length; i = i + 1 | 0) {
+        var idx = block_array[i];
+        var path$ = path.join(paths[idx], format("blk%08x.bin", i));
+        if (!fs.existsSync(path$ + ".gz")) {
+            var data = fs.readFileSync(path$);
+            fs.writeFileSync(path$ + ".gz", zlib.deflateSync(data));
+        }
+    }
 }
 // Separate out the ide%d-%d parts
 ide_parse("ide0-0");
