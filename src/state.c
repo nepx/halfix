@@ -152,7 +152,7 @@ static void writemem(struct wstream* w, void* mem, int len)
 #define STATE_FATAL(x, ...) \
     FATAL("STATE", x, ##__VA_ARGS__);
 
-#define MAX_STATE_HANDLERS 15
+#define MAX_STATE_HANDLERS 16
 static state_handler state_handlers[MAX_STATE_HANDLERS];
 static int state_handler_count = 0;
 static int is_reading = 0;
@@ -182,7 +182,7 @@ struct bjson_data* state_get_mem(struct bjson_object* o, char* key)
 {
     struct bjson_key_value* keyval = get_value(o, key);
     if (!keyval || keyval->datatype != TYPE_DATA) {
-        STATE_LOG("%s is invalid key\n", key);
+        STATE_LOG("%s is invalid key -- setting to zero\n", key);
         return NULL;
     }
     return &keyval->mem_data;
@@ -266,9 +266,13 @@ void state_field(struct bjson_object* cur, int length, char* name, void* data)
 {
     if (is_reading) {
         struct bjson_data* arr = state_get_mem(cur, name);
-        if ((unsigned int)length > arr->length)
-            length = arr->length;
-        memcpy(data, arr->data, length);
+        if (arr == NULL) {
+            memset(data, 0, length);
+        } else {
+            if ((unsigned int)length > arr->length)
+                length = arr->length;
+            memcpy(data, arr->data, length);
+        }
     } else {
         struct bjson_data arr;
         state_init_bjson_mem(&arr, length);
@@ -388,11 +392,13 @@ void state_file(int size, char* name, void* ptr)
             STATE_FATAL("Could not read\n");
         close(fd);
 #else
-        abort();
+        EM_ASM_({
+            window["loadFile"]($0, $1, $2);
+        }, temp, ptr, size);
 #endif
     } else {
 #ifndef EMSCRIPTEN
-        int fd = open(temp, O_WRONLY | O_CREAT | O_BINARY, 0666);
+        int fd = open(temp, O_WRONLY | O_CREAT | O_BINARY | O_TRUNC, 0666);
         if (fd == -1)
             STATE_FATAL("Unable to create file %s\n", temp);
         if (write(fd, ptr, size) != size)
@@ -427,6 +433,7 @@ void state_read_from_file(char* fn)
     global_file_base = normalize(fn);
     sprintf(path, "%s/state.bin", fn);
 
+#ifndef EMSCRIPTEN
     int fd = open(path, O_RDONLY | O_BINARY);
     if (fd == -1)
         STATE_FATAL("Cannot open file %s\n", fn);
@@ -436,6 +443,12 @@ void state_read_from_file(char* fn)
     if (read(fd, buf, size) != size)
         STATE_FATAL("Cannot read from file %s\n", fn);
     close(fd);
+#else
+    void* buf = (void*)(EM_ASM_INT({
+        return window["loadFile2"]($0, $1, $2);
+    },
+        path, global_file_base));
+#endif
 
     struct rstream r;
     rstream_init(&r, buf);

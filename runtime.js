@@ -29,26 +29,26 @@ var Module = {
         printElt.value += ln + "\n";
     },
     "printErr": function (ln) {
-        if(SAVE_LOGS)
+        if (SAVE_LOGS)
             arr.push(ln);
     }
 };
 
 function save(filename, data) {
-    var blob = new Blob([data], {type: 'text/csv'});
-    if(window.navigator.msSaveOrOpenBlob) {
+    var blob = new Blob([data], { type: 'text/csv' });
+    if (window.navigator.msSaveOrOpenBlob) {
         window.navigator.msSaveBlob(blob, filename);
     }
-    else{
+    else {
         var elem = window.document.createElement('a');
         elem.href = window.URL.createObjectURL(blob);
-        elem.download = filename;        
+        elem.download = filename;
         document.body.appendChild(elem);
-        elem.click();        
+        elem.click();
         document.body.removeChild(elem);
     }
 }
-function saveLog(){
+function saveLog() {
     save("test.txt", arr.join("\n"));
 }
 
@@ -559,10 +559,38 @@ function saveLog(){
     });
 
     function run_wrapper2() {
+
+        wrap("emscripten_init")();
+        // Check if we should load a savestate
+        var statepath = getParameterByName("state");
+        if (statepath) {
+            // Load all the files that we can
+            loadFiles([
+                statepath + "/state.bin",
+                statepath + "/ram",
+                statepath + "/vram",
+                statepath + "/diskinfo.json"], function (err, data) {
+                    if (err) throw err;
+                    savestate_files["/state.bin"] = data[0];
+                    savestate_files["/ram"] = data[1];
+                    savestate_files["/vram"] = data[2];
+                    savestate_files["/diskinfo.json"] = JSON.parse(u8tostr(data[3]));
+                    
+                    wrap("emscripten_load_state")();
+
+                    delete data[3]; // try to get this gc'ed 
+
+                    now = new Date().getTime();
+                    cycles = wrap("emscripten_get_cycles");
+                    run = wrap("emscripten_run");
+                    run_wrapper();
+                }, true);
+                return;
+        }
+
         now = new Date().getTime();
         cycles = wrap("emscripten_get_cycles");
         run = wrap("emscripten_run");
-        wrap("emscripten_init")();
         run_wrapper();
     }
 
@@ -631,6 +659,13 @@ function saveLog(){
     var cfg = buildConfiguration();
     loadEmulator(getParameterByName("app") || "halfix.js");
 
+    var savestate_files = {};
+    function u8tostr(u) {
+        var str = "";
+        for (var i = 0; i < u.length; i = i + 1 | 0)str += String.fromCharCode(u[i]);
+        return str;
+    }
+
     Module["onRuntimeInitialized"] = function () {
         // Initialize runtime
         u8 = Module["HEAPU8"];
@@ -651,18 +686,55 @@ function saveLog(){
     };
 
     // Various convienience functions
-    $("ctrlaltdel").addEventListener("mousedown", function(){
+    $("ctrlaltdel").addEventListener("mousedown", function () {
         wrap("display_send_ctrl_alt_del")(1);
     });
-    $("ctrlaltdel").addEventListener("mouseup", function(){
+    $("ctrlaltdel").addEventListener("mouseup", function () {
         wrap("display_send_ctrl_alt_del")(0);
     });
-    $("savebutton").addEventListener("click", function(){
-        wrap("emscripten_savestate")();
-    });
 
-    window["saveFile"] = function(pathstr, fileidx, len){
+    var jszip;
+    $("savebutton").addEventListener("click", function () {
+        jszip = new JSZip();
+        wrap("emscripten_savestate")();
+        jszip.generateAsync({ type: "blob" })
+            .then(function (content) {
+                alert("todo: save content -- zipping is too slow");
+                //saveAs(content, "example.zip");
+            });
+    });
+    window["saveFile"] = function (pathstr, fileidx, len) {
         var path = readstr(pathstr);
-        console.log(path, fileidx, len);
+        jszip.file(path, Module["HEAPU8"].slice(fileidx, fileidx + len | 0));
+    };
+
+    /**
+     * Load file from file cache
+     * @param {number} pathstr Pointer to path string
+     * @param {number} addr Address to load the data
+     */
+    window["loadFile"] = function (pathstr, addr) {
+        var path = readstr(pathstr);
+        var data = savestate_files[path];
+        if(!data) throw new Error("ENOENT: " + path);
+        memcpy(addr, data);
+        return addr;
+    };
+    /**
+     * Load file from file cache and allocate a buffer to store it in. 
+     * It is the responsibility of the caller to free the memory. 
+     * @param {number} pathstr Pointer to path string
+     * @param {number} addr Address to load the data
+     */
+    window["loadFile2"] = function (pathstr, addr) {
+        var path = readstr(pathstr);
+        var data = savestate_files[path];
+        if(!data) throw new Error("ENOENT: " + path);
+        var len = data.length;
+        var addr = alloc(len);
+        _allocs.pop();
+        memcpy(addr, data);
+        console.log(path, data, addr);
+        return addr;
     };
 })();
