@@ -370,7 +370,7 @@ static int drive_write_block_internal(struct drive_internal_info* this, struct b
 static int drive_internal_write_check(struct drive_internal_info* this, void* buffer, uint32_t length, drv_offset_t position, int no_xhr)
 {
     drv_offset_t writeEnd = position + length,
-             blocksToWrite = ((((writeEnd - 1) & ~BLOCK_MASK) - (position & ~BLOCK_MASK)) >> BLOCK_SHIFT) + 1;
+                 blocksToWrite = ((((writeEnd - 1) & ~BLOCK_MASK) - (position & ~BLOCK_MASK)) >> BLOCK_SHIFT) + 1;
 
     uint32_t currentFilePosition = position;
 
@@ -480,7 +480,7 @@ static int drive_internal_prefetch_remote(struct drive_internal_info* this, stru
 #else
     // Open the file, allocate memory, read file, and close file.
     blockinfo->data = drive_read_file(this, temp);
-    
+
     UNUSED(length);
 
     return 0;
@@ -491,7 +491,7 @@ static int drive_internal_prefetch_remote(struct drive_internal_info* this, stru
 static int drive_internal_prefetch_check(struct drive_internal_info* this, uint32_t length, drv_offset_t position)
 {
     drv_offset_t readEnd = position + length,
-             blocksToRead = ((((readEnd - 1) & ~BLOCK_MASK) - (position & ~BLOCK_MASK)) >> BLOCK_SHIFT) + 1;
+                 blocksToRead = ((((readEnd - 1) & ~BLOCK_MASK) - (position & ~BLOCK_MASK)) >> BLOCK_SHIFT) + 1;
 
     uint32_t currentFilePosition = position;
 
@@ -526,7 +526,8 @@ static int drive_internal_prefetch_check(struct drive_internal_info* this, uint3
 }
 static int drive_internal_prefetch(void* this_ptr, void* cb_ptr, uint32_t length, drv_offset_t position, drive_cb cb)
 {
-    if(position > 0xFFFFFFFF) DRIVE_FATAL("TODO: big access\n");
+    if (position > 0xFFFFFFFF)
+        DRIVE_FATAL("TODO: big access\n");
     struct drive_internal_info* this = this_ptr;
     if (!drive_internal_prefetch_check(this, length, position))
         return DRIVE_RESULT_SYNC;
@@ -747,6 +748,9 @@ struct simple_driver {
     // Set if disk is write protected
     int write_protected;
 
+    // Should we modify the backing file?
+    int raw_file_access;
+
     // Table of blocks
     uint8_t** blocks;
 };
@@ -758,7 +762,8 @@ static void drive_simple_state(void* this, char* path)
     //DRIVE_FATAL("TODO: Sync driver state\n");
 }
 
-static int drive_simple_prefetch(void* this_ptr, void* cb_ptr, uint32_t length, drv_offset_t position, drive_cb cb){
+static int drive_simple_prefetch(void* this_ptr, void* cb_ptr, uint32_t length, drv_offset_t position, drive_cb cb)
+{
     // Since we're always sync, no need to prefetch
     UNUSED(this_ptr);
     UNUSED(cb_ptr);
@@ -795,7 +800,7 @@ static int drive_simple_fetch_cache(struct simple_driver* info, void* buffer, dr
 static int drive_simple_add_cache(struct simple_driver* info, drv_offset_t offset)
 {
     void* dest = info->blocks[offset / info->block_size] = malloc(info->block_size);
-    lseek(info->fd, offset & (drv_offset_t)~(info->block_size - 1), SEEK_SET); // Seek to the beginning of the current block
+    lseek(info->fd, offset & (drv_offset_t) ~(info->block_size - 1), SEEK_SET); // Seek to the beginning of the current block
     if ((uint32_t)read(info->fd, dest, info->block_size) != info->block_size)
         DRIVE_FATAL("Unable to read %d bytes from image file\n", (int)info->block_size);
     return 0;
@@ -824,16 +829,16 @@ static int drive_simple_write(void* this, void* cb_ptr, void* buffer, uint32_t s
 
     drv_offset_t end = size + offset;
     while (offset != end) {
-#if !ALLOW_READWRITE
-        if (!drive_simple_has_cache(info, offset))
-            drive_simple_add_cache(info, offset);
-        drive_simple_write_cache(info, buffer, offset);
-#else
-        UNUSED(drive_simple_add_cache);
-        lseek(info->fd, offset, SEEK_SET);
-        if (write(info->fd, buffer, 512) != 512)
-            DRIVE_FATAL("Unable to write 512 bytes to image file\n");
-#endif
+        if (!info->raw_file_access) {
+            if (!drive_simple_has_cache(info, offset))
+                drive_simple_add_cache(info, offset);
+            drive_simple_write_cache(info, buffer, offset);
+        } else {
+            UNUSED(drive_simple_add_cache);
+            lseek(info->fd, offset, SEEK_SET);
+            if (write(info->fd, buffer, 512) != 512)
+                DRIVE_FATAL("Unable to write 512 bytes to image file\n");
+        }
         buffer += 512;
         offset += 512;
     }
@@ -866,16 +871,16 @@ static int drive_simple_read(void* this, void* cb_ptr, void* buffer, uint32_t si
 
 int drive_simple_init(struct drive_info* info, char* filename)
 {
-#if !ALLOW_READWRITE
-    int fd = open(filename, O_RDONLY | O_BINARY);
-#else
-    int fd = open(filename, O_RDWR | O_BINARY);
-#endif
+    int fd;
+    if (!info->modify_backing_file)
+        fd = open(filename, O_RDONLY | O_BINARY);
+    else
+        fd = open(filename, O_RDWR | O_BINARY);
     if (fd < 0)
         return -1;
 
     uint64_t size = lseek(fd, 0, SEEK_END);
-    if (size == (uint64_t) -1)
+    if (size == (uint64_t)-1)
         return -1;
     lseek(fd, 0, SEEK_SET);
 
@@ -886,6 +891,8 @@ int drive_simple_init(struct drive_info* info, char* filename)
     sync_info->block_size = BLOCK_SIZE;
     sync_info->block_array_size = (size + sync_info->block_size - 1) / sync_info->block_size;
     sync_info->blocks = calloc(sizeof(uint8_t*), sync_info->block_array_size);
+
+    sync_info->raw_file_access = info->modify_backing_file;
 
     info->read = drive_simple_read;
     info->state = drive_simple_state;

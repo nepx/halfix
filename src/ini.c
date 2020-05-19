@@ -278,8 +278,11 @@ static int parse_disk(struct drive_info* drv, struct ini_section* s, int id)
 
     // Determine the media type
     drv->type = get_field_enum(s, "type", drive_types, DRIVE_TYPE_DISK);
-    int driver = get_field_enum(s, "driver", driver_types, 0), inserted = get_field_int(s, "inserted", 0);
+    int driver = get_field_enum(s, "driver", driver_types, 0), inserted = get_field_int(s, "inserted", 0), wb = get_field_int(s, "writeback", 0);
     char* path = get_field_string(s, "file");
+    if(driver == 0 && wb) 
+        printf("WARNING: Disk %d uses async (chunked) driver but writeback is not supported!!\n", id);
+    drv->modify_backing_file = wb;
     if (path && inserted) {
 #ifndef EMSCRIPTEN
         UNUSED(id);

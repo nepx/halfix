@@ -41,6 +41,9 @@ struct drive_info {
     uint32_t sectors_per_cylinder;
     uint32_t sectors; // total sectors
 
+    // Modify backing image file?
+    int modify_backing_file;
+
     void* data; // Some internal to the current disk driver (file descriptors, etc.)
     int driver;
 
