@@ -374,10 +374,12 @@ static uint32_t devices_get_next(itick_t now, int* devices_need_servicing)
     if (cpu_get_exit_reason() == EXIT_STATUS_HLT)
         return min;
     if ((unsigned int)min > 200000) {
-        *devices_need_servicing = min - 200000;
+        if(devices_need_servicing)
+            *devices_need_servicing = min - 200000;
         return 200000;
     } else {
-        *devices_need_servicing = 0;
+        if(devices_need_servicing)
+            *devices_need_servicing = 0;
         return min;
     }
 }
@@ -406,8 +408,18 @@ int pc_execute(void)
     // This function is called repeatedly.
     int frames = 10, cycles_to_run, cycles_run, exit_reason, devices_need_servicing = 0;
     itick_t now;
+
+#ifdef EMSCRIPTEN
+    uint64_t cur_now;
+    if (fast)
+        cur_now = cpu_get_cycles();
+#endif
+
+    // Call the callback if needed, for async drive cases
+    drive_check_complete();
+
     sync++;
-    if ((cpu_get_cycles() - last) > INSNS_PER_FRAME) {
+    if (!drive_async_event_in_progress() && (cpu_get_cycles() - last) > INSNS_PER_FRAME) {
 // Verify that timing is identical
 #ifndef DISABLE_CONSTANT_SAVING
         state_store_to_file("savestates/halfix_state");
@@ -418,15 +430,6 @@ int pc_execute(void)
         sync = 0;
         last = cpu_get_cycles();
     }
-
-#ifdef EMSCRIPTEN
-    uint64_t cur_now;
-    if (fast)
-        cur_now = cpu_get_cycles();
-#endif
-
-    // Call the callback if needed, for async drive cases
-    drive_check_complete();
     do {
         now = get_now();
         cycles_to_run = devices_get_next(now, &devices_need_servicing);
@@ -460,6 +463,8 @@ int pc_execute(void)
                 if (wait_time != 0)
                     return wait_time;
             }
+#else
+            UNUSED(wait_time);
 #endif
             // Just continue since wait time is negligable
         }

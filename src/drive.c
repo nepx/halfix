@@ -686,6 +686,13 @@ void drive_check_complete(void)
 #endif
 }
 
+int drive_async_event_in_progress(void)
+{
+#ifdef SIMULATE_ASYNC_ACCESS
+    return transfer_in_progress;
+#endif
+}
+
 #ifndef EMSCRIPTEN
 #if 0
 function join_path(a, b) {
