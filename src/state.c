@@ -390,7 +390,7 @@ static char* global_file_base;
 void state_file(int size, char* name, void* ptr)
 {
     char temp[1000];
-    sprintf(temp, "%s/%s", global_file_base, name);
+    sprintf(temp, "%s" PATHSEP_STR "%s", global_file_base, name);
     if (is_reading) {
 #ifndef EMSCRIPTEN
         int fd = open(temp, O_RDONLY | O_BINARY);
@@ -535,7 +535,11 @@ char* state_get_path_base(void)
 void state_mkdir(char* path)
 {
 #ifndef EMSCRIPTEN
+#ifdef _WIN32
+    if (mkdir(path) == -1) {
+#else
     if (mkdir(path, 0777) == -1) {
+#endif
         if (errno != EEXIST)
             STATE_FATAL("Unable to make new directory %s\n", path);
     }
