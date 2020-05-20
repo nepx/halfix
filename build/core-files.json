@@ -103,7 +103,8 @@
             "include"
         ],
         "additional_flags": [
-            "@flags=!gtk|!win32"
+            "@flags=!gtk", 
+            "@flags=!win32"
         ]
     },
     "src/display-gtk3.c": {
@@ -124,7 +125,8 @@
             "include"
         ],
         "additional_flags": [
-            "@flags=gtk|!win32"
+            "@flags=gtk",
+            "@flags=!win32"
         ]
     },
     "src/display-win32.c": {
@@ -145,7 +147,8 @@
             "include"
         ],
         "additional_flags": [
-            "@flags=gtk|!win32"
+            "@flags=!gtk",
+            "@flags=win32"
         ]
     },
     "src/drive.c": {
