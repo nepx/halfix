@@ -37,6 +37,17 @@ var end_flags = [], fincc_flags = [];
 // flags.push.apply(flags, "-L/usr/lib/x86_64-linux-gnu -lSDL -lSDLmain".split("
 // "));
 end_flags = "-lSDL -lSDLmain -lm -lz".split(" ");
+// XXX: capture live output from allegro-config --shared
+//end_flags.push("-lalleg");
+
+function getFlagsFromExec(a) {
+    var child = child_process.execSync(a);
+    console.log(child.toString());
+    return child.toString().replace(/\n/g, "").split(" ");
+}
+function merge(dst, src) {
+    for (var i = 0; i < src.length; i = i + 1 | 0)dst.push(src[i]);
+}
 
 var build32 = false;
 var verbose = false;
@@ -62,6 +73,15 @@ for (var i = 0; i < argv.length; i++) {
             console.log("Removing all built files in build/");
             child_process.execSync("rm build/objs/*.o");
             process.exit(0);
+            break;
+        case "gtk":
+            merge(flags, getFlagsFromExec("pkg-config --cflags gtk+-3.0"));
+            merge(end_flags, getFlagsFromExec("pkg-config --libs gtk+-3.0"));
+            build_type = "gtk";
+            break;
+        case "win32":
+            build_type = "win32";
+            end_flags.push("-lgdi32", "-lcomdlg32");
             break;
         case "libcpu":
             build_type = "libcpu";

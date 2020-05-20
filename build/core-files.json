@@ -103,6 +103,49 @@
             "include"
         ],
         "additional_flags": [
+            "@flags=!gtk|!win32"
+        ]
+    },
+    "src/display-gtk3.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/display.h",
+            "include/devices.h",
+            "include/util.h",
+            "include/io.h",
+            "include/pc.h",
+            "include/drive.h",
+            "include/state.h",
+            "include/util.h",
+            "include/state.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+            "@flags=gtk|!win32"
+        ]
+    },
+    "src/display-win32.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/display.h",
+            "include/devices.h",
+            "include/util.h",
+            "include/io.h",
+            "include/pc.h",
+            "include/drive.h",
+            "include/state.h",
+            "include/util.h",
+            "include/state.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+            "@flags=gtk|!win32"
         ]
     },
     "src/drive.c": {
