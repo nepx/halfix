@@ -17,6 +17,14 @@
 #include <emscripten.h>
 #endif
 
+#if defined(_WIN32) && !defined(EMSCRIPTEN)
+#define PATHSEP '\\'
+#define PATHSEP_STR "\\"
+#else
+#define PATHSEP '/'
+#define PATHSEP_STR "/"
+#endif
+
 // Binary reader/writer helpers
 struct rstream {
     uint8_t* buf;
@@ -416,7 +424,7 @@ static char* normalize(char* a)
 {
     int len = strlen(a);
     char* res;
-    if (a[len - 1] == '/') {
+    if (a[len - 1] == PATHSEP) {
         res = malloc(len);
         memcpy(res, a, len);
         res[len - 1] = 0;
@@ -431,7 +439,7 @@ void state_read_from_file(char* fn)
 {
     char path[1000];
     global_file_base = normalize(fn);
-    sprintf(path, "%s/state.bin", fn);
+    sprintf(path, "%s" PATHSEP_STR "state.bin", fn);
 
 #ifndef EMSCRIPTEN
     int fd = open(path, O_RDONLY | O_BINARY);
@@ -476,7 +484,7 @@ void state_store_to_file(char* fn)
         state_handlers[i]();
     bjson_serialize(&w, global_obj);
 
-    sprintf(path, "%s/state.bin", fn);
+    sprintf(path, "%s" PATHSEP_STR "state.bin", fn);
 
     int fd = open(path, O_WRONLY | O_CREAT | O_BINARY, 0666);
     if (fd == -1)
