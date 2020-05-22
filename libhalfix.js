@@ -4,7 +4,9 @@
      * @param {object} options 
      */
     function Halfix(options) {
-        this.options = options;
+        this.options = options || {};
+
+        this.config = this.buildConfiguration();
     }
 
     var _cache = [];
@@ -63,6 +65,10 @@
 
     /**
      * Build drive configuration
+     * @param {array} config
+     * @param {string} drvid A drive ID (a/b/c/d)
+     * @param {number} primary Primary? (0=yes, 1=no)
+     * @param {number} master Master? (0=yes, 1=no)
      */
     Halfix.prototype.buildDrive = function (config, drvid, primary, master) {
         var hd = this.getParameterByName("hd" + drvid),
@@ -83,9 +89,25 @@
             }
             config.push("type=cd");
         }
-    }
+    };
 
-    function buildFloppy(config, drvid) {
+    /**
+     * @param {number} progress Fraction of completion * 100 
+     */
+    Halfix.prototype.updateNetworkProgress = function(progress){
+        
+    };
+    /**
+     * @param {number} total Total bytes loaded
+     */
+    Halfix.prototype.updateTotalBytes = function(total){
+        
+    };
+
+    /**
+     * Build floppy configuration
+     */
+    Halfix.prototype.buildFloppy = function (config, drvid) {
         var fd = this.getParameterByName("fd" + drvid);
         if (!fd)
             return;
@@ -97,7 +119,7 @@
     /**
      * From the given URL parameters, we build a .conf file for Halfix to consume. 
      */
-    function buildConfiguration() {
+    Halfix.prototype.buildConfiguration = function () {
         var config = [];
         /*
 
@@ -142,16 +164,16 @@
         //Module["TOTAL_MEMORY"] = roundUp(mem + 32 + vgamem) * 1024 * 1024 | 0;
         config.push("memory=" + mem + "M");
         config.push("vgamemory=" + vgamem + "M");
-        buildDrive(config, "a", 0, "master");
-        buildDrive(config, "b", 0, "slave");
-        buildDrive(config, "c", 1, "master");
-        buildDrive(config, "d", 1, "slave");
+        this.buildDrive(config, "a", 0, "master");
+        this.buildDrive(config, "b", 0, "slave");
+        this.buildDrive(config, "c", 1, "master");
+        this.buildDrive(config, "d", 1, "slave");
 
-        buildFloppy(config, "a");
-        buildFloppy(config, "b");
+        this.buildFloppy(config, "a");
+        this.buildFloppy(config, "b");
         config.push("[boot]");
 
-        var bootOrder = getParameterByName("boot") || "chf";
+        var bootOrder = this.getParameterByName("boot") || "chf";
         config.push("a=" + bootOrder[0] + "d");
         config.push("b=" + bootOrder[1] + "d");
         config.push("c=" + bootOrder[2] + "d");
@@ -159,20 +181,91 @@
         return config.join("\n");
     }
 
+    /**
+     * @param {string[]||object[]} paths
+     * @param {function(object, Uint8Array[])} cb
+     * @param {boolean=} gz Are the files to be fetched gzip'ed?
+     */
+    function loadFiles(paths, cb, gz) {
+        var resultCounter = paths.length | 0,
+            results = [];
+
+        // If we are loading more than one file, then make sure that the progress bar is wide enough
+        netstat.max = paths.length * 100 | 0;
+        netstat.value = 0;
+        netfile.innerHTML = paths.join(", ");
+        inLoading = true;
+        for (var i = 0; i < paths.length; i = i + 1 | 0) {
+            (function () {
+                // Save some state information inside the closure.
+                var xhr = new XMLHttpRequest(),
+                    idx = i,
+                    lastProgress = 0;
+                var path = paths[i] + (gz ? ".gz" : "");
+                xhr.open("GET", paths[i] + (gz ? ".gz" : ""));
+
+                xhr.onprogress = function (e) {
+                    if (e.lengthComputable) {
+                        var now = e.loaded / e.total * 100 | 0;
+                        _halfix.updateNetworkProgress(now - lastProgress | 0);
+                        lastProgress = now;
+                    }
+                };
+                xhr.responseType = "arraybuffer";
+                xhr.onload = function () {
+                    if (!gz)
+                        results[idx] = new Uint8Array(xhr.response);
+                    else
+                        results[idx] = pako.inflate(new Uint8Array(xhr.response));
+                    resultCounter = resultCounter - 1 | 0;
+                    _halfix.updateTotalBytes(xhr.response.byteLength | 0);
+                    if (resultCounter === 0) {
+                        cb(null, results);
+
+                        inLoading = false;
+                        _handle_savestate();
+                    }
+                };
+                xhr.onerror = function (e) {
+                    alert("Unable to load file");
+                    cb(e, null);
+                };
+                xhr.send();
+            })();
+        }
+    }
+
     var _loaded = false;
+
+    // ========================================================================
+    // Public API
+    // ========================================================================
+    /**
+     * Get configuration file
+     * @returns {string} Configuration text
+     */
+    Halfix.prototype["getConfiguration"] = function () {
+        return this.config;
+    };
+
+    /** @type {Halfix} */
+    var _halfix = null;
 
     /**
      * Load and initialize emulator instance
      * @param {function(Error, object)} cb Callback
      */
-    Halfix.prototype.init = function (cb) {
+    Halfix.prototype["init"] = function (cb) {
         // Only one instance can be loaded at a time, unfortunately
         if (_loaded) cb(new Error("Already initialized"), null);
         _loaded = true;
 
+        // Save our Halfix instance for later
+        _halfix = this;
+
         // Load emulator
         var script = document.createElement("script");
-        script.src = path;
+        script.src = this.getParameterByName("emulator") || "halfix.js";
         document.head.appendChild(script);
     };
 
@@ -183,7 +276,40 @@
     // Initialize module instance
     global["Module"] = {};
 
-    global["load_file_xhr"] = function () {
+    var requests_in_progress = 0;
+    /**
+     * @param {number} lenptr Pointer to length (type: int*)
+     * @param {number} dataptr Pointer to allocated data (type: void**)
+     * @param {number} Pointer to path (type: char*)
+     */
+    global["load_file_xhr"] = function (lenptr, dataptr, path) {
+        var pathstr = readstr(path);
+        var cb = function(err, data){
+            if(err) throw err;
+            
+            var destination = Module["_emscripten_alloc"](data.length, 4096);
+            memcpy(destination, data);
+
+            i32[lenptr >> 2] = data.length;
+            i32[dataptr >> 2] = destination;
+            requests_in_progress = requests_in_progress + 1 | 0;
+
+            if (requests_in_progress === 0) run_wrapper2();
+        };
+
+        // Increment requests in progress by one
+        requests_in_progress = requests_in_progress + 1 | 0;
+
+        if (pathstr.indexOf("!") !== -1) {
+            // If the user specified an arraybuffer or a file
+            var pathparts = pathstr.split("!");
+            var data = _cache[parseInt(pathparts[1])];
+            /** @type {WholeFileLoader} */
+            var driver = xhr_replacements[pathparts[0]](data);
+            driver.load(cb);
+        }else loadFiles([pathstr], function(err, datas){
+            cb(err, datas[0]);
+        }, false);
 
     };
 
@@ -196,15 +322,72 @@
         // Get pointer to configuration
         var pc = Module["_emscripten_get_pc_config"]();
 
+        var cfg = _halfix.getConfiguration();
+
         var area = alloc(cfg.length + 1);
         strcpy(area, cfg);
         Module["_parse_cfg"](pc, area);
 
-        var fast = getIntegerByName("fast", 0);
+        var fast = _halfix.getBooleanByName("fast", false);
         Module["_emscripten_set_fast"](fast);
 
         gc();
     };
+
+    // ========================================================================
+    // Data reading functions
+    // ========================================================================
+    /**
+     * @constructor
+     */
+    function WholeFileLoader() { }
+    /**
+     * Load a file 
+     * @param {function} cb Callback
+     */
+    WholeFileLoader.prototype.load = function (cb) {
+        throw new Error("requires implementation");
+    };
+    /**
+     * @extends WholeFileLoader
+     * @constructor
+     * @param {ArrayBuffer} data
+     */
+    function ArrayBufferLoader(data) {
+        this.data = data;
+    }
+    ArrayBufferLoader.prototype = new WholeFileLoader();
+    ArrayBufferLoader.prototype.load = function (cb) {
+        cb(null, new Uint8Array(this.data));
+    };
+
+    /**
+     * @extends WholeFileLoader
+     * @constructor
+     * @param {File} file
+     */
+    function FileReaderLoader(file) {
+        this.file = file;
+    }
+    FileReaderLoader.prototype = new WholeFileLoader();
+    FileReaderLoader.prototype.load = function (cb) {
+        var fr = new FileReader();
+        fr.onload = function () {
+            cb(null, new Uint8Array(fr.result));
+        };
+        fr.onerror = function (e) {
+            cb(e, null);
+        };
+        fr.onabort = function () {
+            cb(new Error("filereader aborted"), null);
+        };
+        fr.readAsArrayBuffer(this.file);
+    };
+    // see load_file_xhr
+    var xhr_replacements = {
+        "fr": FileReaderLoader,
+        "ab": ArrayBufferLoader
+    }
 
     // ========================================================================
     // Useful functions
