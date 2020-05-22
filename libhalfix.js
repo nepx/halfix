@@ -367,15 +367,29 @@
         gc();
     };
 
+    global["drives"] = [];
 
-    window["drive_init"] = function (info_ptr, path, id) {
-        var p = readstr(path);
-        if(p.indexOf("!") !== -1){
+    global["drive_init"] = function (info_ptr, path, id) {
+        var p = readstr(path), image;
+        if (p.indexOf("!") !== -1) {
             var chunks = p.split("!");
-            var image = new image_backends[chunks[0]](_cache[parseInt(chunks[1]) | 0]);
-        }else{
-            var image = 0;
-        }
+            image = new image_backends[chunks[0]](_cache[parseInt(chunks[1]) | 0]);
+        } else 
+            image = new XHRImage();
+        requests_in_progress = requests_in_progress + 1 | 0;
+        image.init(p, function(err, data){
+            if(err) throw err;
+
+            var dataptr = alloc(data.length), strptr = alloc(p.length + 1);
+            memcpy(dataptr, data);
+            strcpy(strptr, p);
+            wrap("drive_emscripten_init")(info_ptr, strptr, dataptr, id);
+            gc();
+
+            global["drives"][id] = image;
+            requests_in_progress = requests_in_progress - 1 | 0;
+            if (requests_in_progress === 0) run_wrapper2();
+        });
     };
 
     // ========================================================================
@@ -560,6 +574,15 @@
     };
 
     /**
+     * Initialize hard drive image
+     * @param {string} arg
+     * @param {function(Uint8Array)} cb
+     */
+    HardDriveImage.prototype.init = function (arg, cb) {
+        throw new Error("implement me");
+    };
+
+    /**
      * Convert a URL (i.e. os2/blk0000005a.bin) into a number (i.e. 0x5a)
      * @param {string} str 
      * @return {number}
@@ -567,6 +590,19 @@
     function _url_to_blkid(str) {
         var parts = str.match(/blk([0-9a-f]{8})\.bin/);
         return parseInt(parts[1], 16) | 0;
+    }
+
+    /**
+     * Create an "info.dat" file
+     * @param {number} size 
+     * @param {number} blksize 
+     * @returns {Uint8Array} The data that would have been contained in info.dat
+     */
+    function _construct_info(size, blksize) {
+        var i32 = new Int32Array(2);
+        i32[0] = size;
+        i32[1] = blksize;
+        return new Uint8Array(i32.buffer);
     }
 
     /**
@@ -590,6 +626,12 @@
             var blockoffs = _url_to_blkid(i) << 18;
             data[i] = this.data.slice(blockoffs, blockoffs + (256 << 10) | 0);
         }
+        setTimeout(function () {
+            cb(null, data);
+        }, 0);
+    };
+    ArrayBufferImage.prototype.init = function (arg, cb) {
+        var data = _construct_info(this.data.byteLength, 256 << 10);
         setTimeout(function () {
             cb(null, data);
         }, 0);
@@ -631,6 +673,30 @@
             cb(new Error("filereader aborted"), null);
         };
         fr.readAsArrayBuffer(this.file);
+    };
+    FileImage.prototype.init = function (arg, cb) {
+        var data = _construct_info(this.file.size, 256 << 10);
+        setTimeout(function () {
+            cb(null, data);
+        }, 0);
+    };
+
+    /**
+     * XHR-backed image
+     * @constructor
+     * @extends HardDriveImage
+     */
+    function XHRImage() {
+    }
+    XHRImage.prototype = new HardDriveImage();
+    XHRImage.prototype.load = function (reqs, cb) {
+        loadFiles(reqs, cb);
+    };
+    XHRImage.prototype.init = function (arg, cb) {
+        loadFiles([join_path(arg, "info.dat")], function (err, data) {
+            if (err) throw err;
+            cb(null, data[0]);
+        });
     };
 
     var image_backends = {
@@ -711,6 +777,19 @@
     // Returns a pointer to an Emscripten-compiled function
     function wrap(nm) {
         return Module["_" + nm];
+    }
+
+    /**
+     * Join two fragments of a path together
+     * @param {string} a The first part of the path
+     * @param {string} b The second part of the path
+     */
+    function join_path(a, b) {
+        if (b.charAt(0) !== "/")
+            b = "/" + b;
+        if (a.charAt(a.length - 1 | 0) === "/")
+            a = a.substring(0, a.length - 1 | 0);
+        return a + b; //normalize_path(a + b);
     }
 
     global["Halfix"] = Halfix;
