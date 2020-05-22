@@ -370,7 +370,12 @@
 
     window["drive_init"] = function (info_ptr, path, id) {
         var p = readstr(path);
-        throw new Error("todo: " + p);
+        if(p.indexOf("!") !== -1){
+            var chunks = p.split("!");
+            var image = new image_backends[chunks[0]](_cache[parseInt(chunks[1]) | 0]);
+        }else{
+            var image = 0;
+        }
     };
 
     // ========================================================================
@@ -432,7 +437,7 @@
      * Generic hard drive image. All you have to do is fill in 
      * @constructor
      */
-    function HardDriveImage() { 
+    function HardDriveImage() {
         /** @type {Uint8Array[]} */
         this.blocks = [];
 
@@ -445,7 +450,7 @@
         /** @type {number} */
         this.cb = 0;
         /** @type {number} */
-        this.arg1 = 0; 
+        this.arg1 = 0;
     }
     /**
      * Adds a block to the cache. Called on IDE writes, typically
@@ -550,8 +555,87 @@
      * 
      * Note that all Uint8Arrays passed back to cb MUST be BLOCK_SIZE bytes long
      */
-    HardDriveImage.prototype.load = function(reqs, cb){
+    HardDriveImage.prototype.load = function (reqs, cb) {
         throw new Error("implement me");
+    };
+
+    /**
+     * Convert a URL (i.e. os2/blk0000005a.bin) into a number (i.e. 0x5a)
+     * @param {string} str 
+     * @return {number}
+     */
+    function _url_to_blkid(str) {
+        var parts = str.match(/blk([0-9a-f]{8})\.bin/);
+        return parseInt(parts[1], 16) | 0;
+    }
+
+    /**
+     * ArrayBuffer-backed image
+     * @param {ArrayBuffer} ab 
+     * @constructor
+     * @extends HardDriveImage
+     */
+    function ArrayBufferImage(ab) {
+        this.data = new Uint8Array(ab);
+    }
+    ArrayBufferImage.prototype = new HardDriveImage();
+    /**
+     * @param {string[]} paths
+     * @param {function(object,Uint8Array[])} cb
+     */
+    ArrayBufferImage.prototype.load = function (reqs, cb) {
+        var data = [];
+        for (var i = 0; i < reqs.length; i = i + 1 | 0) {
+            // note to self: Math.log(256*1024)/Math.log(2) === 18
+            var blockoffs = _url_to_blkid(i) << 18;
+            data[i] = this.data.slice(blockoffs, blockoffs + (256 << 10) | 0);
+        }
+        setTimeout(function () {
+            cb(null, data);
+        }, 0);
+    };
+
+    /**
+     * File API-backed image
+     * @param {File} f 
+     * @constructor
+     * @extends HardDriveImage
+     */
+    function FileImage(f) {
+        this.file = f;
+    }
+    FileImage.prototype = new HardDriveImage();
+    FileImage.prototype.load = function (reqs, cb) {
+        // Ensure that loads are in order and consecutive, which speeds things up
+        var blockBase = _url_to_blkid(reqs[0]);
+        for (var i = 1; i < reqs.length; i = i + 1 | 0)
+            if ((_url_to_blkid(reqs[i]) - i | 0) !== blockBase) throw new Error("non-consecutive reads");
+        var blocks = reqs.length;
+
+        /** @type {File} */
+        var fileslice = this.file.slice(blockBase << 18, (blockBase + blocks) << 18);
+
+        var fr = new FileReader();
+        fr.onload = function () {
+            var arr = [];
+            for (var i = 0; i < reqs.length; i = i + 1 | 0) {
+                // Slice a 256 KB chunk of the file
+                arr.push(new Uint8Array(fr.result.slice(i << 18, (i + 1) << 18)));
+            }
+            cb(null, arr);
+        };
+        fr.onerror = function (e) {
+            cb(e, null);
+        };
+        fr.onabort = function () {
+            cb(new Error("filereader aborted"), null);
+        };
+        fr.readAsArrayBuffer(this.file);
+    };
+
+    var image_backends = {
+        "file": FileImage,
+        "ab": ArrayBufferImage
     };
 
     // ========================================================================
