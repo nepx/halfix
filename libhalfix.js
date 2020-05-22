@@ -368,6 +368,10 @@
     };
 
 
+    window["drive_init"] = function (info_ptr, path, id) {
+        var p = readstr(path);
+        throw new Error("todo: " + p);
+    };
 
     // ========================================================================
     // Data reading functions
@@ -420,9 +424,135 @@
     };
     // see load_file_xhr
     var xhr_replacements = {
-        "fr": FileReaderLoader,
+        "file": FileReaderLoader,
         "ab": ArrayBufferLoader
+    };
+
+    /**
+     * Generic hard drive image. All you have to do is fill in 
+     * @constructor
+     */
+    function HardDriveImage() { 
+        /** @type {Uint8Array[]} */
+        this.blocks = [];
+
+        /** @type {string[]} */
+        this.request_queue = [];
+
+        /** @type {number[]} */
+        this.request_queue_ids = [];
+
+        /** @type {number} */
+        this.cb = 0;
+        /** @type {number} */
+        this.arg1 = 0; 
     }
+    /**
+     * Adds a block to the cache. Called on IDE writes, typically
+     * 
+     * @param {number} id
+     * @param {number} offset Offset in memory to read from
+     * @param {number} length 
+     */
+    HardDriveImage.prototype["addCache"] = function (id, offset, length) {
+        this.blocks[id] = u8.slice(offset, length + offset | 0);
+    };
+    /**
+     * Reads a section of a block from the cache
+     * 
+     * See src/drive.c: drive_read_block_internal
+     * 
+     * @param {number} id Block ID
+     * @param {number} buffer Position in the buffer
+     * @param {number} offset Offset in the block to read from
+     * @param {number} length Number of bytes to read
+     */
+    HardDriveImage.prototype["readCache"] = function (id, buffer, offset, length) {
+        id = id | 0;
+        if (!this.blocks[id]) {
+            //printElt.value += "[JSError] readCache(id=0x" + id.toString(16) + ", buffer=0x" + buffer.toString(16) + ", length=0x" + buffer.toString(16) + ")\n";
+            return 1; // No block here with that data.
+        }
+        var buf = this.blocks[id].subarray(offset, length + offset | 0);
+        if (buf.length > length) throw new Error("Block too long");
+        u8.set(this.blocks[id].subarray(offset, length + offset | 0), buffer);
+        return 0;
+    };
+    /**
+     * Writes a section of a block with some data
+     * 
+     * See src/drive.c: drive_write_block_internal
+     * 
+     * @param {number} id Block ID
+     * @param {number} buffer Position in the buffer
+     * @param {number} offset Offset in the block to read from
+     * @param {number} length Number of bytes to read
+     */
+    HardDriveImage.prototype["writeCache"] = function (id, buffer, offset, length) {
+        id = id | 0;
+        if (!this.blocks[id]) {
+            //printElt.value += "[JSError] writeCache(id=0x" + id.toString(16) + ", buffer=0x" + buffer.toString(16) + ", length=0x" + buffer.toString(16) + ")\n";
+            return 1; // No block here with that data.
+        }
+        var buf = u8.subarray(buffer, length + buffer | 0);
+        if (buf.length > length) throw new Error("Block too long");
+        this.blocks[id].set(buf, offset);
+        return 0;
+    };
+    /**
+     * Queues a memory read. Useful for multi-block reads
+     * 
+     * @param {number} str Pointer to URL
+     * @param {number} id Block ID to store it in
+     */
+    HardDriveImage.prototype["readQueue"] = function (str, id) {
+        this.request_queue.push(readstr(str));
+        this.request_queue_ids.push(id);
+    };
+
+    /**
+     * Runs all requests simultaneously.
+     * 
+     * @param {number} cb Callback pointer
+     * @param {number} arg1 Callback argument
+     */
+    HardDriveImage.prototype["flushReadQueue"] = function (cb, arg1) {
+        /** @type {RemoteHardDiskImage} */
+        var me = this;
+
+        this.cb = cb;
+        this.arg1 = arg1;
+
+        this.load(this.request_queue, function (err, data) {
+            if (err) throw err;
+
+            var rql = me.request_queue.length;
+            for (var i = 0; i < rql; i = i + 1 | 0)
+                me.blocks[me.request_queue_ids[i]] = data[i];
+
+            // Empty request queue
+            me.request_queue = [];
+            me.request_queue_ids = [];
+
+            me.callback(0);
+        }, true);
+    };
+    /**
+     * Call an Emscripten callback
+     * @type {number} res
+     */
+    HardDriveImage.prototype.callback = function (res) {
+        fptr_vii(this.cb | 0, this.arg1 | 0, res | 0);
+    };
+    /**
+     * @param {string[]} paths
+     * @param {function(object,Uint8Array[])} cb
+     * 
+     * Note that all Uint8Arrays passed back to cb MUST be BLOCK_SIZE bytes long
+     */
+    HardDriveImage.prototype.load = function(reqs, cb){
+        throw new Error("implement me");
+    };
 
     // ========================================================================
     // Useful functions
