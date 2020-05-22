@@ -6,7 +6,12 @@
     function Halfix(options) {
         this.options = options || {};
 
+        this.canvas = this.options["canvas"] || null;
+
         this.config = this.buildConfiguration();
+
+        /** @type {ImageData} */
+        this.image_data = null;
     }
 
     var _cache = [];
@@ -94,14 +99,18 @@
     /**
      * @param {number} progress Fraction of completion * 100 
      */
-    Halfix.prototype.updateNetworkProgress = function(progress){
-        
+    Halfix.prototype.updateNetworkProgress = function (progress) {
+
     };
     /**
      * @param {number} total Total bytes loaded
      */
-    Halfix.prototype.updateTotalBytes = function(total){
-        
+    Halfix.prototype.updateTotalBytes = function (total) {
+
+    };
+
+    Halfix.prototype.handleSavestate = function () {
+        // TODO
     };
 
     /**
@@ -223,7 +232,9 @@
                         cb(null, results);
 
                         inLoading = false;
-                        _handle_savestate();
+
+                        // If we have requested a savestate, then create it now.
+                        _halfix.handleSavestate();
                     }
                 };
                 xhr.onerror = function (e) {
@@ -263,6 +274,9 @@
         // Save our Halfix instance for later
         _halfix = this;
 
+        // Set up our module instance
+        global["Module"]["canvas"] = this.canvas;
+
         // Load emulator
         var script = document.createElement("script");
         script.src = this.getParameterByName("emulator") || "halfix.js";
@@ -272,6 +286,10 @@
     // ========================================================================
     // Emscripten support code
     // ========================================================================
+
+    function run_wrapper2() {
+        wrap("emscripten_init")();
+    }
 
     // Initialize module instance
     global["Module"] = {};
@@ -284,15 +302,15 @@
      */
     global["load_file_xhr"] = function (lenptr, dataptr, path) {
         var pathstr = readstr(path);
-        var cb = function(err, data){
-            if(err) throw err;
-            
+        var cb = function (err, data) {
+            if (err) throw err;
+
             var destination = Module["_emscripten_alloc"](data.length, 4096);
             memcpy(destination, data);
 
             i32[lenptr >> 2] = data.length;
             i32[dataptr >> 2] = destination;
-            requests_in_progress = requests_in_progress + 1 | 0;
+            requests_in_progress = requests_in_progress - 1 | 0;
 
             if (requests_in_progress === 0) run_wrapper2();
         };
@@ -307,10 +325,22 @@
             /** @type {WholeFileLoader} */
             var driver = xhr_replacements[pathparts[0]](data);
             driver.load(cb);
-        }else loadFiles([pathstr], function(err, datas){
+        } else loadFiles([pathstr], function (err, datas) {
             cb(err, datas[0]);
         }, false);
 
+    };
+
+    /**
+     * @param {number} fbptr Pointer to framebuffer information
+     * @param {number} x The width of the window
+     * @param {number} y The height of the window
+     */
+    global["update_size"] = function (fbptr, x, y) {
+        if (x == 0 || y == 0) return; // Don't do anything if x or y is zero (VGA resizing sometimes gives weird sizes)
+        Module["canvas"].width = x;
+        Module["canvas"].height = y;
+        _halfix.image_data = new ImageData(new Uint8ClampedArray(Module["HEAPU8"].buffer, fbptr, (x * y) << 2), x, y);
     };
 
     Module["onRuntimeInitialized"] = function () {
@@ -331,8 +361,13 @@
         var fast = _halfix.getBooleanByName("fast", false);
         Module["_emscripten_set_fast"](fast);
 
+        // The story continues in global["load_file_xhr"], which loads the BIOS/VGA BIOS files
+
+        // Run some primitive garbage collection
         gc();
     };
+
+
 
     // ========================================================================
     // Data reading functions
