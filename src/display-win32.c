@@ -9,7 +9,6 @@
 #include <windows.h>
 #include <windowsx.h>
 
-
 #include "util.h"
 
 static HINSTANCE hInst;
@@ -19,14 +18,21 @@ static HDC dc_dest, dc_src; // Drawing contexts
 static void* pixels;
 static int cheight, cwidth, mouse_enabled;
 static HBITMAP hBmp;
+// Position of the cursor, relative to the whole screen
+static int screenx, screeny;
+// Position of the cursor, relative to the window
+static int windowx, windowy;
 static int lastx, lasty;
+// Coordinates of cursor when captured
+static int original_x, original_y;
 
 enum {
     MENU_EXIT,
     MENU_SAVE_STATE
 };
 
-static inline void lparam_to_xy(LPARAM lparam, int* x, int* y){
+static inline void lparam_to_xy(LPARAM lparam, int* x, int* y)
+{
     *x = GET_X_LPARAM(lparam);
     *y = GET_Y_LPARAM(lparam);
 }
@@ -41,15 +47,19 @@ static void display_set_title(void)
     SetWindowText(hWnd, buffer);
 }
 
-static void display_capture_mouse(int yes){
-    if(yes){
+static void display_capture_mouse(int yes)
+{
+    if (yes) {
         RECT rect;
         // Get window size and adjust it
         GetWindowRect(hWnd, &rect);
         ClipCursor(&rect);
+        SetCapture(hWnd);
         ShowCursor(FALSE);
-    }else {
-        ClipCursor(NULL);
+        SetCursorPos(screenx, screeny);
+    } else {
+        //ClipCursor(NULL);
+        SetCapture(NULL);
         ShowCursor(TRUE);
     }
     mouse_enabled = yes;
@@ -59,70 +69,71 @@ static void display_capture_mouse(int yes){
 // Converts a Win32 virtual key code to a PS/2 scan code.
 // See "sdl_keysym_to_scancode" in display.c for a similar implementation
 // https://stanislavs.org/helppc/make_codes.html
-static int win32_to_scancode(int w){
-    switch(w){
-        case VK_BACK:
-            return 0x0E;
-        case VK_CAPITAL:
-            return 0x3A;
-        case VK_RETURN:
-            return 0x1C;
-        case VK_ESCAPE:
-            return 0x01;
-        case VK_MENU: // ALT
-            return 0x38; // using left alt
-        case VK_CONTROL:
-            return 0x1D; // using left ctrl
-        case VK_LSHIFT:
-            return 0x2A;
-        case VK_NUMLOCK:
-            return 0x45;
-        case VK_RSHIFT:
-            return 0x36;
-        case VK_SCROLL:
-            return 0x46;
-        case VK_SPACE:
-            return 0x39;
-        case VK_TAB:
-            return 0x0F;
-        case VK_F1 ... VK_F12:
-            return w - VK_F1 + 0x3B;
-        case VK_NUMPAD0:
-            return 0x52;
-        case VK_NUMPAD1:
-            return 0x4F;
-        case VK_NUMPAD2:
-            return 0x50;
-        case VK_NUMPAD3:
-            return 0x51;
-        case VK_NUMPAD4:
-            return 0x4B;
-        case VK_NUMPAD5:
-            return 0x4C;
-        case VK_NUMPAD6:
-            return 0x4D;
-        case VK_NUMPAD7:
-            return 0x47;
-        case VK_NUMPAD8:
-            return 0x48;
-        case VK_NUMPAD9:
-            return 0x49;
-        case VK_DECIMAL: // keypad period/del
-            return 0x53;
-        case VK_MULTIPLY: // keypad asterix/prtsc
-            return 0x37;
-        case VK_SUBTRACT: // keypad dash
-            return 0x4A;
-        case VK_ADD:
-            return 0x4E;
+static int win32_to_scancode(int w)
+{
+    switch (w) {
+    case VK_BACK:
+        return 0x0E;
+    case VK_CAPITAL:
+        return 0x3A;
+    case VK_RETURN:
+        return 0x1C;
+    case VK_ESCAPE:
+        return 0x01;
+    case VK_MENU: // ALT
+        return 0x38; // using left alt
+    case VK_CONTROL:
+        return 0x1D; // using left ctrl
+    case VK_LSHIFT:
+        return 0x2A;
+    case VK_NUMLOCK:
+        return 0x45;
+    case VK_RSHIFT:
+        return 0x36;
+    case VK_SCROLL:
+        return 0x46;
+    case VK_SPACE:
+        return 0x39;
+    case VK_TAB:
+        return 0x0F;
+    case VK_F1... VK_F12:
+        return w - VK_F1 + 0x3B;
+    case VK_NUMPAD0:
+        return 0x52;
+    case VK_NUMPAD1:
+        return 0x4F;
+    case VK_NUMPAD2:
+        return 0x50;
+    case VK_NUMPAD3:
+        return 0x51;
+    case VK_NUMPAD4:
+        return 0x4B;
+    case VK_NUMPAD5:
+        return 0x4C;
+    case VK_NUMPAD6:
+        return 0x4D;
+    case VK_NUMPAD7:
+        return 0x47;
+    case VK_NUMPAD8:
+        return 0x48;
+    case VK_NUMPAD9:
+        return 0x49;
+    case VK_DECIMAL: // keypad period/del
+        return 0x53;
+    case VK_MULTIPLY: // keypad asterix/prtsc
+        return 0x37;
+    case VK_SUBTRACT: // keypad dash
+        return 0x4A;
+    case VK_ADD:
+        return 0x4E;
 
-        case 0x31 ... 0x39: // 1-9
-            return w + 2 - 0x31; 
-        case 0x30: // 0
-            return 0x0B;
+    case 0x31 ... 0x39: // 1-9
+        return w + 2 - 0x31;
+    case 0x30: // 0
+        return 0x0B;
 // lazy - copy-pasted from display.c with a few hackish macros
 #define toUpper(b) b - ('a' - 'A')
-        
+
     case toUpper('a'):
         return 0x1E;
     case toUpper('b'):
@@ -231,76 +242,100 @@ static inline void display_kbd_send_key(int k)
 static LRESULT CALLBACK display_callback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
     char filename[4096];
-    switch(msg){
-        case WM_CREATE:
-            break; 
-        case WM_DESTROY:
+    switch (msg) {
+    case WM_CREATE:
+        break;
+    case WM_MOVE:
+        // Recalculate the center of our window, if mouse capture is set
+        windowx = (cwidth >> 1);
+        windowy = (cheight >> 1);
+        screenx = windowx + LOWORD(lparam);
+        screeny = windowy + HIWORD(lparam);
+        break;
+    case WM_DESTROY:
+        printf("Exiting.\n");
+        exit(0);
+        break;
+    case WM_KEYDOWN:
+        if (wparam == VK_ESCAPE && mouse_enabled)
+            display_capture_mouse(0);
+        else
+            display_kbd_send_key(win32_to_scancode(wparam));
+        printf("Key down!!\n");
+        break;
+    case WM_KEYUP:
+        printf("Key up!!\n");
+        break;
+    case WM_MOUSEMOVE:
+        if (mouse_enabled) {
+            // Windows gives us absolute coordinates, so we have to do the calculations ourselves
+            int x, y;
+            lparam_to_xy(lparam, &x, &y);
+            int dx = x - windowx, dy = y - windowy;
+            //printf("x/y: %d, %d wx/wy: %d, %d, dx/dy: %d, %d\n", x, y, windowx, windowy, dx, dy);
+            kbd_send_mouse_move(dx, dy);
+            SetCursorPos(screenx, screeny);
+        }
+        break;
+    case WM_RBUTTONDOWN:
+        if (!mouse_enabled) {
+            lparam_to_xy(lparam, &lastx, &lasty);
+            display_capture_mouse(1);
+        } else {
+            kbd_mouse_down(MOUSE_STATUS_NOCHANGE, MOUSE_STATUS_NOCHANGE, MOUSE_STATUS_PRESSED);
+        }
+        break;
+    case WM_RBUTTONUP:
+        kbd_mouse_down(MOUSE_STATUS_NOCHANGE, MOUSE_STATUS_NOCHANGE, MOUSE_STATUS_RELEASED);
+        break;
+    case WM_LBUTTONDOWN:
+        kbd_mouse_down(MOUSE_STATUS_PRESSED, MOUSE_STATUS_NOCHANGE, MOUSE_STATUS_NOCHANGE);
+        break;
+    case WM_LBUTTONUP:
+        kbd_mouse_down(MOUSE_STATUS_RELEASED, MOUSE_STATUS_NOCHANGE, MOUSE_STATUS_NOCHANGE);
+        break;
+    case WM_MBUTTONDOWN:
+        kbd_mouse_down(MOUSE_STATUS_NOCHANGE, MOUSE_STATUS_PRESSED, MOUSE_STATUS_NOCHANGE);
+        break;
+    case WM_MBUTTONUP:
+        kbd_mouse_down(MOUSE_STATUS_NOCHANGE, MOUSE_STATUS_RELEASED, MOUSE_STATUS_NOCHANGE);
+        break;
+    case WM_COMMAND:
+        switch (LOWORD(wparam)) {
+        case MENU_EXIT:
             printf("Exiting.\n");
             exit(0);
-            break;
-        case WM_KEYDOWN: 
-            if(wparam == VK_ESCAPE && mouse_enabled) 
-                display_capture_mouse(0);
-            else 
-                display_kbd_send_key(win32_to_scancode(wparam));
-            printf("Key down!!\n");
-            break;
-        case WM_KEYUP:
-            printf("Key up!!\n");
-            break;
-        case WM_MOUSEMOVE:
-            printf("Mouse move!!\n");
-            if(mouse_enabled){
-                // Windows gives us absolute coordinates, so we have to do the calculations ourselves
-                int x, y;
-                lparam_to_xy(lparam, &x, &y);
-                int dx = x - lastx, dy = y - lasty;
-                lastx = x;
-                lasty = y;
-                kbd_send_mouse_move(dx,dy);
-            }
-            break;
-        case WM_RBUTTONDOWN:
-            if(!mouse_enabled) display_capture_mouse(1);
-            else{
-                lparam_to_xy(lparam, &lastx, &lasty);
-            }
-            break;
-        case WM_COMMAND:
-            switch(LOWORD(wparam)){
-                case MENU_EXIT:
-                    printf("Exiting.\n");
-                    exit(0);
-                case MENU_SAVE_STATE: {
-                    OPENFILENAME ofn;
-                    ZeroMemory(&ofn, sizeof(OPENFILENAME));
+        case MENU_SAVE_STATE: {
+            OPENFILENAME ofn;
+            ZeroMemory(&ofn, sizeof(OPENFILENAME));
 
-                    ofn.lStructSize = sizeof(OPENFILENAME);
-                    ofn.hwndOwner = hWnd;
-                    ofn.lpstrFilter = "All files (*.)\0*.*\0\0";
-                    filename[0] = 0;
-                    ofn.lpstrFile = filename;
-                    ofn.nMaxFile = 4095;
-                    ofn.Flags = OFN_EXPLORER;
-                    ofn.lpstrDefExt = "";
-                    ofn.lpstrTitle = "Save state to...";
-                    ofn.lpstrInitialDir = ".";
-                    
-                    if(GetSaveFileName(&ofn)) {
-                        state_store_to_file(filename);
-                        printf("SELECTED\n");
-                    }else{
-                        printf("NOT SELECTED\n");
-                    }
-                    break;
-                }
+            ofn.lStructSize = sizeof(OPENFILENAME);
+            ofn.hwndOwner = hWnd;
+            ofn.lpstrFilter = "All files (*.)\0*.*\0\0";
+            filename[0] = 0;
+            ofn.lpstrFile = filename;
+            ofn.nMaxFile = 4095;
+            ofn.Flags = OFN_EXPLORER;
+            ofn.lpstrDefExt = "";
+            ofn.lpstrTitle = "Save state to...";
+            ofn.lpstrInitialDir = ".";
+
+            if (GetSaveFileName(&ofn)) {
+                state_store_to_file(filename);
+                printf("SELECTED\n");
+            } else {
+                printf("NOT SELECTED\n");
             }
+            break;
+        }
+        }
     }
     return DefWindowProc(hwnd, msg, wparam, lparam);
 }
 
-void display_init(void) {
-    // Hopefully, this file will always be compiled into an executable: 
+void display_init(void)
+{
+    // Hopefully, this file will always be compiled into an executable:
     // https://stackoverflow.com/questions/21718027/getmodulehandlenull-vs-hinstance
     hInst = GetModuleHandle(NULL);
     wc.lpszClassName = "Halfix";
@@ -312,26 +347,26 @@ void display_init(void) {
     RegisterClass(&wc);
 
     hWnd = CreateWindow(
-        wc.lpszClassName, 
-        "Halfix", 
-        WS_OVERLAPPEDWINDOW|WS_VISIBLE,
+        wc.lpszClassName,
+        "Halfix",
+        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
         // Create it at some random spot
-        100, 
-        100, 
+        100,
+        100,
         // Make it 640x400
-        640, 
-        400, 
+        640,
+        400,
         // No parent window
-        NULL, 
+        NULL,
         // No menu
-        NULL, 
+        NULL,
         // HINSTANCE
         hInst,
-        // void 
+        // void
         NULL);
-    
+
     HMENU bar = CreateMenu(),
-        file = CreateMenu();
+          file = CreateMenu();
 
     AppendMenu(file, MF_STRING, MENU_EXIT, "&Exit");
     AppendMenu(file, MF_STRING, MENU_SAVE_STATE, "&Save State");
@@ -343,9 +378,9 @@ void display_init(void) {
 
     display_set_resolution(640, 400);
 
-    // Now let it run through a few events. 
+    // Now let it run through a few events.
     MSG blah;
-    while(PeekMessage(&blah, hWnd, 0, 0, PM_REMOVE)){
+    while (PeekMessage(&blah, hWnd, 0, 0, PM_REMOVE)) {
         TranslateMessage(&blah);
         DispatchMessage(&blah);
     }
@@ -358,15 +393,15 @@ void display_update(int scanline_start, int scanlines)
     SelectObject(mdc, hBmp);
     BitBlt(
         // Destination context
-        dc_dest, 
+        dc_dest,
         // Destination is at (0, 0)
-        0, 0, 
+        0, 0,
         // Copy the entire rectangle
-        cwidth, cheight, 
+        cwidth, cheight,
         // Our device context source
-        dc_src, 
+        dc_src,
         // Copy from top corner of rectangle
-        0, 0, 
+        0, 0,
         // Just copy -- don't do anything fancy.
         SRCCOPY);
     ReleaseDC(hWnd, hdc);
@@ -374,9 +409,11 @@ void display_update(int scanline_start, int scanlines)
 }
 void display_set_resolution(int width, int height)
 {
-    // CreateDIB section doesn't like it when our width/height are zero. 
-    if(width == 0 || height == 0) return;
-    if(dc_src) DeleteObject(dc_src);
+    // CreateDIB section doesn't like it when our width/height are zero.
+    if (width == 0 || height == 0)
+        return;
+    if (dc_src)
+        DeleteObject(dc_src);
     dc_src = CreateCompatibleDC(dc_dest);
 
     BITMAPINFO i;
@@ -394,7 +431,7 @@ void display_set_resolution(int width, int height)
     HDC hdc = GetDC(hWnd);
     hBmp = CreateDIBSection(hdc, &i, DIB_RGB_COLORS, &pvBits, NULL, 0);
     ReleaseDC(hWnd, hdc);
-    if(!hBmp){
+    if (!hBmp) {
         printf("Failed to create DIB section: %p [%d %d]\n", dc_dest, width, height);
         abort();
     }
@@ -417,27 +454,29 @@ void display_set_resolution(int width, int height)
     rect.right = cwidth;
     // y-coordinate
     rect.bottom = cheight;
-    if(!AdjustWindowRectEx(&rect, GetWindowLong(hWnd, GWL_STYLE), TRUE, 0)){
+    if (!AdjustWindowRectEx(&rect, GetWindowLong(hWnd, GWL_STYLE), TRUE, 0)) {
         printf("Failed to AdjustWindowRect\n");
         exit(0);
     }
-    SetWindowPos(hWnd, (HWND)0, 0, 0, rect.right-rect.left, rect.bottom-rect.top, SWP_NOMOVE | SWP_NOOWNERZORDER);
+    SetWindowPos(hWnd, (HWND)0, 0, 0, rect.right - rect.left, rect.bottom - rect.top, SWP_NOMOVE | SWP_NOOWNERZORDER);
 }
 void* display_get_pixels(void)
 {
     return pixels;
 }
-void display_handle_events(void){
+void display_handle_events(void)
+{
     MSG blah;
-    while(PeekMessage(&blah, hWnd, 0, 0, PM_REMOVE)){
+    while (PeekMessage(&blah, hWnd, 0, 0, PM_REMOVE)) {
         TranslateMessage(&blah);
         DispatchMessage(&blah);
     }
 }
-void display_release_mouse(void){
-    
+void display_release_mouse(void)
+{
 }
-void display_sleep(int ms){
+void display_sleep(int ms)
+{
     UNUSED(ms);
 }
 
