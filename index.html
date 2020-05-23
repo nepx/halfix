@@ -3,30 +3,75 @@
 
 <head>
     <title>Halfix x86 Emulator</title>
+    <meta charset="utf-8">
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
 </head>
 
 <body>
-    <button onclick="lockPointer()">Lock Mouse Pointer</button>
-    | <button id="savebutton">Save Emulator State</button> | <button id="pause">Pause</button>
-    | <button id="ctrlaltdel">Send CTRL+ALT+DEL</button>
-    <br>
-    <p>
-        Loading file <code id="netfile">(none)</code>: <progress id="netstat" value="0" max="0"></progress>, Total Bytes
-        Loaded: <span id="totalbytes"></span> 
-        <span>Speed: <span id="speed"></span> MIPS</span> 
-        <span id="error"></span></p>
-    <hr>
-    <canvas id="screen">Your browser does not support canvas.</canvas><br />
-    <pre id="messages"></pre>
-    <textarea id="log"></textarea>
-    <p>On mobile, tap on the text box to raise keyboard</p>
+    <div class="wrapper">
+        <nav id="sidebar">
+            options go here
+        </nav>
+        <div id="content">
+            <nav class="navbar navbar-expand-lg navbar-light bg-light">
+                <div class="container-fluid">
+                    <button type="button" id="sidebarCollapse" class="btn btn-info">
+                        <i class="fas fa-align-left"></i>
+                        <span id="itxt">Close Sidebar</span>
+                    </button>
+                </div>
+            </nav>
+            <div>
+                emulator goes here
+            </div>
+        </div>
+    </div>
+    <!-- Halfix scripts -->
     <script src="lib/pako_inflate.min.js"></script>
-    <script src="runtime.js"></script>
+    <script src="lib/jszip.min.js"></script>
+    <script src="lib/drive-filereader.js"></script>
+    <!-- <script src="libhalfix.js"></script> -->
+    <!-- <script src="runtime.js"></script> -->
+    <script src="libhalfix.js"></script>
     <script>
-        function lockPointer() {
-            Module["canvas"].requestPointerLock();
+        function getParameterByName(name, url) {
+            if (!url) url = window.location.href;
+            name = name.replace(/[\[\]]/g, '\\$&');
+            var regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'),
+                results = regex.exec(url);
+            if (!results) return null;
+            if (!results[2]) return '';
+            return decodeURIComponent(results[2].replace(/\+/g, ' '));
         }
+        $(document).ready(function() {
+            var sidebarState = 1;
+            $("#sidebarCollapse").on("click", function() {
+                $("#sidebar").toggleClass("active");
+                sidebarState ^= 1;
+                $("#itxt").text((sidebarState ? "Close" : "Open") + " Sidebar")
+            });
+
+        });
     </script>
+    <style>
+        .wrapper {
+            display: flex;
+            width: 100%;
+            align-items: stretch;
+        }
+        
+        #sidebar {
+            min-width: 250px;
+            max-width: 250px;
+        }
+        
+        #sidebar.active {
+            margin-left: -250px;
+        }
+    </style>
 </body>
 
 </html>
