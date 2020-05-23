@@ -158,7 +158,7 @@ static void vga_state(void)
     state_field(obj, 4, "vga.vbe_bank", &vga.vbe_bank);
     state_field(obj, 4, "vga.vgabios_addr", &vga.vgabios_addr);
     state_field(obj, 4, "vga.vram_size", &vga.vram_size);
-    // <<< END AUTOGENERATE "state" >>>
+// <<< END AUTOGENERATE "state" >>>
     if (state_is_reading()) {
         vga_update_size();
         vga_alloc_mem();
@@ -967,6 +967,10 @@ void vga_update(void)
         return;
     vga.memory_modified &= ~(1 << (vga.current_scanline != 0));
 
+#ifdef ALLEGRO_BUILD
+    vga.framebuffer = display_get_pixels();
+#endif
+
     uint32_t
         //current = vga.current_scanline,
         total_scanlines_drawn
@@ -1523,7 +1527,7 @@ static int vga_pci_write(uint8_t* ptr, uint8_t addr, uint8_t data)
 }
 static uint32_t vga_rom_readb(uint32_t addr)
 {
-    printf("%08x --> %08x\n", addr, addr - vga.vgabios_addr + 0xC0000);
+    //printf("%08x --> %08x\n", addr, addr - vga.vgabios_addr + 0xC0000);
     return vga.rom[(addr - vga.vgabios_addr) & 0xFFFF];
 }
 static void vga_rom_writeb(uint32_t addr, uint32_t data)
