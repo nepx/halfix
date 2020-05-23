@@ -7,8 +7,11 @@
         this.options = options || {};
 
         this.canvas = this.options["canvas"] || null;
+        this.ctx = this.canvas ? this.canvas.getContext("2d") : null;
 
         this.config = this.buildConfiguration();
+
+        this.paused = false;
 
         /** @type {ImageData} */
         this.image_data = null;
@@ -44,8 +47,8 @@
      */
     Halfix.prototype.getBooleanByName = function (name, defaultValue) {
         var res = this.getParameterByName(name);
-        if (res === null) return defaultValue;
-        else return !!res;
+        if (res === null) return defaultValue | 0;
+        else return !!res | 0;
     };
     /**
      * @param {string} name
@@ -182,7 +185,7 @@
         this.buildFloppy(config, "b");
         config.push("[boot]");
 
-        var bootOrder = this.getParameterByName("boot") || "chf";
+        var bootOrder = this.getParameterByName("boot") || "hcf";
         config.push("a=" + bootOrder[0] + "d");
         config.push("b=" + bootOrder[1] + "d");
         config.push("c=" + bootOrder[2] + "d");
@@ -190,11 +193,6 @@
         return config.join("\n");
     }
 
-    /**
-     * @param {string[]||object[]} paths
-     * @param {function(object, Uint8Array[])} cb
-     * @param {boolean=} gz Are the files to be fetched gzip'ed?
-     */
     function loadFiles(paths, cb, gz) {
         var resultCounter = paths.length | 0,
             results = [];
@@ -246,6 +244,11 @@
         }
     }
 
+    Halfix.prototype.updateScreen = function () {
+        if (this.ctx)
+            this.ctx.putImageData(this.image_data, 0, 0);
+    };
+
     var _loaded = false;
 
     // ========================================================================
@@ -262,6 +265,8 @@
     /** @type {Halfix} */
     var _halfix = null;
 
+    var init_cb = null;
+
     /**
      * Load and initialize emulator instance
      * @param {function(Error, object)} cb Callback
@@ -277,22 +282,66 @@
         // Set up our module instance
         global["Module"]["canvas"] = this.canvas;
 
+        init_cb = cb;
+
         // Load emulator
         var script = document.createElement("script");
         script.src = this.getParameterByName("emulator") || "halfix.js";
         document.head.appendChild(script);
     };
 
+    Halfix.prototype["run"] = function () {
+        if (this.paused) return;
+        try {
+            var x = run();
+            var temp;
+            var elapsed = (temp = new Date().getTime()) - now;
+            if (elapsed >= 1000) {
+                var curcycles = cycles();
+                //$("speed").innerHTML = ((curcycles - cyclebase) / (elapsed) / (1000)).toFixed(2);
+                cyclebase = curcycles;
+                now = temp;
+            }
+            var me = this;
+            setTimeout(function () {
+                me["run"]();
+            }, x);
+        } catch (e) {
+            $("error").innerHTML = "Exception thrown -- see JavaScript console";
+            $("messages").innerHTML = e.toString() + "<br />" + e.stack;
+            failed = true;
+            console.log(e);
+            throw e;
+        }
+    };
+
     // ========================================================================
     // Emscripten support code
     // ========================================================================
 
+    var cycles, now;
     function run_wrapper2() {
         wrap("emscripten_init")();
+
+        now = new Date().getTime();
+        cycles = wrap("emscripten_get_cycles");
+        run = wrap("emscripten_run");
+        init_cb();
     }
 
     // Initialize module instance
     global["Module"] = {};
+
+    // Set up some stuff that we might find helpful
+
+    const SAVE_LOGS = false;
+    var arr = [];
+    Module["printErr"] = function (ln) { if (SAVE_LOGS) arr.push(ln); };
+    Module["print"] = function (ln) { console.log(ln); };
+
+    global["update_screen"] = function () {
+        _halfix.updateScreen();
+    };
 
     var requests_in_progress = 0;
     /**
@@ -374,11 +423,11 @@
         if (p.indexOf("!") !== -1) {
             var chunks = p.split("!");
             image = new image_backends[chunks[0]](_cache[parseInt(chunks[1]) | 0]);
-        } else 
+        } else
             image = new XHRImage();
         requests_in_progress = requests_in_progress + 1 | 0;
-        image.init(p, function(err, data){
-            if(err) throw err;
+        image.init(p, function (err, data) {
+            if (err) throw err;
 
             var dataptr = alloc(data.length), strptr = alloc(p.length + 1);
             memcpy(dataptr, data);
@@ -536,7 +585,7 @@
      * @param {number} arg1 Callback argument
      */
     HardDriveImage.prototype["flushReadQueue"] = function (cb, arg1) {
-        /** @type {RemoteHardDiskImage} */
+        /** @type {HardDriveImage} */
         var me = this;
 
         this.cb = cb;
@@ -648,6 +697,7 @@
     }
     FileImage.prototype = new HardDriveImage();
     FileImage.prototype.load = function (reqs, cb) {
+        console.log(reqs);
         // Ensure that loads are in order and consecutive, which speeds things up
         var blockBase = _url_to_blkid(reqs[0]);
         for (var i = 1; i < reqs.length; i = i + 1 | 0)
@@ -672,7 +722,7 @@
         fr.onabort = function () {
             cb(new Error("filereader aborted"), null);
         };
-        fr.readAsArrayBuffer(this.file);
+        fr.readAsArrayBuffer(fileslice);
     };
     FileImage.prototype.init = function (arg, cb) {
         var data = _construct_info(this.file.size, 256 << 10);
@@ -690,7 +740,7 @@
     }
     XHRImage.prototype = new HardDriveImage();
     XHRImage.prototype.load = function (reqs, cb) {
-        loadFiles(reqs, cb);
+        loadFiles(reqs, cb, true);
     };
     XHRImage.prototype.init = function (arg, cb) {
         loadFiles([join_path(arg, "info.dat")], function (err, data) {
@@ -792,5 +842,8 @@
         return a + b; //normalize_path(a + b);
     }
 
-    global["Halfix"] = Halfix;
-})(typeof window !== "undefined" ? window : this);
+    if (typeof module !== "undefined" && module["exports"])
+        module["exports"] = Halfix;
+    else
+        global["Halfix"] = Halfix;
+})(typeof window !== "undefined" ? window : global);
