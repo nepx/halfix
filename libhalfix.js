@@ -368,7 +368,7 @@
             var pathparts = pathstr.split("!");
             var data = _cache[parseInt(pathparts[1])];
             /** @type {WholeFileLoader} */
-            var driver = xhr_replacements[pathparts[0]](data);
+            var driver = new xhr_replacements[pathparts[0]](data);
             driver.load(cb);
         } else loadFiles([pathstr], function (err, datas) {
             cb(err, datas[0]);
