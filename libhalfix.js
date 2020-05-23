@@ -197,10 +197,6 @@
         var resultCounter = paths.length | 0,
             results = [];
 
-        // If we are loading more than one file, then make sure that the progress bar is wide enough
-        netstat.max = paths.length * 100 | 0;
-        netstat.value = 0;
-        netfile.innerHTML = paths.join(", ");
         inLoading = true;
         for (var i = 0; i < paths.length; i = i + 1 | 0) {
             (function () {
