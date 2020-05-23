@@ -80,6 +80,20 @@
                                                 </button>
                                                 </td>
                                             </tr>
+                                            <tr>
+                                                <td>
+                                                    <button type="button" class="btn btn-outline-primary" data-toggle="modal" data-target="#mdl_dev">
+                                                    Devices
+                                                </button>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td>
+                                                    <button type="button" class="btn btn-outline-primary" data-toggle="modal" data-target="#mdl_drv">
+                                                    Drives
+                                                </button>
+                                                </td>
+                                            </tr>
                                         </tbody>
                                     </table>
                                 </div>
@@ -138,12 +152,114 @@
                     <div class="form-group">
                         <label for="inp_bios">BIOS image</label>
                         <input type="file" class="form-control" id="inp_bios" aria-describedby="hlp_bios" />
-                        <small id="hlp_bios" class="form-text text-muted">Loads <code>bios.img</code> by default</small>
+                        <small id="hlp_bios" class="form-text text-muted">
+                            Loads <code>bios.img</code> by default. 
+                            <a href="#" id="clearbios">Clear</a>
+                        </small>
                     </div>
                     <div class="form-group">
-                        <label for="inp_vgabios">Video RAM size</label>
+                        <label for="inp_vgabios">Video BIOS</label>
                         <input type="file" class="form-control" id="inp_vgabios" aria-describedby="hlp_vgabios" value="4" />
-                        <small id="hlp_vgabios" class="form-text text-muted">Loads <code>vgabios.img</code> by default</small>
+                        <small id="hlp_vgabios" class="form-text text-muted">
+                            Loads <code>vgabios.img</code> by default.
+                            <a href="#" id="clearvgabios">Clear</a>
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Device modal-->
+    <div class="modal" tabindex="-1" id="mdl_dev">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Devices</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="inp_pci" checked />
+                            <label class="form-check-label" for="inp_pci" aria-describedby="hlp_pci">
+                            PCI
+                        </label>
+                            <small id="hlp_pci" class="form-text text-muted">If checked, simulate a PC with a PCI adapter. Otherwise, simulates an ISA system.</small>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="inp_pcivga" />
+                            <label class="form-check-label" for="inp_pcivga" aria-describedby="hlp_pcivga">
+                            PCI VGA controller
+                        </label>
+                            <small id="hlp_pcivga" class="form-text text-muted">Connect the VGA display adapter to the PCI bus. Allows some systems (like ReactOS) to detect more video modes, but is slow and incomplete.</small>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="inp_apic" checked />
+                            <label class="form-check-label" for="inp_apic" aria-describedby="hlp_apic">
+                            APIC
+                        </label>
+                            <small id="hlp_pcivga" class="form-text text-muted">An APIC is integrated with almost every CPU that Halfix can emulate. Should only be disabled if you know what you're doing.</small>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="inp_acpi" checked />
+                            <label class="form-check-label" for="inp_acpi" aria-describedby="hlp_acpi">
+                            ACPI
+                        </label>
+                            <small id="hlp_acpi" class="form-text text-muted">Required by newer operating systems for timing.</small>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="inp_floppy" />
+                            <label class="form-check-label" for="inp_floppy" aria-describedby="hlp_floppy">
+                            Floppy disk controller
+                        </label>
+                            <small id="hlp_floppy" class="form-text text-muted">Supports the bare minimum of features. Buggy and incomplete. </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Drive modals -->
+    <div class="modal" tabindex="-1" id="mdl_drv">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Drives</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="btn-group" role="group" aria-label="Select disk">
+                        <button type="button" class="btn btn-secondary disksel" data-id="0">ata0-master</button>
+                        <button type="button" class="btn btn-secondary disksel" data-id="1">ata0-slave</button>
+                        <button type="button" class="btn btn-secondary disksel" data-id="2">ata1-master</button>
+                        <button type="button" class="btn btn-secondary disksel" data-id="3">ata0-slave</button>
+                    </div>
+                    <hr />
+                    <div class="btn-group" role="group" aria-label="Select type">
+                        <button type="button" class="btn btn-secondary disksel" data-id="none">Not inserted</button>
+                        <button type="button" class="btn btn-secondary disksel" data-id="hd">Hard disk</button>
+                        <button type="button" class="btn btn-secondary disksel" data-id="cd">CD-ROM</button>
+                    </div>
+                    <div class="form-group">
+                        <label for="inp_ata0">Disk image</label>
+                        <input type="file" class="form-control" id="inp_ata0" />
+                        <input type="file" class="form-control" id="inp_ata1" />
+                        <input type="file" class="form-control" id="inp_ata2" />
+                        <input type="file" class="form-control" id="inp_ata3" />
+                        <small id="hlp_vmemsz" class="form-text text-muted">
+                            Images are not uploaded to server.
+                            <a href="#" id="clearata">Clear</a>
+                        </small>
                     </div>
                 </div>
             </div>
@@ -183,6 +299,25 @@
             console.log($("#inp_bios")[0].files);
             opts.bios = $("#inp_bios")[0].files[0] || "bios.bin";
             opts.vgabios = $("#inp_vgabios")[0].files[0] || "vgabios.bin";
+
+            opts.apic = $("#inp_apic").val();
+            opts.acpi = $("#inp_acpi").val();
+            opts.pci = $("#inp_pci").val();
+            opts.pcivga = $("#inp_pcivga").val();
+            opts.floppy = $("#inp_floppy").val();
+        }
+
+        var currentSelected = -1;
+        function loadATAdata(id) {
+            currentSelected = id;
+            for (var i = 0; i < 4; i++) {
+                var str = "inp_ata" + i;
+                if (id === i) {
+                    $("#" + str).show();
+                } else {
+                    $("#" + str).hide();
+                }
+            }
         }
 
         $(document).ready(function() {
@@ -191,6 +326,37 @@
                 $("#sidebar").toggleClass("active");
                 sidebarState ^= 1;
                 $("#itxt").text((sidebarState ? "Close" : "Open") + " Sidebar")
+            });
+
+            $("#clearbios").click(function() {
+                $("#inp_bios").val(null);
+            });
+            $("#clearvgabios").click(function() {
+                $("#inp_vgabios").val(null);
+            });
+            $("#clearata").click(function() {
+                $("#inp_ata"+currentSelected).val(null);
+            });
+
+            loadATAdata(0);
+            $(".disksel").each(function() {
+                var n = $(this);
+                n.click(function() {
+                    loadATAdata(parseInt(n.attr("data-id")));
+                });
+            });
+
+            // Make configuration options logically consistent
+            $("#inp_pci").change(function() {
+                if (!this.checked) {
+                    $("#inp_pcivga").val(false);
+                    $("#inp_pcivga").attr("disabled", "disabled");
+                    $("#inp_acpi").val(false);
+                    $("#inp_acpi").attr("disabled", "disabled");
+                } else {
+                    $("#inp_pcivga").removeAttr("disabled");
+                    $("#inp_acpi").removeAttr("disabled");
+                }
             });
 
             var opts = {};
