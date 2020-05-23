@@ -11,22 +11,37 @@
 </head>
 
 <body>
-    <div class="wrapper">
-        <nav id="sidebar">
-            options go here
-        </nav>
-        <div id="content">
-            <nav class="navbar navbar-expand-lg navbar-light bg-light">
-                <div class="container-fluid">
-                    <button type="button" id="sidebarCollapse" class="btn btn-info">
-                        <i class="fas fa-align-left"></i>
-                        <span id="itxt">Close Sidebar</span>
-                    </button>
+    <nav class="navbar navbar-dark fixed-top bg-dark flex-md-nowrap p-0 shadow">
+        <span class="navbar-brand col-sm-3 col-md-2 mr-0">Halfix x86 Emulator</span>
+    </nav>
+    <div class="container-fluid">
+        <div class="row">
+            <nav class="col-md-2 d-none d-md-block bg-light sidebar">
+                <div class="sidebar-sticky">
+                    <div class="container">
+                        <table class="btn_tbl">
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_start">Start</button>
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_stop">Stop</button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_pause">Pause</button>
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_restart">Restart</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </nav>
-            <div>
-                emulator goes here
-            </div>
         </div>
     </div>
     <!-- Halfix scripts -->
@@ -57,19 +72,17 @@
         });
     </script>
     <style>
-        .wrapper {
-            display: flex;
+        .sidebar {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            padding: 48px 0 0;
+            box-shadow: inset -1px 0 0 rgba(0, 0, 0, .1);
+        }
+
+        .btn_tbl {
             width: 100%;
-            align-items: stretch;
-        }
-        
-        #sidebar {
-            min-width: 250px;
-            max-width: 250px;
-        }
-        
-        #sidebar.active {
-            margin-left: -250px;
         }
     </style>
 </body>
