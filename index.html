@@ -242,13 +242,14 @@
                         <button type="button" class="btn btn-secondary disksel" data-id="0">ata0-master</button>
                         <button type="button" class="btn btn-secondary disksel" data-id="1">ata0-slave</button>
                         <button type="button" class="btn btn-secondary disksel" data-id="2">ata1-master</button>
-                        <button type="button" class="btn btn-secondary disksel" data-id="3">ata0-slave</button>
+                        <button type="button" class="btn btn-secondary disksel" data-id="3">ata1-slave</button>
                     </div>
                     <hr />
+                    <h6>Drive type</h6>
                     <div class="btn-group" role="group" aria-label="Select type">
-                        <button type="button" class="btn btn-secondary disksel" data-id="none">Not inserted</button>
-                        <button type="button" class="btn btn-secondary disksel" data-id="hd">Hard disk</button>
-                        <button type="button" class="btn btn-secondary disksel" data-id="cd">CD-ROM</button>
+                        <button type="button" class="btn btn-secondary typesel" data-type="none">Not inserted</button>
+                        <button type="button" class="btn btn-secondary typesel" data-type="hd">Hard disk</button>
+                        <button type="button" class="btn btn-secondary typesel" data-type="cd">CD-ROM</button>
                     </div>
                     <div class="form-group">
                         <label for="inp_ata0">Disk image</label>
@@ -308,16 +309,32 @@
         }
 
         var currentSelected = -1;
+
+        var disksels = [],
+            diskinfos = [],
+            typobj = {},
+            typsels = [];
+
+        function selectType(n) {
+            for (var i = 0; i < typsels.length; i++) {
+                if (typsels[i] !== n) typsels[i].removeClass("active");
+            }
+            n.addClass("active");
+        }
+
         function loadATAdata(id) {
             currentSelected = id;
             for (var i = 0; i < 4; i++) {
                 var str = "inp_ata" + i;
                 if (id === i) {
                     $("#" + str).show();
+                    disksels[i].addClass("active");
                 } else {
                     $("#" + str).hide();
+                    disksels[i].removeClass("active");
                 }
             }
+            selectType(typobj[diskinfos[id].type]);
         }
 
         $(document).ready(function() {
@@ -335,16 +352,34 @@
                 $("#inp_vgabios").val(null);
             });
             $("#clearata").click(function() {
-                $("#inp_ata"+currentSelected).val(null);
+                $("#inp_ata" + currentSelected).val(null);
             });
 
-            loadATAdata(0);
             $(".disksel").each(function() {
                 var n = $(this);
+                diskinfos[disksels.length] = {
+                    type: "none"
+                };
+                disksels.push(n);
                 n.click(function() {
                     loadATAdata(parseInt(n.attr("data-id")));
                 });
             });
+
+            $(".typesel").each(function() {
+                var n = $(this);
+                typsels.push(n);
+                typobj[n.attr("data-type")] = n;
+                n.click(function() {
+                    diskinfos[currentSelected].type = n.attr("data-type");
+                    for (var i = 0; i < typsels.length; i++) {
+                        if (typsels[i] !== n) typsels[i].removeClass("active");
+                    }
+                    n.addClass("active");
+                });
+            });
+            typsels[0].addClass("active");
+            loadATAdata(0);
 
             // Make configuration options logically consistent
             $("#inp_pci").change(function() {
