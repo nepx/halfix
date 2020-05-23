@@ -64,8 +64,24 @@
                             </div>
                             <div id="sbr_config" class="collapse" aria-labelledby="hdr_config" data-parent="#accordion">
                                 <div class="card-body">
-                                    
-                                    todo: configuration
+                                    <table>
+                                        <tbody>
+                                            <tr>
+                                                <td>
+                                                    <button type="button" class="btn btn-outline-primary" data-toggle="modal" data-target="#mdl_memory">
+                                                    Memory
+                                                </button>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td>
+                                                    <button type="button" class="btn btn-outline-primary" data-toggle="modal" data-target="#mdl_rom">
+                                                    ROM Images
+                                                </button>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
@@ -78,6 +94,59 @@
                     <canvas id="canvas" height="480" width="640">Your browser does not support canvas</canvas>
                 </div>
             </main>
+        </div>
+    </div>
+    <!-- Modals -->
+
+    <!-- Memory modal -->
+    <div class="modal" tabindex="-1" id="mdl_memory">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Memory</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="inp_memsz">RAM size</label>
+                        <input type="number" class="form-control" id="inp_memsz" aria-describedby="hlp_memsz" value="32" min="1" max="3072" />
+                        <small id="hlp_memsz" class="form-text text-muted">Megabytes of memory allocated to guest</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="inp_vmemsz">Video RAM size</label>
+                        <input type="number" class="form-control" id="inp_vmemsz" aria-describedby="hlp_vmemsz" value="4" />
+                        <small id="hlp_vmemsz" class="form-text text-muted">Megabytes of video memory</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BIOS modal -->
+    <div class="modal" tabindex="-1" id="mdl_rom">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">ROM Images</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="inp_bios">BIOS image</label>
+                        <input type="file" class="form-control" id="inp_bios" aria-describedby="hlp_bios" />
+                        <small id="hlp_bios" class="form-text text-muted">Loads <code>bios.img</code> by default</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="inp_vgabios">Video RAM size</label>
+                        <input type="file" class="form-control" id="inp_vgabios" aria-describedby="hlp_vgabios" value="4" />
+                        <small id="hlp_vgabios" class="form-text text-muted">Loads <code>vgabios.img</code> by default</small>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     <!-- Halfix scripts -->
@@ -99,11 +168,21 @@
         }
 
         function run(options) {
+            $("#btn_start").attr("disabled", "disabled").blur();
             options.canvas = document.getElementById("canvas");
             var halfix = new Halfix(options);
             halfix.init(function() {
                 halfix.run();
             });
+        }
+
+        function mkConfig(opts) {
+            opts.mem = $("#inp_memsz").val();
+            opts.vgamem = $("#inp_vmemsz").val();
+
+            console.log($("#inp_bios")[0].files);
+            opts.bios = $("#inp_bios")[0].files[0] || "bios.bin";
+            opts.vgabios = $("#inp_vgabios")[0].files[0] || "vgabios.bin";
         }
 
         $(document).ready(function() {
@@ -115,8 +194,9 @@
             });
 
             var opts = {};
-            $("btn_start").on("click", function(){
+            $("#btn_start").on("click", function() {
                 // TODO: actually get opts
+                mkConfig(opts);
                 run(opts);
             });
 
