@@ -18,30 +18,66 @@
         <div class="row">
             <nav class="col-md-2 d-none d-md-block bg-light sidebar">
                 <div class="sidebar-sticky">
-                    <div class="container">
-                        <table class="btn_tbl">
-                            <tbody>
-                                <tr>
-                                    <td>
-                                        <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_start">Start</button>
-                                    </td>
-                                    <td>
-                                        <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_stop">Stop</button>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td>
-                                        <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_pause">Pause</button>
-                                    </td>
-                                    <td>
-                                        <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_restart">Restart</button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div id="accordion">
+                        <div class="card">
+                            <div class="card-header" id="hdr_control">
+                                <h5 class="mb-0">
+                                    <button class="btn btn-link" data-toggle="collapse" data-target="#sbr_control" aria-expanded="true" aria-controls="sbr_control">
+                                Emulator Control
+                              </button>
+                                </h5>
+                            </div>
+
+                            <div id="sbr_control" class="collapse show" aria-labelledby="hdr_control" data-parent="#accordion">
+                                <div class="card-body">
+                                    <table class="btn_tbl">
+                                        <tbody>
+                                            <tr>
+                                                <td>
+                                                    <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_start">Start</button>
+                                                </td>
+                                                <td>
+                                                    <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_stop">Stop</button>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td>
+                                                    <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_pause">Pause</button>
+                                                </td>
+                                                <td>
+                                                    <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_restart">Restart</button>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header" id="hdr_config">
+                                <h5 class="mb-0">
+                                    <button class="btn btn-link collapsed" data-toggle="collapse" data-target="#sbr_config" aria-expanded="false" aria-controls="sbr_config">
+                                Configuration
+                              </button>
+                                </h5>
+                            </div>
+                            <div id="sbr_config" class="collapse" aria-labelledby="hdr_config" data-parent="#accordion">
+                                <div class="card-body">
+                                    
+                                    todo: configuration
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             </nav>
+            <main role="main" class="col-md-9 ml-sm-auto col-lg-10 px-4">
+                <div class="text-center">
+                    <canvas id="canvas" height="480" width="640">Your browser does not support canvas</canvas>
+                </div>
+            </main>
         </div>
     </div>
     <!-- Halfix scripts -->
@@ -61,6 +97,15 @@
             if (!results[2]) return '';
             return decodeURIComponent(results[2].replace(/\+/g, ' '));
         }
+
+        function run(options) {
+            options.canvas = document.getElementById("canvas");
+            var halfix = new Halfix(options);
+            halfix.init(function() {
+                halfix.run();
+            });
+        }
+
         $(document).ready(function() {
             var sidebarState = 1;
             $("#sidebarCollapse").on("click", function() {
@@ -69,6 +114,15 @@
                 $("#itxt").text((sidebarState ? "Close" : "Open") + " Sidebar")
             });
 
+            var opts = {};
+            $("btn_start").on("click", function(){
+                // TODO: actually get opts
+                run(opts);
+            });
+
+            if (getParameterByName("autostart")) {
+                run({});
+            }
         });
     </script>
     <style>
@@ -80,9 +134,13 @@
             padding: 48px 0 0;
             box-shadow: inset -1px 0 0 rgba(0, 0, 0, .1);
         }
-
+        
         .btn_tbl {
             width: 100%;
+        }
+        
+        main {
+            padding-top: 48px;
         }
     </style>
 </body>
