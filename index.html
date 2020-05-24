@@ -37,15 +37,15 @@
                                                     <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_start">Start</button>
                                                 </td>
                                                 <td>
-                                                    <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_stop">Stop</button>
+                                                    <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_pause">Pause</button>
                                                 </td>
                                             </tr>
                                             <tr>
                                                 <td>
-                                                    <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_pause">Pause</button>
+                                                    <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_lockmouse">Lock Mouse</button>
                                                 </td>
                                                 <td>
-                                                    <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_restart">Restart</button>
+                                                    <button type="button" class="btn btn-outline-primary btn-sm btn-block" id="btn_fullscreen">Fullscreen</button>
                                                 </td>
                                             </tr>
                                         </tbody>
@@ -91,6 +91,13 @@
                                                 <td>
                                                     <button type="button" class="btn btn-outline-primary" data-toggle="modal" data-target="#mdl_drv">
                                                     Drives
+                                                </button>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td>
+                                                    <button type="button" class="btn btn-outline-primary" data-toggle="modal" data-target="#mdl_other">
+                                                    Other
                                                 </button>
                                                 </td>
                                             </tr>
@@ -266,6 +273,29 @@
             </div>
         </div>
     </div>
+
+    <!-- Other options -->
+    <div class="modal" tabindex="-1" id="mdl_other">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Other Settings</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="inp_fast" checked />
+                        <label class="form-check-label" for="inp_fast" aria-describedby="hlp_fast">
+                        Turbo mode
+                    </label>
+                        <small id="hlp_fast" class="form-text text-muted">If checked, the emulator runs as fast as possible, causing time to become desynchronized.</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- Halfix scripts -->
     <script src="lib/pako_inflate.min.js"></script>
     <script src="lib/jszip.min.js"></script>
@@ -284,28 +314,62 @@
             return decodeURIComponent(results[2].replace(/\+/g, ' '));
         }
 
+        var halfix;
+
+        function pause() {
+            $("#btn_pause").attr("disabled", "disabled").blur();
+            $("#btn_start").removeAttr("disabled").blur();
+            halfix.pause(true);
+        }
+
         function run(options) {
             $("#btn_start").attr("disabled", "disabled").blur();
-            options.canvas = document.getElementById("canvas");
-            var halfix = new Halfix(options);
-            halfix.init(function() {
+            $("#btn_pause").removeAttr("disabled").blur();
+            if (!halfix) {
+                halfix = new Halfix(options);
+
+                halfix.init(function() {
+                    halfix.run();
+                });
+            } else {
+                halfix.pause(false);
                 halfix.run();
-            });
+            }
         }
 
         function mkConfig(opts) {
             opts.mem = $("#inp_memsz").val();
             opts.vgamem = $("#inp_vmemsz").val();
 
+            opts.fast = $("#inp_fast")[0].checked;
+
             console.log($("#inp_bios")[0].files);
             opts.bios = $("#inp_bios")[0].files[0] || "bios.bin";
             opts.vgabios = $("#inp_vgabios")[0].files[0] || "vgabios.bin";
 
-            opts.apic = $("#inp_apic").val();
-            opts.acpi = $("#inp_acpi").val();
-            opts.pci = $("#inp_pci").val();
-            opts.pcivga = $("#inp_pcivga").val();
-            opts.floppy = $("#inp_floppy").val();
+            opts.apic = $("#inp_apic")[0].checked;
+            opts.acpi = $("#inp_acpi")[0].checked;
+            opts.pci = $("#inp_pci")[0].checked;
+            opts.pcivga = $("#inp_pcivga")[0].checked;
+            opts.floppy = $("#inp_floppy")[0].checked;
+
+            var letters = ["a", "b", "c", "d"];
+            for (var i = 0; i < 4; i++) {
+                if (diskinfos[i].type !== "none") {
+                    var str = diskinfos[i].type + letters[i];
+                    var obj = $("#inp_ata" + i)[0];
+                    var obj2 = obj.files[0];
+                    if (obj2) {
+                        opts[str] = obj2;
+                    }
+                }else{
+                    if(getParameterByName("hd" + letters[i]) || getParameterByName("cd" + letters[i])){
+                        var str = getParameterByName("hd" + letters[i]) ? "hd" + letters[i] : "cd" + letters[i];
+                        opts[str] = getParameterByName(str);
+                    }
+                }
+            }
+            opts.canvas = document.getElementById("canvas");
         }
 
         var currentSelected = -1;
@@ -396,15 +460,35 @@
 
             var opts = {};
             $("#btn_start").on("click", function() {
-                // TODO: actually get opts
-                mkConfig(opts);
+                if (opts) {
+                    mkConfig(opts);
+                }
                 run(opts);
+                opts = null;
+            });
+            $("#btn_pause").on("click", function() {
+                pause();
+            });
+            $("#btn_lockmouse").on("click", function() {
+                lockMouse();
+            });
+            $("#btn_fullscreen").on("click", function() {
+                fullScreen();
             });
 
             if (getParameterByName("autostart")) {
                 run({});
             }
         });
+
+        function lockMouse() {
+            document.getElementById("canvas").requestPointerLock();
+        }
+
+        function fullScreen() {
+            lockMouse();
+            halfix.fullscreen();
+        }
     </script>
     <style>
         .sidebar {
