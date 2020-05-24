@@ -11,6 +11,8 @@
 
         this.config = this.buildConfiguration();
 
+        this.fast = options["fast"] || false;
+
         this.paused = false;
 
         /** @type {ImageData} */
@@ -286,6 +288,20 @@
         document.head.appendChild(script);
     };
 
+    /**
+     * Pause the emulator
+     * @param {boolean} paused
+     */
+    Halfix.prototype["pause"] = function(paused){
+        this.paused = paused;
+    };
+
+    /**
+     * Send a fullscreen request to the brower. 
+     */
+    Halfix.prototype["fullscreen"] = function(){
+        Module["requestFullscreen"]();
+    };
     Halfix.prototype["run"] = function () {
         if (this.paused) return;
         try {
@@ -322,6 +338,8 @@
         now = new Date().getTime();
         cycles = wrap("emscripten_get_cycles");
         run = wrap("emscripten_run");
+        
+        wrap("emscripten_set_fast")(_halfix.fast);
         init_cb();
     }
 
