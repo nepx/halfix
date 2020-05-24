@@ -66,11 +66,15 @@ The emulated video card is based on the ET4000, so that's what it detects. Curre
 
 Disable Pentium 4 and Core Duo support in `src/cpu/ops/misc.c`. There's a well-known CPU detection bug that causes NT to triple fault during installation. You can re-enable higher-level CPU emulation after installation. 
 
+Works well in browser too. Don't forget to set up the disk configuration exactly as it was during installation or else you're going to get a `INACCESSIBLE_BOOT_DEVICE` error during startup. 
+
 ### Windows 2000
 Boots and runs. 
 
 ### Windows XP
 Installs, boots, and runs. Very stable. I recommend running with 128 MB RAM, although 32 MB works fine too. 
+
+Boots in browser, but takes a little bit of time. My installation transfers ~70 MB of data during boot. 
 
 ### Windows Vista
 Takes forever to boot with the Pentium 4 CPU configuration. Set IPS to around 50,000,000 to get the nice Aero theme. Run with 512 MB of RAM. 
@@ -111,7 +115,7 @@ Boots from CD and runs. Slightly longer boot time than Windows XP.
 Haven't tested with the new PAE improvements because I accidentally deleted my disk image. 
 
 ### TinyCore Linux
-Boots fine. Run with 64 MB of RAM. On browser version, desktop icons don't render. 
+Boots fine. Run with 64 MB of RAM. 
 
 ### Red Star OS 2
 Boots fine. Slightly laggy, but usable. Installed using QEMU. 
@@ -135,6 +139,10 @@ Due to bugs in IDE emulation, don't try running the OS with a CD-ROM inserted.
 
 I have not tried versions besides 16.04.
 
+### Alpine Linux
+
+Boots on native and browser, although it takes a while. 
+
 ## ReactOS
 Works fine, from the LiveCD. VGA emulation is funky, though. Icons don't render when booted with VGA. However, they do render fine when VESA is enabled.
 
@@ -142,3 +150,11 @@ I have not tried versions besides 0.4.12.
 
 ## 9Front
 Boots fine. Keyboard is a bit laggy, but works. Tested with 512 MB RAM, Bochs BIOS. 
+
+## MenuetOS
+
+Boots and runs. I chose 800x600 24 BPP, no MTRR accleration, PS/2 mouse, and floppy disk. 
+
+## NeXTSTEP
+
+Installed on Bochs. Follow directions [here](https://sites.google.com/site/benvirtualbox/home/nextstep) during install. Works well. 
