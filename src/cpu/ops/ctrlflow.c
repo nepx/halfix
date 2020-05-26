@@ -772,6 +772,7 @@ void cpu_exception(int vec, int code)
         }
 #ifndef EMSCRIPTEN
         CPU_LOG("HALFIX EXCEPTION: %02x(%04x) @ EIP=%08x lin=%08x\n", vec, code, VIRT_EIP(), LIN_EIP());
+        if(LIN_EIP() == 0x00010063) __asm__("int3");
 #endif
         current_exception = vec;
         if (cpu_interrupt(vec, code, INTERRUPT_TYPE_EXCEPTION, VIRT_EIP()))
@@ -990,7 +991,7 @@ int callf(uint32_t eip, uint32_t cs, uint32_t oldeip, int is32)
             gate_type = ACCESS_TYPE(gate_access);
             dpldiff = gate_dpl - cpu.cpl; // Will be < 0 if DPL<CPL, =0 if DPL=CPL, or >0 if DPL>CPL
             switch (gate_type) {
-            case 0x18 ... 0x1B: // Conforming code segment
+            case 0x18 ... 0x1B: // Non-conforming code segment
                 if (dpldiff < 0) {
                     // Call gate to more privilege
                     int ss, esp, ss_offset, ss_access, ss_type, ss_base, ss_mask;
@@ -1025,7 +1026,7 @@ int callf(uint32_t eip, uint32_t cs, uint32_t oldeip, int is32)
 
                     // Finished validating SS, all ok
                     // Now push all required values to new stack
-                    // We need to be careful here because gate_dpl might be different than cpu.cpl (OS/2 uses tis feature)
+                    // We need to be careful here because gate_dpl might be different than cpu.cpl (OS/2 uses this feature)
                     int parameter_count = cpu_seg_gate_parameter_count(&cs_info);
                     uint32_t* params = alloca(parameter_count * 4);
 
