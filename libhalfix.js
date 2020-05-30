@@ -652,7 +652,7 @@
      */
     function _url_to_blkid(str) {
         var parts = str.match(/blk([0-9a-f]{8})\.bin/);
-        return parseInt(parts[1], 16) | 0;
+        return parseInt(parts[1], 16) >>> 0;
     }
 
     /**
@@ -686,8 +686,8 @@
         var data = [];
         for (var i = 0; i < reqs.length; i = i + 1 | 0) {
             // note to self: Math.log(256*1024)/Math.log(2) === 18
-            var blockoffs = _url_to_blkid(i) << 18;
-            data[i] = this.data.slice(blockoffs, blockoffs + (256 << 10) | 0);
+            var blockoffs = (_url_to_blkid(i) << 18) >>> 0;
+            data[i] = this.data.slice(blockoffs, (blockoffs + (256 << 10)) >>> 0);
         }
         setTimeout(function () {
             cb(null, data);
@@ -719,7 +719,7 @@
         var blocks = reqs.length;
 
         /** @type {File} */
-        var fileslice = this.file.slice(blockBase << 18, (blockBase + blocks) << 18);
+        var fileslice = this.file.slice((blockBase << 18) >>> 0, ((blockBase + blocks) << 18) >>> 0);
 
         var fr = new FileReader();
         fr.onload = function () {
