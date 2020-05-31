@@ -37,7 +37,10 @@ int cpu_init_mem(int size)
 #endif
     return 0;
 }
-
+int cpu_interrupts_masked(void)
+{
+    return cpu.eflags & EFLAGS_IF;
+}
 
 itick_t cpu_get_cycles(void)
 {
@@ -98,7 +101,7 @@ int cpu_run(int cycles)
 
     // We are here for the following three reasons:
     //  - HLT raised
-    //  - A device requested a fast return 
+    //  - A device requested a fast return
     //  - We have run "cycles" operations.
     // In the case of the former, cpu.hlt_counter will contain the number of cycles still in cpu.cycles_to_run
     int cycles_run = cpu_get_cycles() - begin;
@@ -204,7 +207,7 @@ void cpu_reset(void)
         cpu.apic_base = 0xFEE00900; // We are BSP
     else
         cpu.apic_base = 0;
-    
+
     cpu.mxcsr = 0x1F80;
     cpu_update_mxcsr();
 
@@ -269,7 +272,7 @@ static void cpu_state(void)
     state_field(obj, 4, "cpu.exit_reason", &cpu.exit_reason);
     state_field(obj, 8, "cpu.ia32_efer", &cpu.ia32_efer);
     state_field(obj, 12, "cpu.sysenter", &cpu.sysenter);
-// <<< END AUTOGENERATE "state" >>>
+    // <<< END AUTOGENERATE "state" >>>
     state_file(cpu.memory_size, "ram", cpu.mem);
 
     if (state_is_reading()) {
@@ -297,36 +300,38 @@ int cpu_init(void)
     return 0;
 }
 
-void cpu_init_dma(uint32_t page){
+void cpu_init_dma(uint32_t page)
+{
     cpu_smc_invalidate_page(page);
 }
 
-void cpu_write_mem(uint32_t addr, void* data, uint32_t length){
-    if(length <= 4){
-        switch(length){
-            case 1:
-                cpu.mem8[addr] = *(uint8_t*)data;
+void cpu_write_mem(uint32_t addr, void* data, uint32_t length)
+{
+    if (length <= 4) {
+        switch (length) {
+        case 1:
+            cpu.mem8[addr] = *(uint8_t*)data;
 #ifdef INSTRUMENT
-                cpu_instrument_dma(addr, data, 1);
+            cpu_instrument_dma(addr, data, 1);
 #endif
-                return;
-            case 2:
-                cpu.mem16[addr >> 1] = *(uint16_t*)data;
+            return;
+        case 2:
+            cpu.mem16[addr >> 1] = *(uint16_t*)data;
 #ifdef INSTRUMENT
-                cpu_instrument_dma(addr, data, 2);
+            cpu_instrument_dma(addr, data, 2);
 #endif
-                return;
-            case 4:
-                cpu.mem32[addr >> 2] = *(uint32_t*)data;
+            return;
+        case 4:
+            cpu.mem32[addr >> 2] = *(uint32_t*)data;
 #ifdef INSTRUMENT
-                cpu_instrument_dma(addr, data, 4);
+            cpu_instrument_dma(addr, data, 4);
 #endif
-                return;
+            return;
         }
     }
     memcpy(cpu.mem + addr, data, length);
 #ifdef INSTRUMENT
-                cpu_instrument_dma(addr, data, length);
+    cpu_instrument_dma(addr, data, length);
 #endif
 }
 

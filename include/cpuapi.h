@@ -83,6 +83,8 @@ void cpu_init_dma(uint32_t page);
 // Is there an APIC connected to the CPU in some way??
 int cpu_apic_connected(void);
 
+int cpu_interrupts_masked(void);
+
 // Debug API
 void cpu_debug(void);
 

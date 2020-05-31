@@ -453,6 +453,8 @@ int pc_execute(void)
             cycles_to_move_forward = cycles_to_run - cycles_run;
 
             if (exit_reason == EXIT_STATUS_HLT) {
+                // The below line should prevent the browser version from locking up
+                if(!cpu_interrupts_masked()) return 0;
                 moveforward = devices_get_next(get_now(), NULL);
                 cycles_to_move_forward += moveforward;
             }
@@ -464,6 +466,7 @@ int pc_execute(void)
                     return wait_time;
             }
 #else
+            if(wait_time != 0) return 0; // try to match with emscripten
             UNUSED(wait_time);
 #endif
             // Just continue since wait time is negligable
