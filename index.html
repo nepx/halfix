@@ -477,7 +477,9 @@
             });
 
             if (getParameterByName("autostart")) {
-                run({});
+                var opts = {};
+                    mkConfig(opts);
+                run(opts);
             }
         });
 
