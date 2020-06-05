@@ -4,12 +4,13 @@ TODO list:
      ~ BSOD: KERNEL_DATA_INPAGE_ERROR. most likely a hardware issue (hard drive?)
  [x] boot Windows 10
  [x] boot Ubuntu
- [ ] gui (perhaps Imgui?)
+ [~] gui (perhaps Imgui?)
+     ~ basic win32 gui 
  [ ] swap floppy drives (NT 3.51 install)
  [ ] dynamic recompiler
  [ ] network support
- [ ] allow hard disks to be modified via command line option
-     ~ currently, it's controlled by a macro in src/drive.c
+ [x] allow hard disks to be modified via command line option
+     ~ now controllable using the configuration file, see wiki
  [ ] more robust savestate support
      ~ savestates work well, but they're only for debugging purposes. 
  [ ] vesa 4bpp
@@ -36,5 +37,5 @@ CPU bugs:
 Hardware bugs:
  [ ] cd-rom boot on seabios doesn't work
      ~ "Error trying to fetch already-fetched ATAPI data"
- [ ] write to end of disk image file doesn't work when disk image isn't a multiple of 256K large
+ [ ] write to end of raw disk image file doesn't work when disk image isn't a multiple of 256K large
      ~ "Unable to read 262144 bytes from image file" 
