@@ -742,7 +742,7 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
     }
     case 0x3D4:
     case 0x3B4: // CRT index
-        vga.crt_index = data & 0x3F;
+        vga.crt_index = data/* & 0x3F*/;
         break;
     case 0x3D5:
     case 0x3B5: { // CRT data
@@ -774,6 +774,8 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
             MASK(0b00010000), // 17
             MASK(0b00000000) // 18
         };
+        // Don't allow ourselves to go out of bounds
+        if(vga.crt_index > 0x3F) break;
         // The extra difficulty here comes from the fact that the mask is used here to allow masking of CR0-7 in addition to keeping out undefined bits
         data &= mask[vga.crt_index];
         // consider the case when we write 0x33 to CR01 (which is currently 0x66) and write protection is own
@@ -786,6 +788,7 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
             case 1:
                 VGA_LOG("End Horizontal Display: %02x\n", data);
                 vga_update_size();
+                if(vga.total_width == 9) __asm__("int3");
                 break;
             case 2:
                 VGA_LOG("Start Horizontal Blanking: %02x\n", data);
