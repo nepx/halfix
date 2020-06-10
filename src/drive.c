@@ -10,6 +10,7 @@
 #ifndef EMSCRIPTEN
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <zlib.h>
@@ -254,6 +255,9 @@ static int drive_internal_read_check(struct drive_internal_info* this, void* buf
             if (end == 0)
                 end = BLOCK_SIZE;
         }
+#if 0 && defined(EMSCRIPTEN)
+        blockInformation->data = (void*)1;
+#endif
         len = end - begin;
         //printf("BlockInformation: %p Data: %p cfp=%d\n", blockInformation, blockInformation->data, currentFilePosition / 512);
         if (blockInformation->data) {
@@ -916,4 +920,30 @@ void drive_destroy_simple(struct drive_info* info)
     free(simple_info->blocks);
     free(simple_info);
 }
+
+#ifndef EMSCRIPTEN
+// Autodetect drive type
+int drive_autodetect_type(char* path)
+{
+    struct stat statbuf;
+
+    // Check for URL
+    if (strstr(path, "http://") != NULL || strstr(path, "https://") != NULL)
+        return 2;
+    
+    int fd = open(path, O_RDONLY);
+    if (fd < 0)
+        return -1;
+    if(fstat(fd, &statbuf)){
+        close(fd);
+        return -1;
+    }
+    close(fd);
+    if(S_ISDIR(statbuf.st_mode))
+        return 0; // Chunked file 
+    else
+        return 1; // Raw image file 
+    
+}
+#endif
 #endif

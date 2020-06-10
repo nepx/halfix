@@ -58,6 +58,8 @@ void drive_state(struct drive_info* info, char* filename);
 
 #ifdef EMSCRIPTEN
 int drive_internal_init(struct drive_info* info, char* filename, void* info_dat, int);
+#else
+int drive_autodetect_type(char* path);
 #endif
 
 int drive_init(struct drive_info* info, char* path);

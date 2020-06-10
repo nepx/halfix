@@ -266,6 +266,8 @@ static const struct ini_enum driver_types[] = {
     { "raw", 1 },
     { "chunked", 0 },
     { "normal", 0 },
+    { "network", 2 },
+    { "net", 2 },
     { NULL, 0 }
 };
 
@@ -278,8 +280,22 @@ static int parse_disk(struct drive_info* drv, struct ini_section* s, int id)
 
     // Determine the media type
     drv->type = get_field_enum(s, "type", drive_types, DRIVE_TYPE_DISK);
-    int driver = get_field_enum(s, "driver", driver_types, 0), inserted = get_field_int(s, "inserted", 0), wb = get_field_int(s, "writeback", 0);
+    int driver = get_field_enum(s, "driver", driver_types, -1), inserted = get_field_int(s, "inserted", 0), wb = get_field_int(s, "writeback", 0);
     char* path = get_field_string(s, "file");
+
+    if(driver < 0 && inserted){
+#ifndef EMSCRIPTEN
+        // Try auto-detecting driver type if not specified. 
+        driver = drive_autodetect_type(path);
+        if(driver < 0)
+            FATAL("INI", "Unable to determine driver to use for ata%d-%s!\n", id >> 1, id & 1 ? "slave" : "master");
+        
+#else
+        // The wrapper code already knows what driver we have. It knows best. 
+        driver = 0;
+#endif
+    }
+
     if(driver == 0 && wb) 
         printf("WARNING: Disk %d uses async (chunked) driver but writeback is not supported!!\n", id);
     drv->modify_backing_file = wb;
