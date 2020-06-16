@@ -332,7 +332,7 @@ static int fpu_check_exceptions2(int commit_sw){
     // If #I, #D, or #Z, then ignore others.
     if (flags & (FPU_EXCEPTION_INVALID_OPERATION | FPU_EXCEPTION_ZERO_DIVIDE | FPU_EXCEPTION_DENORMALIZED)) {
         unmasked_exceptions &= FPU_EXCEPTION_INVALID_OPERATION | FPU_EXCEPTION_ZERO_DIVIDE | FPU_EXCEPTION_DENORMALIZED;
-        flags &= FPU_EXCEPTION_INVALID_OPERATION | FPU_EXCEPTION_ZERO_DIVIDE | FPU_EXCEPTION_DENORMALIZED;
+        flags &= FPU_EXCEPTION_INVALID_OPERATION | FPU_EXCEPTION_ZERO_DIVIDE | FPU_EXCEPTION_DENORMALIZED | FPU_EXCEPTION_STACK_FAULT;
     }
 
     if(commit_sw)
@@ -494,9 +494,11 @@ static int write_float64(uint32_t linaddr, float64 dest)
 static int fpu_check_push(void)
 {
     if (fpu_check_stack_overflow(-1)) {
-        if (fpu_check_exceptions()) {
+        fpu_check_exceptions();
+        if(fpu.control_word & FPU_EXCEPTION_INVALID_OPERATION){
+            // masked response
             fpu_push(IndefiniteNaN);
-        }
+        }else fpu.status_word |= 0x80; // ?
         return 1;
     }
     return 0;
@@ -1320,6 +1322,8 @@ int fpu_mem_op(struct decoded_instruction* i, uint32_t virtaddr, uint32_t seg)
     case OP(0xDE, 6):
     case OP(0xDE, 7):
     case OP(0xDF, 0): {
+        //printf("%08x %02x /%d\n", cpu.phys_eip, (smaller_opcode >> 3) | 0xD8, opcode & 7);
+        //if(cpu.phys_eip == 0x0018b3f0) __asm__("int3");
         if (fpu_fwait())
             return 1;
         switch (opcode >> 9 & 3) {
@@ -1794,7 +1798,7 @@ int fpu_fwait(void)
             // yucky, but works. OS/2 uses this method
             pic_lower_irq(13);
             pic_raise_irq(13);
-            ABORT();
+            //ABORT();
         }
     }
     return 0;
