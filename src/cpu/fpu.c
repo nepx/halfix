@@ -177,7 +177,7 @@ static void fpu_state(void)
     state_field(obj, 2, "fpu.fpu_cs", &fpu.fpu_cs);
     state_field(obj, 2, "fpu.fpu_opcode", &fpu.fpu_opcode);
     state_field(obj, 2, "fpu.fpu_data_seg", &fpu.fpu_data_seg);
-// <<< END AUTOGENERATE "state" >>>
+    // <<< END AUTOGENERATE "state" >>>
     char name[32];
     for (int i = 0; i < 8; i++) {
         sprintf(name, "fpu.st[%d].mantissa", i);
@@ -305,7 +305,8 @@ static void fpu_stack_fault(void)
 
 static uint32_t partial_sw, bits_to_clear;
 
-static void fpu_commit_sw(void){
+static void fpu_commit_sw(void)
+{
     // XXX this is a really, really bad kludge
     fpu.status_word |= partial_sw;
     fpu.status_word &= ~bits_to_clear | partial_sw;
@@ -313,7 +314,8 @@ static void fpu_commit_sw(void){
     partial_sw = 0;
 }
 
-static int fpu_check_exceptions2(int commit_sw){
+static int fpu_check_exceptions2(int commit_sw)
+{
     int flags = fpu.status.float_exception_flags;
     int unmasked_exceptions = (flags & ~fpu.status.float_exception_masks) & 0x3F;
 
@@ -335,9 +337,10 @@ static int fpu_check_exceptions2(int commit_sw){
         flags &= FPU_EXCEPTION_INVALID_OPERATION | FPU_EXCEPTION_ZERO_DIVIDE | FPU_EXCEPTION_DENORMALIZED | FPU_EXCEPTION_STACK_FAULT;
     }
 
-    if(commit_sw)
+    if (commit_sw)
         fpu.status_word |= flags;
-    else partial_sw |= flags;
+    else
+        partial_sw |= flags;
 
     if (unmasked_exceptions) {
         fpu.status_word |= 0x8080;
@@ -408,15 +411,15 @@ static int fpu_check_stack_underflow(int st, int commit_sw)
     int tag = fpu_get_tag(st);
     if (tag == FPU_TAG_EMPTY) {
         fpu_stack_fault();
-        if(commit_sw)
+        if (commit_sw)
             SET_C1(1);
-        else 
+        else
             partial_sw = 1 << 9;
         return 1;
     }
-    if(commit_sw)
+    if (commit_sw)
         SET_C1(0);
-    else 
+    else
         bits_to_clear = 1 << 9;
     return 0;
 }
@@ -495,10 +498,11 @@ static int fpu_check_push(void)
 {
     if (fpu_check_stack_overflow(-1)) {
         fpu_check_exceptions();
-        if(fpu.control_word & FPU_EXCEPTION_INVALID_OPERATION){
+        if (fpu.control_word & FPU_EXCEPTION_INVALID_OPERATION) {
             // masked response
             fpu_push(IndefiniteNaN);
-        }else fpu.status_word |= 0x80; // ?
+        } else
+            fpu.status_word |= 0x80; // ?
         return 1;
     }
     return 0;
@@ -1629,18 +1633,18 @@ int fpu_mem_op(struct decoded_instruction* i, uint32_t virtaddr, uint32_t seg)
             FPU_ABORT();
         // Make sure we didn't cause exception
 
-        for(int i=0;i<9;i++) {
+        for (int i = 0; i < 9; i++) {
             int result = bcd % 10;
             bcd /= 10;
             result |= (bcd % 10) << 4;
-            bcd /= 10; 
+            bcd /= 10;
             cpu_write8(linaddr + i, result, cpu.tlb_shift_write);
         }
 
-            int result = bcd % 10;
-            bcd /= 10;
-            result |= (bcd % 10) << 4;
-            cpu_write8(linaddr + 9, result | (st0.exp >> 8 & 0x80), cpu.tlb_shift_write);
+        int result = bcd % 10;
+        bcd /= 10;
+        result |= (bcd % 10) << 4;
+        cpu_write8(linaddr + 9, result | (st0.exp >> 8 & 0x80), cpu.tlb_shift_write);
 
         fpu_pop();
         break;
@@ -1686,7 +1690,8 @@ int fpu_fxsave(uint32_t linaddr)
     if (fpu_nm_check())
         return 1;
 
-    if(cpu_access_verify(linaddr, linaddr + 288 - 1, cpu.tlb_shift_write)) return 1;
+    if (cpu_access_verify(linaddr, linaddr + 288 - 1, cpu.tlb_shift_write))
+        return 1;
     cpu_write16(linaddr + 0, fpu.control_word, cpu.tlb_shift_write);
     cpu_write16(linaddr + 2, fpu_get_status_word(), cpu.tlb_shift_write);
     // "Abridge" tag word
@@ -1694,8 +1699,8 @@ int fpu_fxsave(uint32_t linaddr)
     for (int i = 0; i < 8; i++)
         if ((fpu.tag_word >> (i * 2) & 3) != FPU_TAG_EMPTY)
             tag |= 1 << i;
-        
-    // Some fields are less than 16 or 32 bits wide, but we write them anyways. 
+
+    // Some fields are less than 16 or 32 bits wide, but we write them anyways.
     // They are filled with zeros.
     cpu_write16(linaddr + 4, tag, cpu.tlb_shift_write);
     cpu_write16(linaddr + 6, fpu.fpu_opcode, cpu.tlb_shift_write);
@@ -1732,7 +1737,8 @@ int fpu_fxrstor(uint32_t linaddr)
         EXCEPTION_GP(0);
     if (fpu_nm_check())
         return 1;
-    if(cpu_access_verify(linaddr, linaddr + 288 - 1, cpu.tlb_shift_read)) return 1;
+    if (cpu_access_verify(linaddr, linaddr + 288 - 1, cpu.tlb_shift_read))
+        return 1;
 
     uint32_t mxcsr;
     cpu_read32(linaddr + 24, mxcsr, cpu.tlb_shift_read);
@@ -1777,9 +1783,9 @@ int fpu_fxrstor(uint32_t linaddr)
 
     // Now find out tag word
     uint16_t tag_word = 0;
-    for(int i=0;i<8;i++){
+    for (int i = 0; i < 8; i++) {
         int tagid = FPU_TAG_EMPTY;
-        if(small_tag_word & (1 << i))
+        if (small_tag_word & (1 << i))
             tagid = fpu_get_tag_from_value(&fpu.st[i]);
         tag_word |= tagid << (i * 2);
     }
