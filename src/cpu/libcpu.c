@@ -357,6 +357,7 @@ int cpu_set_state(int id, uint32_t value)
     }
     return 0;
 }
+
 EXPORT
 void cpu_init_32bit(void)
 {
@@ -369,6 +370,18 @@ void cpu_init_32bit(void)
     // Set translation mode to 32-bit
     cpu.state_hash = 0;
     cpu.memory_size = -1;
+
+    cpu.seg_base[CS] = cpu.seg_base[DS] = cpu.seg_base[SS] = 0;
+    cpu.seg_limit[CS] = cpu.seg_limit[DS] = cpu.seg_limit[SS] = -1;
+
+    // access doesn't matter here.
+}
+void fpu_init_lib(void);
+
+EXPORT
+void cpu_init_fpu(void)
+{
+    fpu_init_lib();
 }
 
 static uint8_t mem[4096];

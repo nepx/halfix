@@ -1864,3 +1864,18 @@ void* fpu_get_st_ptr1(void)
     return &fpu.st[0];
 }
 #endif
+
+#ifdef LIBCPU
+// Initialize FPU state
+void fpu_init_lib(void)
+{
+    // Disable anything that might cause FPU exceptions
+    cpu.cr[0] &= ~(CR0_EM | CR0_TS);
+
+    // Enable FPU exceptions (but they're all masked anyways by fninit)
+    cpu.cr[0] |= CR0_NE;
+
+    // Initialize the FPU
+    fninit();
+}
+#endif

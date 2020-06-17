@@ -56,8 +56,11 @@ int cpu_set_state(int id, uint32_t data);
 // Initialize CPU
 void libcpu_init(void);
 
-// Shortcut to initialize the CPU to 32-bit protected
+// Shortcut to initialize the CPU to 32-bit flat protected mode.
 void cpu_init_32bit(void);
+
+// Shortcut to enable and initialize the FPU
+void cpu_init_fpu(void);
 
 enum {
     // Registers

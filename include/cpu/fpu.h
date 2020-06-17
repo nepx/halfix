@@ -63,4 +63,8 @@ struct fpu {
 extern struct fpu fpu;
 #endif
 
+#ifdef LIBCPU
+void fpu_init_lib(void);
+#endif
+
 #endif
