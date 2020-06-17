@@ -416,7 +416,7 @@ float_class_t float16_class(float16);
 | Software IEC/IEEE floating-point types.
 *----------------------------------------------------------------------------*/
 
-#ifdef BX_BIG_ENDIAN
+#ifdef CFG_BIG_ENDIAN
 typedef struct {	// leave alignment to compiler
     uint16_t exp;
     uint64_t fraction;

@@ -20,7 +20,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags);
 struct fpu {
     union {
 // This is a really nasty union to make MMX instructions work.
-#ifdef BIG_ENDIAN
+#ifdef CFG_BIG_ENDIAN
         struct
         {
             uint16_t dummy;
