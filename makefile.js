@@ -37,6 +37,12 @@ var end_flags = [], fincc_flags = [];
 // flags.push.apply(flags, "-L/usr/lib/x86_64-linux-gnu -lSDL -lSDLmain".split("
 // "));
 end_flags = "-lSDL -lSDLmain -lm -lz".split(" ");
+
+if(os.endianness() === "BE"){
+    console.warn("WARNING: This emulator has not been tested on big-endian platforms and may not work.");
+    flags.push("-DCFG_BIG_ENDIAN");
+}
+
 // XXX: capture live output from allegro-config --shared
 //end_flags.push("-lalleg");
 
