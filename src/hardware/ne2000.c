@@ -7,21 +7,109 @@
 #include "pc.h"
 
 #define NE2K_LOG(x, ...) LOG("NE2K", x, ##__VA_ARGS__)
+#define NE2K_DEBUG(x, ...) LOG("NE2K", x, ##__VA_ARGS__)
 #define NE2K_FATAL(x, ...) FATAL("NE2K", x, ##__VA_ARGS__)
+
+#define CMD_PAGESEL 0xC0
+#define CMD_RWMODE 0x38 // 0: not allowed, 1: remote read, 2: remote write, 4+: abort/dma
+#define CMD_TXP 0x04 // Bit must be set to transmit a packet, cleared internally afterwards
+#define CMD_STA 0x02 // useless
+#define CMD_STP 0x01 // disables packet send/recv
 
 struct ne2000 {
     uint32_t iobase;
     int irq;
+
+    uint8_t mem[256 * 128]; // 128 chunks of 256 bytes each, or 32K
+
+    uint8_t multicast[8];
+    int pagestart, pagestop;
+
+    int cmd;
 } ne2000;
+
+static uint32_t ne2000_read1(uint32_t port)
+{
+    uint8_t retv;
+    switch (port) {
+    case 8 ... 15:
+        retv = ne2000.multicast[port & 7];
+        NE2K_DEBUG("MULTI%d: read %02x\n", port & 7, retv);
+    }
+    return retv;
+}
 
 static uint32_t ne2000_read(uint32_t port)
 {
-    NE2K_FATAL("TODO: read port=%08x\n", port);
+    switch (port & 31) {
+    case 0:
+        NE2K_DEBUG("CMD: read %02x\n", ne2000.cmd);
+        return ne2000.cmd;
+    case 1 ... 15:
+        // Select correct register page
+        switch (ne2000.cmd >> 6 & 3) {
+        case 1:
+            return ne2000_read1(port & 31);
+        default:
+            NE2K_FATAL("todo: (offs %d) implement page %d\n", port & 31, ne2000.cmd >> 6 & 3);
+        }
+        break;
+    default:
+        NE2K_FATAL("TODO: read port=%08x\n", port);
+    }
 }
 
+static void ne2000_write0(uint32_t port, uint32_t data)
+{
+    switch (port) {
+    case 1: // Page start
+        NE2K_DEBUG("PAGE0: PageStart: %02x\n", data);
+        ne2000.pagestart = data;
+        break;
+    case 2: // Page stop
+        NE2K_DEBUG("PAGE0: PageStop: %02x\n", data);
+        ne2000.pagestop = data;
+        break;
+    default:
+        NE2K_FATAL("todo: page0 implement port %d\n", port & 31);
+    }
+}
+static void ne2000_write1(uint32_t port, uint32_t data)
+{
+    switch (port) {
+    case 8 ... 15:
+        ne2000.multicast[port & 7] = data;
+        NE2K_DEBUG("PAGE1: Multicast%d: %02x\n", port & 7, data);
+        break;
+    default:
+        NE2K_FATAL("todo: page0 implement port %d\n", port & 31);
+    }
+}
 static void ne2000_write(uint32_t port, uint32_t data)
 {
-    NE2K_FATAL("TODO: write port=%08x data=%08x\n", port, data);
+    switch (port & 31) {
+    case 0:
+        NE2K_DEBUG("CMD: write %02x\n", data);
+        ne2000.cmd = data;
+        if (!(data & 1)) {
+            NE2K_FATAL("todo\n");
+        }
+        break;
+    case 1 ... 15:
+        switch (ne2000.cmd >> 6 & 3) {
+        case 0:
+            ne2000_write0(port & 31, data);
+            break;
+        case 1:
+            ne2000_write1(port & 31, data);
+            break;
+        default:
+            NE2K_FATAL("todo: (offs %d/data %02x) implement page %d\n", port & 31, data, ne2000.cmd >> 6 & 3);
+        }
+        break;
+    default:
+        NE2K_FATAL("TODO: write port=%08x data=%02x\n", port, data);
+    }
 }
 
 static void ne2000_pci_remap(uint8_t* dev, unsigned int newbase)
