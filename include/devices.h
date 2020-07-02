@@ -15,6 +15,7 @@ void vga_init(struct pc_settings* pc);
 void ide_init(struct pc_settings* pc);
 void fdc_init(struct pc_settings* pc);
 void acpi_init(struct pc_settings* pc);
+void ne2000_init(struct ne2000_settings* conf);
 
 // XXX:
 #define floppy_get_type(id) 0

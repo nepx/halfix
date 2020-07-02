@@ -25,6 +25,15 @@ enum {
     CPU_TYPE_CORE_DUO
 };
 
+struct ne2000_settings
+{
+    int enabled; 
+    int port_base;
+    int pci;
+    int irq;
+    uint8_t mac_address[6];
+};
+
 // Important: do not free this struct or modify values in it after passing it to pc_init
 struct pc_settings
 {
@@ -59,6 +68,8 @@ struct pc_settings
         // If the image is write-protected (note: has nothing to do with the drive_info write-protected bit)
         int write_protected;
     } floppy_settings[2];
+
+    struct ne2000_settings ne2000; 
 
     struct drive_info floppy_drives[2];
 };
