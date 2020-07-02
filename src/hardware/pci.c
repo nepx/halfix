@@ -15,7 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define PCI_LOG(x, ...) LOG("PCI", x, ##__VA_ARGS__)
+#define PCI_LOG(x, ...) NOP() //LOG("PCI", x, ##__VA_ARGS__)
 #define PCI_FATAL(x, ...) FATAL("PCI", x, ##__VA_ARGS__)
 
 #define ROM_READ 1
@@ -72,10 +72,10 @@ static void pci_write(uint32_t addr, uint32_t data)
             int offset = (pci.configuration_address_register & 0xFC) | (addr & 3);
 
             if (bus != 0) {
-                PCI_LOG("Unknown bus id=%d\n", bus);
                 return;
             }
-
+            if (!pci.configuration_modification[device_and_function])
+                return;
             uint8_t* arr = pci.configuration_address_spaces[device_and_function];
             if (!pci.configuration_modification[device_and_function](arr, offset, data))
                 arr[offset] = data;
@@ -90,6 +90,7 @@ static uint32_t pci_read(uint32_t addr)
 {
     int offset = addr & 3;
     uint32_t retval = -1;
+    printf("%08x %08x\n", addr, pci.configuration_address_register);
     switch (addr & ~3) {
     case 0xCF8: // PCI Status Register
         return pci.configuration_address_register >> (offset * 8) & 0xFF;
@@ -101,7 +102,6 @@ static uint32_t pci_read(uint32_t addr)
             int offset = pci.configuration_address_register & 0xFC;
 
             if (bus != 0) {
-                PCI_LOG("Unknown bus id=%d\n", bus);
                 return -1;
             }
 
@@ -110,6 +110,7 @@ static uint32_t pci_read(uint32_t addr)
                 retval = ptr[offset | (addr & 3)];
             else
                 retval = -1;
+            printf("%d=device_and_function addr=%08x = data=%08x\n", device_and_function, addr, retval);
             //pci.status_register = ~retval & 0x80000000; // ~(uint8_t value) & 0x80000000 == 0x80000000 and ~(-1) & 0x80000000 == 0
         }
         return retval;
@@ -203,7 +204,6 @@ static const uint8_t configuration_space_82441fx[128] = {
 
     // Everything from 128 and on is a zero.
 };
-
 
 // The difference between this function and pci_mark_rom_area is that this one logs accesses
 static void pci_set_rw(uint32_t addr, int access_bits)
@@ -453,6 +453,7 @@ static int pci_82371sb_isa_write(uint8_t* ptr, uint8_t addr, uint8_t data)
     return retval;
 }
 
+#define DEV_82371SB_ID 1
 static void pci_82371sb_isa_init(void)
 {
     void* ptr = pci_create_device(0, 1, 0, pci_82371sb_isa_write);
@@ -510,7 +511,7 @@ static int pci_82371sb_ide_write(uint8_t* ptr, uint8_t addr, uint8_t data)
     // TODO: Implement some functionality
     uint8_t res = data;
     int retval = 0;
-    uint32_t old_bar4 = *((uint32_t *)(ptr + 0x20)), new_bar4;
+    uint32_t old_bar4 = *((uint32_t *)(ptr + 0x20)) & 0xFFFC, new_bar4;
     switch (addr) {
     case 0 ... 3:
     case 8 ... 12:
@@ -521,19 +522,22 @@ static int pci_82371sb_ide_write(uint8_t* ptr, uint8_t addr, uint8_t data)
         retval = 1;
         break;
     case 0x20:
-        res = (data & 0xFC) | 1; // Bit 0 must always be set to one to signify I/O address
+        res |= 1;
+        //res = (data & 0xFC) | 1; // Bit 0 must always be set to one to signify I/O address
         retval = 1;
         break;
     case 0x22 ... 0x23:
         // Upper 15 bits of PRDT register are hard-wired to zero
-        res = 0;
+        //res = 0;
         retval = 1;
         break;
     }
     ptr[addr] = res;
-    new_bar4 = *((uint32_t*)(ptr + 0x20));
-    if (old_bar4 != new_bar4 && addr == 0x23) // Only update PRDT on last byte write
+    new_bar4 = *((uint32_t*)(ptr + 0x20)) & 0xFFFC;
+    if (old_bar4 != new_bar4 && addr == 0x23) { // Only update PRDT on last byte write
+        PCI_LOG("Remapping PRDT to %04x\n", new_bar4);
         pci_82371sb_ide_remap(old_bar4);
+    }
 
     return retval;
 }
@@ -600,7 +604,6 @@ static void pci_state(void)
             n++;
     }
     // <<< BEGIN AUTOGENERATE "state" >>>
-    // Auto-generated on Wed Oct 09 2019 13:00:43 GMT-0700 (PDT)
     struct bjson_object* obj = state_obj("pci", 3 + n);
     state_field(obj, 4, "pci.configuration_address_register", &pci.configuration_address_register);
     state_field(obj, 4, "pci.configuration_cycle", &pci.configuration_cycle);
@@ -632,4 +635,21 @@ void pci_init(struct pc_settings* pc)
     pci_82441fx_init();
     pci_82371sb_isa_init();
     pci_82371sb_ide_init();
+}
+
+void pci_set_irq_line(int dev, int state)
+{
+    uint8_t *config = pci.configuration_address_spaces[dev & 0xFF], *config2 = pci.configuration_address_spaces[DEV_82371SB_ID];
+    if (!config)
+        PCI_FATAL("Trying to raise IRQ line for non-existent device!\n");
+
+    int pin = config[0x3D] - 1,
+        dev = (uint8_t)((dev >> 3) - 1),
+        fudge = (state == 0) << 1, // if (lower) fudge = 2; else fudge = 0
+        pin_offset = 0x60 + ((pin + dev - fudge) & 3);
+
+    if (state)
+        pic_raise_irq(config2[pin_offset]);
+    else
+        pic_lower_irq(config2[pin_offset]);
 }

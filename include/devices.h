@@ -63,6 +63,7 @@ typedef int (*pci_conf_write_cb)(uint8_t* ptr, uint8_t addr, uint8_t data);
 void pci_init(struct pc_settings* pc);
 void pci_init_mem(void*);
 void* pci_create_device(uint32_t bus, uint32_t device, uint32_t function, pci_conf_write_cb cb);
+void pci_set_irq_line(int dev, int state);
 
 // PCI IDE support
 void ide_write_prdt(uint32_t addr, uint32_t data);
