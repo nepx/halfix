@@ -110,7 +110,6 @@ static uint32_t pci_read(uint32_t addr)
                 retval = ptr[offset | (addr & 3)];
             else
                 retval = -1;
-            printf("%d=device_and_function addr=%08x = data=%08x\n", device_and_function, addr, retval);
             //pci.status_register = ~retval & 0x80000000; // ~(uint8_t value) & 0x80000000 == 0x80000000 and ~(-1) & 0x80000000 == 0
         }
         return retval;
@@ -205,10 +204,6 @@ static const uint8_t configuration_space_82441fx[128] = {
     // Everything from 128 and on is a zero.
 };
 
-#ifdef BOCHS_BUILD
-void bochs_stuff(uint32_t, int);
-#endif
-
 // The difference between this function and pci_mark_rom_area is that this one logs accesses
 static void pci_set_rw(uint32_t addr, int access_bits)
 {
@@ -232,10 +227,6 @@ static void pci_set_rw(uint32_t addr, int access_bits)
     PCI_LOG("Setting permissions at address %08x to %s\n", addr, str);
 #endif
     pci.rom_area_memory_mapping[(addr - 0xC0000) >> 14] = access_bits;
-
-#ifdef BOCHS_BUILD
-    bochs_stuff(addr, access_bits);
-#endif
 
 #ifdef INSTRUMENT
     cpu_instrument_memory_permissions_changed(addr, access_bits);
