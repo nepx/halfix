@@ -205,6 +205,10 @@ static const uint8_t configuration_space_82441fx[128] = {
     // Everything from 128 and on is a zero.
 };
 
+#ifdef BOCHS_BUILD
+void bochs_stuff(uint32_t, int);
+#endif
+
 // The difference between this function and pci_mark_rom_area is that this one logs accesses
 static void pci_set_rw(uint32_t addr, int access_bits)
 {
@@ -228,6 +232,10 @@ static void pci_set_rw(uint32_t addr, int access_bits)
     PCI_LOG("Setting permissions at address %08x to %s\n", addr, str);
 #endif
     pci.rom_area_memory_mapping[(addr - 0xC0000) >> 14] = access_bits;
+
+#ifdef BOCHS_BUILD
+    bochs_stuff(addr, access_bits);
+#endif
 
 #ifdef INSTRUMENT
     cpu_instrument_memory_permissions_changed(addr, access_bits);
@@ -644,9 +652,9 @@ void pci_set_irq_line(int dev, int state)
         PCI_FATAL("Trying to raise IRQ line for non-existent device!\n");
 
     int pin = config[0x3D] - 1,
-        dev = (uint8_t)((dev >> 3) - 1),
+        devN = (uint8_t)((dev >> 3) - 1),
         fudge = (state == 0) << 1, // if (lower) fudge = 2; else fudge = 0
-        pin_offset = 0x60 + ((pin + dev - fudge) & 3);
+        pin_offset = 0x60 + ((pin + devN - fudge) & 3);
 
     if (state)
         pic_raise_irq(config2[pin_offset]);
