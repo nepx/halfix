@@ -4,6 +4,7 @@
 // https://web.archive.org/web/20000229212715/https://www.national.com/pf/DP/DP8390D.html
 // https://www.cs.usfca.edu/~cruse/cs326/RTL8139_ProgrammersGuide.pdf
 #include "devices.h"
+#include "io.h"
 #include "pc.h"
 
 #define NE2K_LOG(x, ...) LOG("NE2K", x, ##__VA_ARGS__)
@@ -16,17 +17,65 @@
 #define CMD_STA 0x02 // useless
 #define CMD_STP 0x01 // disables packet send/recv
 
+#define ISR_PRX 0x01 // Packet received
+#define ISR_PTX 0x02 // Packet transmitted
+#define ISR_RXE 0x04 // Receive error
+#define ISR_TXE 0x08 // Transmit error
+#define ISR_OVW 0x10 // Overwrite error
+#define ISR_CNT 0x20 // Counter overflow
+#define ISR_RDC 0x40 // Remote DMA done
+#define ISR_RST 0x80 // Reset state
+
 struct ne2000 {
     uint32_t iobase;
     int irq;
 
     uint8_t mem[256 * 128]; // 128 chunks of 256 bytes each, or 32K
 
+    // Tally counters -- for when things go wrong
+    uint8_t cntr[2];
+
+    // Some more registers
+    uint8_t isr, dcr, imr, rcr, tcr;
+
+    uint16_t rbcr, rsar;
+
     uint8_t multicast[8];
     int pagestart, pagestop;
 
     int cmd;
 } ne2000;
+
+static void ne2000_reset_internal(int software)
+{
+    if (software) {
+        ne2000.isr = ISR_RST;
+        return;
+    }
+}
+static void ne2000_reset(void)
+{
+    ne2000_reset_internal(0);
+}
+
+static uint32_t ne2000_read0(uint32_t port)
+{
+    uint8_t retv;
+    switch (port) {
+    case 7:
+        retv = ne2000.isr;
+        NE2K_DEBUG("ISR read: %02x\n", retv);
+        break;
+    case 13:
+    case 14:
+        retv = ne2000.cntr[~port & 1];
+        NE2K_DEBUG("CNTR%d: read %02x\n", port & 7, retv);
+        break;
+    default:
+        NE2K_FATAL("PAGE0 read %02x\n", port);
+    }
+    return retv;
+}
 
 static uint32_t ne2000_read1(uint32_t port)
 {
@@ -48,12 +97,16 @@ static uint32_t ne2000_read(uint32_t port)
     case 1 ... 15:
         // Select correct register page
         switch (ne2000.cmd >> 6 & 3) {
+        case 0:
+            return ne2000_read0(port & 31);
         case 1:
             return ne2000_read1(port & 31);
         default:
-            NE2K_FATAL("todo: (offs %d) implement page %d\n", port & 31, ne2000.cmd >> 6 & 3);
+            NE2K_FATAL("todo: (offs %02x) implement page %d\n", port & 31, ne2000.cmd >> 6 & 3);
         }
         break;
+    case 31:
+        return 0;
     default:
         NE2K_FATAL("TODO: read port=%08x\n", port);
     }
@@ -63,12 +116,48 @@ static void ne2000_write0(uint32_t port, uint32_t data)
 {
     switch (port) {
     case 1: // Page start
-        NE2K_DEBUG("PAGE0: PageStart: %02x\n", data);
+        NE2K_DEBUG("PageStart write: %02x\n", data);
         ne2000.pagestart = data;
         break;
     case 2: // Page stop
-        NE2K_DEBUG("PAGE0: PageStop: %02x\n", data);
+        NE2K_DEBUG("PageStop write: %02x\n", data);
         ne2000.pagestop = data;
+        break;
+    case 7: // ISR
+        NE2K_DEBUG("ISR write: %02x\n", data);
+        ne2000.isr = data;
+        break;
+    case 8: // Remote start address register
+        NE2K_DEBUG("RSAR low: %02x\n", data);
+        ne2000.rsar = (ne2000.rsar & 0xFF00) | data;
+        break;
+    case 9: // Remote start address register
+        NE2K_DEBUG("RSAR high: %02x\n", data);
+        ne2000.rsar = (ne2000.rsar & 0x00FF) | (data << 8);
+        break;
+    case 10: // Remote byte count register
+        NE2K_DEBUG("RBCR low: %02x\n", data);
+        ne2000.rbcr = (ne2000.rbcr & 0xFF00) | data;
+        break;
+    case 11:
+        NE2K_DEBUG("RBCR high: %02x\n", data);
+        ne2000.rbcr = (ne2000.rbcr & 0x00FF) | (data << 8);
+        break;
+    case 12: // Receive configuration register
+        NE2K_DEBUG("RCR: %02x\n", data);
+        ne2000.rcr = data;
+        break;
+    case 13: // Transmit configuration register
+        NE2K_DEBUG("TCR: %02x\n", data);
+        ne2000.tcr = data;
+        break;
+    case 14: // Data configuration register
+        NE2K_DEBUG("DCR write: %02x\n", data);
+        ne2000.dcr = data;
+        break;
+    case 15: // Interrupt mask register
+        NE2K_DEBUG("IMBR write: %02x\n", data);
+        ne2000.imr = data;
         break;
     default:
         NE2K_FATAL("todo: page0 implement port %d\n", port & 31);
@@ -92,7 +181,7 @@ static void ne2000_write(uint32_t port, uint32_t data)
         NE2K_DEBUG("CMD: write %02x\n", data);
         ne2000.cmd = data;
         if (!(data & 1)) {
-            NE2K_FATAL("todo\n");
+            break; // TODO
         }
         break;
     case 1 ... 15:
@@ -107,6 +196,10 @@ static void ne2000_write(uint32_t port, uint32_t data)
             NE2K_FATAL("todo: (offs %d/data %02x) implement page %d\n", port & 31, data, ne2000.cmd >> 6 & 3);
         }
         break;
+    case 31: // Reset port
+        NE2K_LOG("Software reset\n");
+        ne2000_reset_internal(1);
+        break;
     default:
         NE2K_FATAL("TODO: write port=%08x data=%02x\n", port, data);
     }
@@ -120,8 +213,9 @@ static void ne2000_pci_remap(uint8_t* dev, unsigned int newbase)
 
         io_unregister_read(ne2000.iobase, 32);
         io_unregister_write(ne2000.iobase, 32);
-        io_register_read(newbase, 16, ne2000_read, NULL, NULL);
-        io_register_write(newbase, 16, ne2000_write, NULL, NULL);
+        io_register_read(newbase, 32, ne2000_read, NULL, NULL);
+        io_register_write(newbase, 32, ne2000_write, NULL, NULL);
+        //io_register_write(newbase + 31, 1, NULL, ne2000_write, NULL);
 
         ne2000.iobase = newbase;
         NE2K_LOG("Remapped controller to 0x%x\n", ne2000.iobase);
@@ -185,6 +279,21 @@ void ne2000_init(struct ne2000_settings* conf)
     if (conf->irq == 0)
         conf->irq = 3;
 
+    // If our mac address is all zeros, then create a new one
+    int macsum = 0;
+    for (int i = 0; i < 6; i++)
+        macsum |= conf->mac_address[i];
+    
+    if (macsum == 0) {
+        // XXX - we hard-code this now to make our code output deterministic. 
+        conf->mac_address[0] = 0x12;
+        conf->mac_address[1] = 0x34;
+        conf->mac_address[2] = 0x56;
+        conf->mac_address[3] = 0x78;
+        conf->mac_address[4] = 0x9A;
+        conf->mac_address[5] = 0xBC;
+    }
+
     if (conf->pci) {
         ne2000_pci_init(conf);
     } else {
@@ -192,5 +301,8 @@ void ne2000_init(struct ne2000_settings* conf)
         ne2000.irq = conf->irq & 15;
         io_register_read(0x300, 32, ne2000_read, NULL, NULL);
         io_register_write(0x300, 32, ne2000_write, NULL, NULL);
+        //io_register_write(0x300 + 31, 1, NULL, ne2000_write, NULL);
     }
+
+    io_register_reset(ne2000_reset);
 }
