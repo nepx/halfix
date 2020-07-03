@@ -51,6 +51,18 @@ struct ne2000 {
     // Remote byte count register (RBCR), remote start address register (RSAR)
     uint16_t rbcr, rsar;
 
+    // Transfer page start register
+    int tpsr;
+
+    // Boundary pointer
+    int bnry;
+
+    // Current page register
+    int curr;
+
+    // Physical address registers
+    uint8_t par[6];
+
     uint8_t multicast[8];
     int pagestart, pagestop;
 
@@ -62,6 +74,10 @@ static void ne2000_reset_internal(int software)
     if (software) {
         ne2000.isr = ISR_RST;
         return;
+    } else {
+        ne2000.pagestart = 0x40 << 8;
+        ne2000.pagestop = 0x80 << 8;
+        ne2000.bnry = 0x4C << 8;
     }
 }
 static void ne2000_reset(void)
@@ -113,6 +129,10 @@ static uint32_t ne2000_read0(uint32_t port)
 {
     uint8_t retv;
     switch (port) {
+    case 3: // Boundary pointer
+        retv = ne2000.bnry;
+        NE2K_DEBUG("Boundary read: %02x\n", retv);
+        break;
     case 7:
         retv = ne2000.isr;
         NE2K_DEBUG("ISR read: %02x\n", retv);
@@ -132,9 +152,18 @@ static uint32_t ne2000_read1(uint32_t port)
 {
     uint8_t retv;
     switch (port) {
+    case 1 ... 6:
+        retv = ne2000.par[port - 1];
+        NE2K_DEBUG("PAR%d: read %02x\n", port - 1, retv);
+        break;
+    case 7:
+        retv = ne2000.curr;
+        NE2K_DEBUG("CURR: read %02x\n", retv);
+        break;
     case 8 ... 15:
         retv = ne2000.multicast[port & 7];
         NE2K_DEBUG("MULTI%d: read %02x\n", port & 7, retv);
+        break;
     }
     return retv;
 }
@@ -203,6 +232,14 @@ static void ne2000_write0(uint32_t port, uint32_t data)
         NE2K_DEBUG("PageStop write: %02x\n", data);
         ne2000.pagestop = (data << 8) & 0xFF00;
         break;
+    case 3: // Boundary pointer
+        NE2K_DEBUG("Boundary write: %02x\n", data);
+        ne2000.bnry = data;
+        break;
+    case 4:
+        NE2K_DEBUG("TPSR: %02x\n", data);
+        ne2000.tpsr = (data << 8) & 0xFF00;
+        break;
     case 7: // ISR
         NE2K_DEBUG("ISR write: %02x\n", data);
         ne2000.isr = data;
@@ -246,12 +283,20 @@ static void ne2000_write0(uint32_t port, uint32_t data)
 static void ne2000_write1(uint32_t port, uint32_t data)
 {
     switch (port) {
+    case 1 ... 6:
+        ne2000.par[port - 1] = data;
+        NE2K_DEBUG("PAR%d: %02x\n", port - 1, data);
+        break;
+    case 7:
+        ne2000.curr = data;
+        NE2K_DEBUG("CURR: read %02x\n", data);
+        break;
     case 8 ... 15:
         ne2000.multicast[port & 7] = data;
-        NE2K_DEBUG("PAGE1: Multicast%d: %02x\n", port & 7, data);
+        NE2K_DEBUG("Multicast%d: %02x\n", port & 7, data);
         break;
     default:
-        NE2K_FATAL("todo: page0 implement port %d\n", port & 31);
+        NE2K_FATAL("todo: page1 implement port %d\n", port & 31);
     }
 }
 static void ne2000_write(uint32_t port, uint32_t data)
