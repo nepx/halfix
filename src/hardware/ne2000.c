@@ -26,6 +26,16 @@
 #define ISR_RDC 0x40 // Remote DMA done
 #define ISR_RST 0x80 // Reset state
 
+#define DCR_WTS 0x01 // Word transfer select
+#define DCR_BOS 0x02 // Byte order select
+#define DCR_LAS 0x04 // Long address select
+#define DCR_LS 0x08 // Loopback select
+#define DCR_AR 0x10 // Auto-init remote
+#define DCR_FIFO_THRESH 0x60 // FIFO threshold
+
+#define NE2K_DEVID 5
+
+#define NE2K_MEMSZ (32 << 10)
 struct ne2000 {
     uint32_t iobase;
     int irq;
@@ -38,6 +48,7 @@ struct ne2000 {
     // Some more registers
     uint8_t isr, dcr, imr, rcr, tcr;
 
+    // Remote byte count register (RBCR), remote start address register (RSAR)
     uint16_t rbcr, rsar;
 
     uint8_t multicast[8];
@@ -56,6 +67,46 @@ static void ne2000_reset_internal(int software)
 static void ne2000_reset(void)
 {
     ne2000_reset_internal(0);
+}
+
+static void ne2000_trigger_irq(int flag)
+{
+    ne2000.isr |= flag;
+    if ((ne2000.isr ^ ne2000.imr) & flag) // ISR/IMR bits differ (ISR has been set, but IMR isn't)
+        return;
+
+    // XXX -- the PIC doesn't support edge/level triggered interrupts yet, so we simulate it this way
+    pci_set_irq_line(NE2K_DEVID, 0);
+    pci_set_irq_line(NE2K_DEVID, 1);
+}
+
+static uint32_t ne2000_asio_mem_read(void)
+{
+    if (!(ne2000.dcr & DCR_WTS)) { // Byte-sized DMA transfers
+        if (ne2000.rsar >= NE2K_MEMSZ) // Ignore out of bounds accesses
+            return 0xFF;
+        uint8_t data = ne2000.mem[ne2000.rsar++];
+        ne2000.rbcr--;
+        if (!ne2000.rbcr)
+            ne2000_trigger_irq(ISR_RDC);
+        return data;
+    } else { // Word-sized DMA transfers
+        if (ne2000.rsar & 1) {
+            NE2K_LOG("Unaligned RSAR -- forcing alignment\n");
+            // In the manual, it says that A0 is forced to zero
+            ne2000.rsar &= ~1;
+        }
+        if (ne2000.rsar >= NE2K_MEMSZ) // Ignore out of bounds accesses
+            return 0xFFFF;
+        uint16_t data = ne2000.mem[ne2000.rsar] | (ne2000.mem[ne2000.rsar + 1] << 8);
+
+        ne2000.rsar += 2;
+        ne2000.rbcr -= 2;
+
+        if (!ne2000.rbcr)
+            ne2000_trigger_irq(ISR_RDC);
+        return data;
+    }
 }
 
 static uint32_t ne2000_read0(uint32_t port)
@@ -105,10 +156,39 @@ static uint32_t ne2000_read(uint32_t port)
             NE2K_FATAL("todo: (offs %02x) implement page %d\n", port & 31, ne2000.cmd >> 6 & 3);
         }
         break;
+    case 16: // ASIO data read port
+        return ne2000_asio_mem_read();
     case 31:
         return 0;
     default:
         NE2K_FATAL("TODO: read port=%08x\n", port);
+    }
+}
+
+// Intended for port +0x10
+static uint32_t ne2000_read_mem16(uint32_t port)
+{
+    UNUSED(port);
+    if (ne2000.dcr & DCR_WTS)
+        return ne2000_asio_mem_read();
+    else {
+        int retval = ne2000_asio_mem_read();
+        return retval | (ne2000_asio_mem_read() << 8);
+    }
+}
+static uint32_t ne2000_read_mem32(uint32_t port)
+{
+    UNUSED(port);
+    if (ne2000.dcr & DCR_WTS) {
+        int retval = ne2000_asio_mem_read();
+        retval |= ne2000_asio_mem_read() << 16;
+        return retval;
+    } else {
+        int retval = ne2000_asio_mem_read();
+        retval |= ne2000_asio_mem_read() << 8;
+        retval |= ne2000_asio_mem_read() << 16;
+        retval |= ne2000_asio_mem_read() << 24;
+        return retval;
     }
 }
 
@@ -117,11 +197,11 @@ static void ne2000_write0(uint32_t port, uint32_t data)
     switch (port) {
     case 1: // Page start
         NE2K_DEBUG("PageStart write: %02x\n", data);
-        ne2000.pagestart = data;
+        ne2000.pagestart = (data << 8) & 0xFF00;
         break;
     case 2: // Page stop
         NE2K_DEBUG("PageStop write: %02x\n", data);
-        ne2000.pagestop = data;
+        ne2000.pagestop = (data << 8) & 0xFF00;
         break;
     case 7: // ISR
         NE2K_DEBUG("ISR write: %02x\n", data);
@@ -156,11 +236,11 @@ static void ne2000_write0(uint32_t port, uint32_t data)
         ne2000.dcr = data;
         break;
     case 15: // Interrupt mask register
-        NE2K_DEBUG("IMBR write: %02x\n", data);
+        NE2K_DEBUG("IMR write: %02x\n", data);
         ne2000.imr = data;
         break;
     default:
-        NE2K_FATAL("todo: page0 implement port %d\n", port & 31);
+        NE2K_FATAL("todo: page0 implement write %d\n", port & 31);
     }
 }
 static void ne2000_write1(uint32_t port, uint32_t data)
@@ -215,6 +295,7 @@ static void ne2000_pci_remap(uint8_t* dev, unsigned int newbase)
         io_unregister_write(ne2000.iobase, 32);
         io_register_read(newbase, 32, ne2000_read, NULL, NULL);
         io_register_write(newbase, 32, ne2000_write, NULL, NULL);
+        io_register_read(newbase + 16, 1, ne2000_read, ne2000_read_mem16, ne2000_read_mem32);
         //io_register_write(newbase + 31, 1, NULL, ne2000_write, NULL);
 
         ne2000.iobase = newbase;
@@ -263,7 +344,7 @@ static const uint8_t ne2000_config_space[16] = {
 
 static void ne2000_pci_init(struct ne2000_settings* conf)
 {
-    uint8_t* dev = pci_create_device(0, 5, 0, ne2000_pci_write);
+    uint8_t* dev = pci_create_device(0, NE2K_DEVID, 0, ne2000_pci_write);
     pci_copy_default_configuration(dev, (void*)ne2000_config_space, 16);
 
     dev[0x3D] = 1;
@@ -283,15 +364,24 @@ void ne2000_init(struct ne2000_settings* conf)
     int macsum = 0;
     for (int i = 0; i < 6; i++)
         macsum |= conf->mac_address[i];
-    
+
     if (macsum == 0) {
-        // XXX - we hard-code this now to make our code output deterministic. 
+        // XXX - we hard-code this now to make our code output deterministic.
         conf->mac_address[0] = 0x12;
         conf->mac_address[1] = 0x34;
         conf->mac_address[2] = 0x56;
         conf->mac_address[3] = 0x78;
         conf->mac_address[4] = 0x9A;
         conf->mac_address[5] = 0xBC;
+    }
+
+    for (int i = 0; i < 8; i++) {
+        int val;
+        if (i == 7)
+            val = 0x57;
+        else
+            val = conf->mac_address[i];
+        ne2000.mem[i << 1] = ne2000.mem[(i << 1) | 1] = val;
     }
 
     if (conf->pci) {
@@ -301,6 +391,7 @@ void ne2000_init(struct ne2000_settings* conf)
         ne2000.irq = conf->irq & 15;
         io_register_read(0x300, 32, ne2000_read, NULL, NULL);
         io_register_write(0x300, 32, ne2000_write, NULL, NULL);
+        io_register_read(0x300 + 16, 1, ne2000_read, ne2000_read_mem16, ne2000_read_mem32);
         //io_register_write(0x300 + 31, 1, NULL, ne2000_write, NULL);
     }
 
