@@ -947,7 +947,7 @@ int fpu_reg_op(struct decoded_instruction* i, uint32_t flags)
                     SET_C0(0);
                     SET_C2(0);
                     SET_C3(0);
-                    if (flags) {
+                    if (temp2 > 0) {
                         SET_C2(1);
                     } else {
                         // 1 2 4 - 1 3 0
