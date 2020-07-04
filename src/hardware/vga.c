@@ -788,7 +788,6 @@ bit   0  If set Color Emulation. Base Address=3Dxh else Mono Emulation. Base
             case 1:
                 VGA_LOG("End Horizontal Display: %02x\n", data);
                 vga_update_size();
-                if(vga.total_width == 9) __asm__("int3");
                 break;
             case 2:
                 VGA_LOG("Start Horizontal Blanking: %02x\n", data);
@@ -1295,7 +1294,7 @@ static
 
     addr -= vga.vram_window_base;
     if (addr > vga.vram_window_size) { // Note: will catch the case where addr < vram_window_base as well
-        VGA_LOG("Out Of Bounds VRAM read: %08x [original: %08x]\n", addr, addr + vga.vram_window_base);
+        //VGA_LOG("Out Of Bounds VRAM read: %08x [original: %08x]\n", addr, addr + vga.vram_window_base);
         return -1;
     }
     // Fill Latches with data from all 4 planes
@@ -1392,7 +1391,7 @@ static
 
     addr -= vga.vram_window_base;
     if (addr > vga.vram_window_size) { // Note: will catch the case where addr < vram_window_base as well
-        VGA_LOG("Out Of Bounds VRAM write: addr=%08x data=%02x\n", addr, data);
+        //VGA_LOG("Out Of Bounds VRAM write: addr=%08x data=%02x\n", addr, data);
         return;
     }
     int plane = 0, plane_addr = -1;
