@@ -350,6 +350,10 @@ static uint32_t menubar_width = 0, menubar_overflow = 0, menubar_overscan = 0x70
 typedef void (*topmenu_cb_t)(int);
 typedef void (*menu_click_cb)(void);
 
+enum {
+    FILE_QUIT
+};
+
 #define MAX_MENUBAR_ITEMS 10
 #define MAX_SUBWINDOWS 5
 static struct menubar {
@@ -361,7 +365,8 @@ static struct menubar {
     topmenu_cb_t cbclick;
 } menubar[MAX_MENUBAR_ITEMS];
 
-static void blit_chr(uint8_t chrpnt, uint8_t attr, uint32_t* pix, uint32_t offsz)
+// Blit 'chrpnt' with attributes 'attr' to framebuffer 'pix' with width 'w' at offset 'offsz.'
+static void blit_chr(uint8_t chrpnt, uint8_t attr, uint32_t* pix, uint32_t offsz, int w)
 {
     uint32_t fg = vga_colors[attr & 15],
              bg = vga_colors[attr >> 4 & 15],
@@ -396,18 +401,53 @@ static struct subwindow {
 } subwindows[MAX_SUBWINDOWS];
 static int num_subwindows = 0;
 
-static void window_update_pixbuf(struct subwindow* sw)
+static void render_windows(void)
 {
-    for (int i = 0; i < sw->ch; i++) {
-        int cpos = i * sw->cw;
-        for (int j = 0; j < sw->ch; j++) {
-            int offsz = (cpos + j) * (CHAR_WIDTH * CHAR_HEIGHT);
-            int cpos2 = (cpos + j) << 1;
-            blit_chr(sw->textbuf[cpos2 | 1], sw->textbuf[cpos], sw->pixbuf, offsz);
+    uint32_t* pix = surface->pixels;
+    for (int i = 0; i < num_subwindows; i++) {
+        struct subwindow* sw = &subwindows[i];
+
+        // Copy each scanline to the pixel buffer
+        int pos = (w * sw->y) + sw->x;
+
+        if (sw->x >= w || sw->y >= h)
+            continue;
+
+        // Figure out how many pixels per line we're going to copy
+        int line_length = sw->w;
+        if ((line_length + sw->x) > w) // If we go past the end of the screeen, simply truncate the screen
+            line_length = w - sw->x; // i.e. if width was 640 pixels and we wanted to draw from 630 to 655, we'd draw 640 - 630 = 10 pixels and discard the other 655 - 640 = 15
+
+        int scanlines = sw->h; // same thing for height
+        if ((scanlines + sw->y) > h)
+            scanlines = h - sw->y;
+
+        int sw_pos = 0;
+
+        for (int j = 0; j < scanlines; j++) {
+            memcpy(&pix[pos], &sw->pixbuf[sw_pos], line_length * SCREEN_BYTPP);
+
+            // Advance to next scanline
+            sw_pos += sw->w;
+            pos += w;
         }
     }
 }
 
+static void window_update_pixbuf(struct subwindow* sw)
+{
+    for (int i = 0; i < sw->ch; i++) {
+        int cpos = i * sw->cw;
+        for (int j = 0; j < sw->cw; j++) {
+            int offsz = i * (CHAR_WIDTH * CHAR_HEIGHT * sw->cw) + j * CHAR_WIDTH;
+            int cpos2 = (cpos + j) << 1;
+            blit_chr(sw->textbuf[cpos2 | 0], sw->textbuf[cpos | 1], sw->pixbuf, offsz, sw->w);
+        }
+    }
+}
+
+// w=5
+// h=10
 static int create_subwindow(int chrwidth, int chrheight, int x, int y)
 {
     // Find first free subwindow
@@ -452,6 +492,8 @@ static void destroy_subwindow(int id)
         free(sw->pixbuf);
         free(sw->textbuf);
         sw->visible = 0;
+        if (num_subwindows == (id + 1))
+            num_subwindows--;
     }
 }
 
@@ -463,11 +505,11 @@ static void display_blit_menubar(void)
 
     // Draw characters, one by one, like the VGA alphanumeric renderer
     for (unsigned int i = 0; i < menubar_width; i++) {
-        uint8_t atrchr = menubar_textbuffer[i << 1],
-                chrpnt = menubar_textbuffer[(i << 1) | 1];
+        uint8_t atrchr = menubar_textbuffer[(i << 1) | 1],
+                chrpnt = menubar_textbuffer[(i << 1) | 0];
 
         int offsz = i * CHAR_WIDTH;
-        blit_chr(chrpnt, atrchr, pix, offsz);
+        blit_chr(chrpnt, atrchr, pix, offsz, w);
     }
     UNUSED(menubar_overscan);
     display_update(0, h);
@@ -490,7 +532,7 @@ static void menubar_blur(int index)
 {
     struct menubar* menu = &menubar[index];
     for (int i = 0; i < menu->cwidth; i++) {
-        menubar_textbuffer[(menu->cpos + i) << 1] = 0x70;
+        menubar_textbuffer[((menu->cpos + i) << 1) | 1] = 0x70;
     }
     menubar_idx_focus = -1;
     display_blit_menubar();
@@ -499,7 +541,7 @@ static void menubar_focus(int index)
 {
     struct menubar* menu = &menubar[index];
     for (int i = 0; i < menu->cwidth; i++) {
-        menubar_textbuffer[(menu->cpos + i) << 1] = 0x07;
+        menubar_textbuffer[((menu->cpos + i) << 1) | 1] = 0x07;
     }
     menubar_idx_focus = index;
     display_blit_menubar();
@@ -524,11 +566,11 @@ static void realloc_menubar_size(int width)
     // Fill our menu bar with stuff
 
     // Window corner icon
-    menubar_textbuffer[0] = 0x03;
-    menubar_textbuffer[1] = 15;
+    menubar_textbuffer[1] = 0x03;
+    menubar_textbuffer[0] = 15;
     for (unsigned int i = 1; i < new_menubar_width; i++) {
-        menubar_textbuffer[i << 1] = 0x70; // fg black, bg gray
-        menubar_textbuffer[(i << 1) | 1] = ' ';
+        menubar_textbuffer[(i << 1) | 1] = 0x70; // fg black, bg gray
+        menubar_textbuffer[(i << 1)] = ' ';
     }
 
     for (int i = 0; i < MAX_MENUBAR_ITEMS; i++) {
@@ -536,18 +578,116 @@ static void realloc_menubar_size(int width)
             continue;
         int rpos = menubar[i].cpos << 1, len = strlen(menubar[i].name);
         // Add spacer before
-        menubar_textbuffer[rpos++] = 0x70;
         menubar_textbuffer[rpos++] = ' ';
+        menubar_textbuffer[rpos++] = 0x70;
 
         // Copy menu entry
         for (int j = 0; j < len; j++) {
-            menubar_textbuffer[rpos++] = 0x70;
             menubar_textbuffer[rpos++] = menubar[i].name[j];
+            menubar_textbuffer[rpos++] = 0x70;
         }
 
-        menubar_textbuffer[rpos++] = 0x70;
         menubar_textbuffer[rpos++] = ' ';
+        menubar_textbuffer[rpos++] = 0x70;
     }
+}
+
+#define PUTCHR(a, ps, c, attr)   \
+    do {                         \
+        a[(ps) << 1] = c;        \
+        a[(ps) << 1 | 1] = attr; \
+    } while (0)
+#define THICK_MASK_TOP 1
+#define THICK_MASK_LEFT 2
+#define THICK_MASK_RIGHT 4
+#define THICK_MASK_BOTTOM 8
+// Draw a border around the window 'sw.' A bitmask in 'thick' decides whether the border should be thick (double-lined) or not.
+// https://en.wikipedia.org/wiki/Box-drawing_character#DOS
+static void draw_window_border(struct subwindow* sw, int thick, int attr)
+{
+    // Draw the upper left hand corner piece -- left and top
+    int c;
+    {
+        int mask = thick & (THICK_MASK_TOP | THICK_MASK_LEFT);
+        if (!mask)
+            c = 0xDA; // no thick, all thin
+        else if (mask == (THICK_MASK_LEFT | THICK_MASK_TOP))
+            c = 0xC9; // left and top thick
+        else if (mask == THICK_MASK_TOP)
+            c = 0xD5; // left thin, top thick
+        else // if(mask == THICK_MASK_LEFT)
+            c = 0xD6; // left thick top thin
+    }
+    PUTCHR(sw->textbuf, 0, c, attr);
+    c = thick & THICK_MASK_TOP ? 0xCD : 0xC4;
+    for (int i = 1; i < (sw->cw - 1); i++)
+        PUTCHR(sw->textbuf, i, c, attr);
+
+    // Draw upper right hand corner piece.
+    {
+        int mask = thick & (THICK_MASK_TOP | THICK_MASK_RIGHT);
+        if (!mask)
+            c = 0xBF; // no thick, all thin
+        else if (mask == (THICK_MASK_RIGHT | THICK_MASK_TOP))
+            c = 0xBB; // right and top thick
+        else if (mask == THICK_MASK_TOP)
+            c = 0xB8; // right thin, top thick
+        else // if(mask == THICK_MASK_LEFT)
+            c = 0xB7; // right thick top thin
+    }
+    PUTCHR(sw->textbuf, sw->cw - 1, c, attr);
+
+    // Now draw left and right bars
+    c = thick & THICK_MASK_LEFT ? 0xBA : 0xB3;
+    int c2 = thick & THICK_MASK_RIGHT ? 0xBA : 0xB3;
+    int index = sw->cw;
+    for (int i = 1; i < (sw->ch - 1); i++) {
+        PUTCHR(sw->textbuf, index, c, attr);
+        PUTCHR(sw->textbuf, index + sw->cw - 1, c2, attr);
+        index += sw->cw;
+    }
+
+    // Lower left hand corner
+    {
+        int mask = thick & (THICK_MASK_BOTTOM | THICK_MASK_LEFT);
+        if (!mask)
+            c = 0xC0; // no thick, all thin
+        else if (mask == (THICK_MASK_LEFT | THICK_MASK_BOTTOM))
+            c = 0xC8; // left and bottom thick
+        else if (mask == THICK_MASK_BOTTOM)
+            c = 0xD4; // left thin, bottom thick
+        else // if(mask == THICK_MASK_LEFT)
+            c = 0xD3; // left thick bottom thin
+    }
+    PUTCHR(sw->textbuf, index, c, attr);
+    index++;
+
+    c = thick & THICK_MASK_BOTTOM ? 0xCD : 0xC4;
+    for (int i = 1; i < (sw->cw - 1); i++, index++)
+        PUTCHR(sw->textbuf, index, c, attr);
+    
+    // Final corner piece! Lower right hand corner
+    {
+        int mask = thick & (THICK_MASK_BOTTOM | THICK_MASK_RIGHT);
+        if (!mask)
+            c = 0xD9; // no thick, all thin
+        else if (mask == (THICK_MASK_RIGHT | THICK_MASK_BOTTOM))
+            c = 0xBC; // right and bottom thick
+        else if (mask == THICK_MASK_BOTTOM)
+            c = 0xBE; // right thin, bottom thick
+        else // if(mask == THICK_MASK_LEFT)
+            c = 0xBD; // right thick bottom thin
+    }
+    PUTCHR(sw->textbuf, index, c, attr);
+    window_update_pixbuf(sw);
+}
+
+// Called when one of the callbacks are triggered
+static void render_menubar_info(int id)
+{
+    struct menubar* mb = &menubar[id];
+    int window = create_subwindow(10, 5, mb->xoffs, MENUBAR_HEIGHT);
+    draw_window_border(&subwindows[window], 0, 0x07);
 }
 
 void display_set_resolution(int width, int height)
@@ -582,7 +722,7 @@ void display_update(int scanline_start, int scanlines)
         printf("%d x %d [%d %d]\n", w, h, scanline_start, scanlines);
         ABORT();
     } else {
-// TODO: blit menu items here.
+        render_windows();
 #ifndef EMSCRIPTEN
         SDL_Flip(surface);
 #else
@@ -604,7 +744,11 @@ void display_init(void)
     display_mouse_capture_update(1);
 #endif
     int menupos = 2;
-    menupos = make_menu_item(0, menupos, "File", NULL);
+    menupos = make_menu_item(0, menupos, "File", render_menubar_info);
+    int x = create_subwindow(10, 5, 69, 69);
+    subwindows[x].textbuf[0] = 0x69;
+    subwindows[x].textbuf[1] = 'A';
+    window_update_pixbuf(&subwindows[x]);
     UNUSED(create_subwindow);
     UNUSED(destroy_subwindow);
 }
