@@ -317,7 +317,8 @@ static const uint32_t vga_colors[16] = {
 static SDL_Surface* surface = NULL;
 static int w, h, mouse_enabled, mhz_rating, input_captured;
 
-#define MENUBAR_HEIGHT 16
+#define CHAR_HEIGHT 16
+#define MENUBAR_HEIGHT CHAR_HEIGHT
 #define CHAR_WIDTH 9
 #define SCREEN_BYTPP 4 // BYTES per pixel, just the way that the VGA controller likes it
 
@@ -347,8 +348,10 @@ static uint8_t* menubar_textbuffer = NULL;
 static uint32_t menubar_width = 0, menubar_overflow = 0, menubar_overscan = 0x70;
 
 typedef void (*topmenu_cb_t)(int);
+typedef void (*menu_click_cb)(void);
 
 #define MAX_MENUBAR_ITEMS 10
+#define MAX_SUBWINDOWS 5
 static struct menubar {
     char* name;
     int xoffs, twidth;
@@ -357,6 +360,100 @@ static struct menubar {
     int cpos, cwidth;
     topmenu_cb_t cbclick;
 } menubar[MAX_MENUBAR_ITEMS];
+
+static void blit_chr(uint8_t chrpnt, uint8_t attr, uint32_t* pix, uint32_t offsz)
+{
+    uint32_t fg = vga_colors[attr & 15],
+             bg = vga_colors[attr >> 4 & 15],
+             xorvec = fg ^ bg;
+    const uint8_t* fontptr = &vgadata[chrpnt * 16];
+    for (int j = 0; j < MENUBAR_HEIGHT; j++) {
+        uint8_t font = fontptr[j];
+        // copied from vga.c
+        pix[offsz + 0] = ((xorvec & -(font >> 7))) ^ bg;
+        pix[offsz + 1] = ((xorvec & -(font >> 6 & 1))) ^ bg;
+        pix[offsz + 2] = ((xorvec & -(font >> 5 & 1))) ^ bg;
+        pix[offsz + 3] = ((xorvec & -(font >> 4 & 1))) ^ bg;
+        pix[offsz + 4] = ((xorvec & -(font >> 3 & 1))) ^ bg;
+        pix[offsz + 5] = ((xorvec & -(font >> 2 & 1))) ^ bg;
+        pix[offsz + 6] = ((xorvec & -(font >> 1 & 1))) ^ bg;
+        if ((chrpnt & 0xE0) == 0xC0)
+            pix[offsz + 7] = pix[offsz + 8] = ((xorvec & -(font >> 0 & 1))) ^ bg; // Pretend ATTR 0x10 bit 5 is 1 (line graphics)
+        else {
+            pix[offsz + 7] = ((xorvec & -(font >> 0 & 1))) ^ bg;
+            pix[offsz + 8] = bg;
+        }
+        // Move onto next scanline
+        offsz += w;
+    }
+}
+
+static struct subwindow {
+    int visible;
+    uint8_t* textbuf;
+    uint32_t* pixbuf;
+    int h, w, ch, cw, x, y;
+} subwindows[MAX_SUBWINDOWS];
+static int num_subwindows = 0;
+
+static void window_update_pixbuf(struct subwindow* sw)
+{
+    for (int i = 0; i < sw->ch; i++) {
+        int cpos = i * sw->cw;
+        for (int j = 0; j < sw->ch; j++) {
+            int offsz = (cpos + j) * (CHAR_WIDTH * CHAR_HEIGHT);
+            int cpos2 = (cpos + j) << 1;
+            blit_chr(sw->textbuf[cpos2 | 1], sw->textbuf[cpos], sw->pixbuf, offsz);
+        }
+    }
+}
+
+static int create_subwindow(int chrwidth, int chrheight, int x, int y)
+{
+    // Find first free subwindow
+    for (int i = 0; i < MAX_SUBWINDOWS; i++) {
+        struct subwindow* sw = &subwindows[i];
+        if (!sw->visible) {
+            int chrsize = chrwidth * chrheight;
+
+            sw->textbuf = malloc(chrsize << 1);
+            sw->pixbuf = malloc(chrsize * (CHAR_WIDTH * CHAR_HEIGHT) * SCREEN_BYTPP);
+
+            for (int j = 0; j < chrsize; j++) {
+                ((uint16_t*)sw->textbuf)[j] = 0x0720; // gray on black, space
+            }
+
+            sw->ch = chrheight;
+            sw->cw = chrwidth;
+            sw->h = chrheight * CHAR_HEIGHT;
+            sw->w = chrwidth * CHAR_WIDTH;
+
+            sw->x = x;
+            sw->y = y;
+
+            sw->visible = 1;
+
+            // Increment num_subwindows if needed
+            if (i >= num_subwindows)
+                num_subwindows = i + 1; // we use num_subwindows in the count below
+
+            window_update_pixbuf(sw);
+
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void destroy_subwindow(int id)
+{
+    struct subwindow* sw = &subwindows[id];
+    if (sw->visible) {
+        free(sw->pixbuf);
+        free(sw->textbuf);
+        sw->visible = 0;
+    }
+}
 
 static int menubar_idx_focus;
 
@@ -368,32 +465,9 @@ static void display_blit_menubar(void)
     for (unsigned int i = 0; i < menubar_width; i++) {
         uint8_t atrchr = menubar_textbuffer[i << 1],
                 chrpnt = menubar_textbuffer[(i << 1) | 1];
-        const uint8_t* fontptr = &vgadata[chrpnt * 16];
-
-        uint32_t fg = vga_colors[atrchr & 7],
-                 bg = vga_colors[atrchr >> 4 & 7],
-                 xorvec = fg ^ bg;
 
         int offsz = i * CHAR_WIDTH;
-        for (int j = 0; j < MENUBAR_HEIGHT; j++) {
-            uint8_t font = fontptr[j];
-            // copied from vga.c
-            pix[offsz + 0] = ((xorvec & -(font >> 7))) ^ bg;
-            pix[offsz + 1] = ((xorvec & -(font >> 6 & 1))) ^ bg;
-            pix[offsz + 2] = ((xorvec & -(font >> 5 & 1))) ^ bg;
-            pix[offsz + 3] = ((xorvec & -(font >> 4 & 1))) ^ bg;
-            pix[offsz + 4] = ((xorvec & -(font >> 3 & 1))) ^ bg;
-            pix[offsz + 5] = ((xorvec & -(font >> 2 & 1))) ^ bg;
-            pix[offsz + 6] = ((xorvec & -(font >> 1 & 1))) ^ bg;
-            if ((chrpnt & 0xE0) == 0xC0)
-                pix[offsz + 7] = pix[offsz + 8] = ((xorvec & -(font >> 0 & 1))) ^ bg; // Pretend ATTR 0x10 bit 5 is 1 (line graphics)
-            else {
-                pix[offsz + 7] = ((xorvec & -(font >> 0 & 1))) ^ bg;
-                pix[offsz + 8] = bg;
-            }
-            // Move onto next scanline
-            offsz += w;
-        }
+        blit_chr(chrpnt, atrchr, pix, offsz);
     }
     UNUSED(menubar_overscan);
     display_update(0, h);
@@ -531,6 +605,8 @@ void display_init(void)
 #endif
     int menupos = 2;
     menupos = make_menu_item(0, menupos, "File", NULL);
+    UNUSED(create_subwindow);
+    UNUSED(destroy_subwindow);
 }
 void display_sleep(int ms)
 {
@@ -590,7 +666,6 @@ void display_handle_events(void)
                 // Check where the click was.
                 if (event.button.y <= MENUBAR_HEIGHT) {
                     if (event.type == SDL_MOUSEBUTTONDOWN) {
-                        printf("CLICKED ON MENU BAR!!\n");
                         // Find out which element we clicked on.
                         if (menubar_idx_focus != -1)
                             menubar_blur(menubar_idx_focus);
@@ -599,7 +674,6 @@ void display_handle_events(void)
                             if (!menubar[i].name)
                                 continue;
                             unsigned int dx = x - menubar[i].xoffs;
-                            printf("%d %d %d\n", dx, menubar[i].xoffs, menubar[i].cpos);
                             // If (dx >= 0), that means we clicked to the right.
                             // If (dx < 0), then we clicked to the left and can safely ignore it.
                             if (dx <= (unsigned int)menubar[i].twidth) { // Handily catches both cases (note the unsigned int type for dx)
