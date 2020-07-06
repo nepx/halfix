@@ -144,8 +144,10 @@ void cpu_shift8(int op, uint8_t* dest, uint8_t src)
                 res = (op1 << op2) | (op1 >> (8 - op2));
             } else
                 res = *dest;
-            cpu_set_cf(res & 1);
-            cpu_set_of((res ^ (res >> 7)) & 1);
+            if(src & 31) {
+                cpu_set_cf(res & 1);
+                cpu_set_of((res ^ (res >> 7)) & 1);
+            }
             break;
         case 1: // ROR
             op1 = *dest;
@@ -154,8 +156,10 @@ void cpu_shift8(int op, uint8_t* dest, uint8_t src)
                 res = (op1 >> op2) | (op1 << (8 - op2));
             } else
                 res = *dest;
-            cpu_set_cf(res >> 7 & 1);
-            cpu_set_of((res ^ (res << 1)) >> 7 & 1);
+            if(src & 31) {
+                cpu_set_cf(res >> 7 & 1);
+                cpu_set_of((res ^ (res << 1)) >> 7 & 1);
+            }
             break;
         case 2: // RCL
             op1 = *dest;
@@ -203,7 +207,7 @@ void cpu_shift8(int op, uint8_t* dest, uint8_t src)
         case 7: // SAR
             src &= 31;
             if(src) {
-                cpu.lop1 = *dest;
+                cpu.lop1 = (int8_t)*dest;
                 cpu.lop2 = src;
                 res = cpu.lr = (int8_t)((((int8_t)(*dest)) >> cpu.lop2));
                 cpu.laux = SAR8;
@@ -228,8 +232,10 @@ void cpu_shift16(int op, uint16_t* dest, uint16_t src)
                 res = (op1 << op2) | (op1 >> (16 - op2));
             } else
                 res = *dest;
-            cpu_set_cf(res & 1);
-            cpu_set_of((res ^ (res >> 15)) & 1);
+            if(src & 31) {
+                cpu_set_cf(res & 1);
+                cpu_set_of((res ^ (res >> 15)) & 1);
+            }
             break;
         case 1:
             op1 = *dest;
@@ -238,8 +244,10 @@ void cpu_shift16(int op, uint16_t* dest, uint16_t src)
                 res = (op1 >> op2) | (op1 << (16 - op2));
             } else
                 res = *dest;
-            cpu_set_cf(res >> 15 & 1);
-            cpu_set_of((res ^ (res << 1)) >> 15 & 1);
+            if(src & 31) {
+                cpu_set_cf(res >> 15 & 1);
+                cpu_set_of((res ^ (res << 1)) >> 15 & 1);
+            }
             break;
         case 2:
             op1 = *dest;
@@ -287,7 +295,7 @@ void cpu_shift16(int op, uint16_t* dest, uint16_t src)
         case 7:
             src &= 31;
             if(src) {
-                cpu.lop1 = *dest;
+                cpu.lop1 = (int16_t)*dest;
                 cpu.lop2 = src;
                 res = cpu.lr = (int16_t)((((int16_t)(*dest)) >> cpu.lop2));
                 cpu.laux = SAR16;
@@ -310,8 +318,10 @@ void cpu_shift32(int op, uint32_t* dest, uint32_t src)
                 res = (op1 << op2) | (op1 >> (32 - op2));
             } else
                 res = *dest;
-            cpu_set_cf(res & 1);
-            cpu_set_of((res ^ (res >> 31)) & 1);
+            if(src & 31) {
+                cpu_set_cf(res & 1);
+                cpu_set_of((res ^ (res >> 31)) & 1);
+            }
             break;
         case 1:
             op1 = *dest;
@@ -320,8 +330,10 @@ void cpu_shift32(int op, uint32_t* dest, uint32_t src)
                 res = (op1 >> op2) | (op1 << (32 - op2));
             } else
                 res = *dest;
-            cpu_set_cf(res >> 31 & 1);
-            cpu_set_of((res ^ (res << 1)) >> 31 & 1);
+            if(src & 31) {
+                cpu_set_cf(res >> 31 & 1);
+                cpu_set_of((res ^ (res << 1)) >> 31 & 1);
+            }
             break;
         case 2:
             op1 = *dest;
