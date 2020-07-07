@@ -28,7 +28,6 @@ void cpu_mmu_tlb_flush(void)
 }
 void cpu_mmu_tlb_flush_nonglobal(void)
 {
-    printf("non global flush\n");
     for (unsigned int i = 0; i < cpu.tlb_entry_count; i++) {
         uint32_t entry = cpu.tlb_entry_indexes[i];
         if (entry == (uint32_t)-1)
