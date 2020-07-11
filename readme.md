@@ -12,7 +12,9 @@ I made this mostly for fun, and because it was a great way to learn about the x8
 
 ## Building and Running
 
-You will need `node.js`, a C99-compatible compiler, `libsdl`, `zlib`, and Emscripten (only if you're targeting the browser). Make sure that the required libraries are in a place where the compiler can get them. No prior configuration is required. 
+You will need `node.js`, a C99-compatible compiler, `zlib`, and Emscripten (only if you're targeting the browser). Make sure that the required libraries are in a place where the compiler can find them. No pre-build configuration is required. 
+
+The display driver uses `libsdl`, but if you're on Windows, there's a native port that uses the Win32 API and doesn't require SDL. 
 
 ```bash
 # Debug, native
@@ -29,6 +31,11 @@ node makefile.js emscripten release
 # Release, Emscripten, WebAssembly
 node makefile.js emscripten --enable-wasm release
 
+# Win32 API build (no SDL required)
+node makefile.js win32
+# Win32 API build, release
+node makefile.js win32 release
+
 # For more options and fine tuning
 node makefile.js --help
 
@@ -43,28 +50,28 @@ Check the [project wiki](https://github.com/nepx/halfix/wiki) for more details.
 
 ## System Specifications
 
- - CPU: Intel Core Duo-compatible (FPU, MMX, SSE, SSE2, some SSE3)
+ - [CPU](https://github.com/nepx/halfix/tree/master/src/cpu): x86-32 (FPU, MMX, SSE, SSE2, some SSE3, PAE)
  - RAM: Configurable - anywhere from 1 MB to 3584 MB
  - Devices:
-   - Intel 8259 Programmable Interrupt Controller
-   - Intel 8254 Programmable Interval Timer
-   - Intel 8237 Direct Memory Access Controller
-   - Intel 8042 "PS/2" Controller with attached keyboard and mouse
-   - i440FX chipset (this doesn't work quite so well yet)
+   - Intel 8259 [Programmable Interrupt Controller](https://github.com/nepx/halfix/blob/master/src/hardware/pic.c)
+   - Intel 8254 [Programmable Interval Timer](https://github.com/nepx/halfix/blob/master/src/hardware/pit.c)
+   - Intel 8237 [Direct Memory Access Controller](https://github.com/nepx/halfix/blob/master/src/hardware/dma.c)
+   - Intel 8042 ["PS/2" Controller](https://github.com/nepx/halfix/blob/master/src/hardware/kbd.c) with attached keyboard and mouse
+   - [i440FX chipset](https://github.com/nepx/halfix/blob/master/src/hardware/pci.c) (this doesn't work quite so well yet)
      - 82441FX PMC
      - 82371SB ISA-to-PCI bus
      - 82371SB IDE controller
-     - ACPI interface
-   - Intel 82093AA I/O APIC
- - Display: Generic VGA graphics card (ET4000-compatible) with Bochs VBE extensions, optionally PCI-enabled
+     - [ACPI](https://github.com/nepx/halfix/blob/master/src/hardware/acpi.c) interface
+   - Intel 82093AA [I/O APIC](https://github.com/nepx/halfix/blob/master/src/hardware/ioapic.c)
+ - Display: Generic [VGA graphics card](https://github.com/nepx/halfix/blob/master/src/hardware/vga.c) (ET4000-compatible) with Bochs VBE extensions, optionally PCI-enabled
  - Mass Storage: 
-   - Generic IDE controller (hard drive and CD-ROM) 
-   - Intel 82077AA Floppy drive controller (incomplete)
+   - Generic [IDE controller](https://github.com/nepx/halfix/blob/master/src/hardware/ide.c) (hard drive and CD-ROM) 
+   - Intel 82077AA [Floppy drive controller](https://github.com/nepx/halfix/blob/master/src/hardware/fdc.c) (incomplete, but works in most cases)
  - Dummy PC speaker (no sound)
 
 ## Compatibility
 
-It boots a wide range of operating system software, including all versions of DOS, most versions of Windows (excluding Windows 8), newer versions of OS/2 Warp (3 and 4.5), ReactOS, and some varieties of Linux (ISO Linux, Damn Small Linux, Red Star OS 2, Buildroot, Ubuntu). 
+It boots a wide range of operating system software, including all versions of DOS, most versions of Windows (excluding Windows 8), newer versions of OS/2 Warp (3 and 4.5), ReactOS, some varieties of Linux (ISO Linux, Damn Small Linux, Red Star OS 2, Buildroot, Ubuntu), 9Front, NeXTSTEP, several hobby OSes, and probably more. 
 
 See [Compatibility](compatibility.md) for more details.
 
@@ -75,12 +82,6 @@ Can you run the emulator inside the emulator?
 Yes, but not very quickly. 
 
 ![Halfix in Halfix](docs/pics/halfix-in-halfix.png)
-
-Host: Ubuntu 16.04
-
-Guest: Windows XP SP2
-
-Guest 2: Windows 98 SE
 
 ## Screenshots
 
@@ -96,7 +97,7 @@ Windows Vista
 
 ![Vista](docs/pics/vista.png)
 
-Windows 7 (Note: CMOS date mistake)
+Windows 7
 
 ![Windows 7](docs/pics/win7.png)
 
