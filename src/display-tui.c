@@ -4,6 +4,7 @@
 #include "devices.h"
 #include "util.h"
 #include <SDL/SDL.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -319,6 +320,7 @@ static int w, h, mouse_enabled, mhz_rating, input_captured;
 
 #define CHAR_HEIGHT 16
 #define MENUBAR_HEIGHT CHAR_HEIGHT
+#define STATUS_HEIGHT CHAR_HEIGHT
 #define CHAR_WIDTH 9
 #define SCREEN_BYTPP 4 // BYTES per pixel, just the way that the VGA controller likes it
 
@@ -344,7 +346,7 @@ void display_update_cycles(int cycles_elapsed, int us)
 }
 
 static int resized = 0;
-static uint8_t* menubar_textbuffer = NULL;
+static uint8_t *menubar_textbuffer = NULL, *statusbar_textbuffer = NULL;
 static uint32_t menubar_width = 0, menubar_overflow = 0, menubar_overscan = 0x70;
 
 typedef void (*topmenu_cb_t)(int);
@@ -356,12 +358,49 @@ enum {
 
 #define MAX_MENUBAR_ITEMS 10
 #define MAX_SUBWINDOWS 5
+
+struct menubar_listing {
+    int nent;
+    int max_width;
+    char** entries;
+    int* offsets;
+    menu_click_cb* cbs;
+};
+
+static struct menubar_listing* init_menubar_listing(int sz)
+{
+    struct menubar_listing* mbl = malloc(sizeof(struct menubar_listing));
+    mbl->nent = sz;
+    mbl->entries = calloc(sizeof(char*), sz);
+    mbl->offsets = calloc(sizeof(int), sz);
+    mbl->cbs = calloc(sizeof(menu_click_cb), sz);
+    return mbl;
+}
+
+static int add_menu_entry(struct menubar_listing* mbl, int idx, char* value, menu_click_cb cb)
+{
+    int width = strlen(value);
+    if (width > mbl->max_width)
+        mbl->max_width = width;
+    mbl->entries[idx] = value;
+    mbl->cbs[idx] = cb;
+    mbl->offsets[idx] = (idx + 1) << 4;
+    return idx + 1;
+}
+
+static void menuentry_to_chrbuf(struct menubar_listing* mbl, char* dest)
+{
+}
+
 static struct menubar {
     char* name;
     int xoffs, twidth;
 
     // Character position
     int cpos, cwidth;
+
+    int attached_window;
+
     topmenu_cb_t cbclick;
 } menubar[MAX_MENUBAR_ITEMS];
 
@@ -514,6 +553,20 @@ static void display_blit_menubar(void)
     UNUSED(menubar_overscan);
     display_update(0, h);
 }
+static void display_blit_statusbar(void)
+{
+    uint32_t *pix = surface->pixels, base = w * (h + CHAR_HEIGHT); // Screen size plus menu bar
+
+    // Draw characters, one by one, like the VGA alphanumeric renderer
+    for (unsigned int i = 0; i < menubar_width; i++) {
+        uint8_t atrchr = statusbar_textbuffer[(i << 1) | 1],
+                chrpnt = statusbar_textbuffer[(i << 1) | 0];
+
+        int offsz = base + i * CHAR_WIDTH;
+        blit_chr(chrpnt, atrchr, pix, offsz, w);
+    }
+    display_update(0, h);
+}
 
 static int make_menu_item(int index, int pos, char* name, topmenu_cb_t cbclick)
 {
@@ -536,6 +589,7 @@ static void menubar_blur(int index)
     }
     menubar_idx_focus = -1;
     display_blit_menubar();
+    destroy_subwindow(menubar[index].attached_window);
 }
 static void menubar_focus(int index)
 {
@@ -551,7 +605,7 @@ static void menubar_click(int index)
     menubar[index].cbclick(index);
 }
 
-static void realloc_menubar_size(int width)
+static void realloc_bar_sizes(int width)
 {
     uint32_t new_menubar_width = width / CHAR_WIDTH;
     if (menubar_width != new_menubar_width) {
@@ -559,6 +613,12 @@ static void realloc_menubar_size(int width)
             menubar_textbuffer = realloc(menubar_textbuffer, new_menubar_width << 1);
         else
             menubar_textbuffer = malloc(new_menubar_width << 1);
+
+        // Menubar width
+        if (statusbar_textbuffer)
+            statusbar_textbuffer = realloc(statusbar_textbuffer, new_menubar_width << 1);
+        else
+            statusbar_textbuffer = malloc(new_menubar_width << 1);
     }
     menubar_width = new_menubar_width;
     menubar_overflow = width % CHAR_WIDTH;
@@ -590,6 +650,15 @@ static void realloc_menubar_size(int width)
         menubar_textbuffer[rpos++] = ' ';
         menubar_textbuffer[rpos++] = 0x70;
     }
+
+    // Render status bar
+    for (unsigned int i = 0; i < new_menubar_width; i++) {
+        statusbar_textbuffer[(i << 1)] = ' ';
+        statusbar_textbuffer[(i << 1) | 1] = 0x30; // cyan bg, black fg
+    }
+
+    statusbar_textbuffer[0] = 'H';
+    statusbar_textbuffer[2] = 'i';
 }
 
 #define PUTCHR(a, ps, c, attr)   \
@@ -665,7 +734,7 @@ static void draw_window_border(struct subwindow* sw, int thick, int attr)
     c = thick & THICK_MASK_BOTTOM ? 0xCD : 0xC4;
     for (int i = 1; i < (sw->cw - 1); i++, index++)
         PUTCHR(sw->textbuf, index, c, attr);
-    
+
     // Final corner piece! Lower right hand corner
     {
         int mask = thick & (THICK_MASK_BOTTOM | THICK_MASK_RIGHT);
@@ -688,20 +757,21 @@ static void render_menubar_info(int id)
     struct menubar* mb = &menubar[id];
     int window = create_subwindow(10, 5, mb->xoffs, MENUBAR_HEIGHT);
     draw_window_border(&subwindows[window], 0, 0x07);
+    mb->attached_window = window;
 }
 
 void display_set_resolution(int width, int height)
 {
     resized = 1;
     if ((!width && !height)) {
-        realloc_menubar_size(640);
-        display_set_resolution(640, 480 + MENUBAR_HEIGHT);
+        realloc_bar_sizes(640);
+        display_set_resolution(640, 480 + MENUBAR_HEIGHT + STATUS_HEIGHT);
         return;
     }
     DISPLAY_LOG("Changed resolution to w=%d h=%d\n", width, height);
     // We reserve nine pixels at the top for our menu bar.
-    surface = SDL_SetVideoMode(width, height + MENUBAR_HEIGHT, 32, SDL_SWSURFACE);
-    realloc_menubar_size(width);
+    surface = SDL_SetVideoMode(width, height + MENUBAR_HEIGHT + STATUS_HEIGHT, 32, SDL_SWSURFACE);
+    realloc_bar_sizes(width);
     w = width;
     h = height;
     display_set_title();
@@ -710,6 +780,7 @@ void display_set_resolution(int width, int height)
     emscripten_handle_resize(surface->pixels, width, height);
 #endif
     display_blit_menubar();
+    display_blit_statusbar();
 }
 
 void display_update(int scanline_start, int scanlines)
@@ -745,10 +816,10 @@ void display_init(void)
 #endif
     int menupos = 2;
     menupos = make_menu_item(0, menupos, "File", render_menubar_info);
-    int x = create_subwindow(10, 5, 69, 69);
-    subwindows[x].textbuf[0] = 0x69;
-    subwindows[x].textbuf[1] = 'A';
-    window_update_pixbuf(&subwindows[x]);
+
+    struct menubar_listing* menulist = init_menubar_listing(5);
+    int idx = 0;
+    idx = add_menu_entry(menulist, idx, "Exit", NULL);
     UNUSED(create_subwindow);
     UNUSED(destroy_subwindow);
 }
@@ -802,6 +873,10 @@ void display_handle_events(void)
             printf("QUIT\n");
             exit(0);
             break;
+        case SDL_KEYDOWN:
+            if (event.key.keysym.sym == SDLK_ESCAPE)
+                display_release_mouse();
+            break;
         case SDL_MOUSEBUTTONDOWN:
         case SDL_MOUSEBUTTONUP:
             if (input_captured)
@@ -831,10 +906,12 @@ void display_handle_events(void)
                         }
                     }
                 } else {
-                    if (menubar_idx_focus != -1)
+                    if (menubar_idx_focus != -1) {
+                        // Don't register a click to get rid of a menu bar item.
                         menubar_blur(menubar_idx_focus);
-                    // TODO: menu bar items
-                    display_handle_mouse_click(&event);
+                    } else
+                        // TODO: menu bar items
+                        display_handle_mouse_click(&event);
                 }
             }
         }
