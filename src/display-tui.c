@@ -361,36 +361,13 @@ enum {
 
 struct menubar_listing {
     int nent;
-    int max_width;
+    int max_width, max_height;
     char** entries;
     int* offsets;
     menu_click_cb* cbs;
+
+    char* textbuf;
 };
-
-static struct menubar_listing* init_menubar_listing(int sz)
-{
-    struct menubar_listing* mbl = malloc(sizeof(struct menubar_listing));
-    mbl->nent = sz;
-    mbl->entries = calloc(sizeof(char*), sz);
-    mbl->offsets = calloc(sizeof(int), sz);
-    mbl->cbs = calloc(sizeof(menu_click_cb), sz);
-    return mbl;
-}
-
-static int add_menu_entry(struct menubar_listing* mbl, int idx, char* value, menu_click_cb cb)
-{
-    int width = strlen(value);
-    if (width > mbl->max_width)
-        mbl->max_width = width;
-    mbl->entries[idx] = value;
-    mbl->cbs[idx] = cb;
-    mbl->offsets[idx] = (idx + 1) << 4;
-    return idx + 1;
-}
-
-static void menuentry_to_chrbuf(struct menubar_listing* mbl, char* dest)
-{
-}
 
 static struct menubar {
     char* name;
@@ -402,6 +379,8 @@ static struct menubar {
     int attached_window;
 
     topmenu_cb_t cbclick;
+
+    struct menubar_listing* menulist;
 } menubar[MAX_MENUBAR_ITEMS];
 
 // Blit 'chrpnt' with attributes 'attr' to framebuffer 'pix' with width 'w' at offset 'offsz.'
@@ -432,8 +411,10 @@ static void blit_chr(uint8_t chrpnt, uint8_t attr, uint32_t* pix, uint32_t offsz
     }
 }
 
+#define FLAG_NOFREE 1
 static struct subwindow {
     int visible;
+    int flags;
     uint8_t* textbuf;
     uint32_t* pixbuf;
     int h, w, ch, cw, x, y;
@@ -485,8 +466,6 @@ static void window_update_pixbuf(struct subwindow* sw)
     }
 }
 
-// w=5
-// h=10
 static int create_subwindow(int chrwidth, int chrheight, int x, int y)
 {
     // Find first free subwindow
@@ -506,6 +485,43 @@ static int create_subwindow(int chrwidth, int chrheight, int x, int y)
             sw->cw = chrwidth;
             sw->h = chrheight * CHAR_HEIGHT;
             sw->w = chrwidth * CHAR_WIDTH;
+
+            sw->flags = 0;
+
+            sw->x = x;
+            sw->y = y;
+
+            sw->visible = 1;
+
+            // Increment num_subwindows if needed
+            if (i >= num_subwindows)
+                num_subwindows = i + 1; // we use num_subwindows in the count below
+
+            window_update_pixbuf(sw);
+
+            return i;
+        }
+    }
+    return -1;
+}
+
+static int create_subwindow2(int chrwidth, int chrheight, char* textbuf, int x, int y)
+{
+    // Find first free subwindow
+    for (int i = 0; i < MAX_SUBWINDOWS; i++) {
+        struct subwindow* sw = &subwindows[i];
+        if (!sw->visible) {
+            int chrsize = chrwidth * chrheight;
+
+            sw->textbuf = (uint8_t*)textbuf;
+            sw->pixbuf = malloc(chrsize * (CHAR_WIDTH * CHAR_HEIGHT) * SCREEN_BYTPP);
+
+            sw->ch = chrheight;
+            sw->cw = chrwidth;
+            sw->h = chrheight * CHAR_HEIGHT;
+            sw->w = chrwidth * CHAR_WIDTH;
+
+            sw->flags = FLAG_NOFREE;
 
             sw->x = x;
             sw->y = y;
@@ -529,7 +545,8 @@ static void destroy_subwindow(int id)
     struct subwindow* sw = &subwindows[id];
     if (sw->visible) {
         free(sw->pixbuf);
-        free(sw->textbuf);
+        if (!(sw->flags & FLAG_NOFREE))
+            free(sw->textbuf);
         sw->visible = 0;
         if (num_subwindows == (id + 1))
             num_subwindows--;
@@ -568,7 +585,7 @@ static void display_blit_statusbar(void)
     display_update(0, h);
 }
 
-static int make_menu_item(int index, int pos, char* name, topmenu_cb_t cbclick)
+static int make_menu_item(int index, int pos, char* name, topmenu_cb_t cbclick, struct menubar_listing* menulist)
 {
     int len = strlen(name);
     menubar[index].name = name;
@@ -577,6 +594,7 @@ static int make_menu_item(int index, int pos, char* name, topmenu_cb_t cbclick)
     menubar[index].cwidth = len + 2;
     menubar[index].xoffs = pos * CHAR_WIDTH;
     menubar[index].twidth = (len + 2) * CHAR_WIDTH;
+    menubar[index].menulist = menulist;
 
     return pos + len + 2;
 }
@@ -670,6 +688,7 @@ static void realloc_bar_sizes(int width)
 #define THICK_MASK_LEFT 2
 #define THICK_MASK_RIGHT 4
 #define THICK_MASK_BOTTOM 8
+#define NO_PIXBUF_UPDATE 16
 // Draw a border around the window 'sw.' A bitmask in 'thick' decides whether the border should be thick (double-lined) or not.
 // https://en.wikipedia.org/wiki/Box-drawing_character#DOS
 static void draw_window_border(struct subwindow* sw, int thick, int attr)
@@ -748,16 +767,93 @@ static void draw_window_border(struct subwindow* sw, int thick, int attr)
             c = 0xBD; // right thick bottom thin
     }
     PUTCHR(sw->textbuf, index, c, attr);
-    window_update_pixbuf(sw);
+
+    if (!(NO_PIXBUF_UPDATE & thick))
+        window_update_pixbuf(sw);
 }
 
 // Called when one of the callbacks are triggered
 static void render_menubar_info(int id)
 {
     struct menubar* mb = &menubar[id];
-    int window = create_subwindow(10, 5, mb->xoffs, MENUBAR_HEIGHT);
-    draw_window_border(&subwindows[window], 0, 0x07);
+    struct menubar_listing* ml = mb->menulist;
+    int window = create_subwindow2(ml->max_width + 2, ml->max_height + 2, ml->textbuf, mb->xoffs, MENUBAR_HEIGHT);
     mb->attached_window = window;
+}
+
+static struct menubar_listing* init_menubar_listing(int sz)
+{
+    struct menubar_listing* mbl = malloc(sizeof(struct menubar_listing));
+    mbl->nent = sz;
+    mbl->entries = calloc(sizeof(char*), sz);
+    mbl->offsets = calloc(sizeof(int), sz);
+    mbl->cbs = calloc(sizeof(menu_click_cb), sz);
+    mbl->max_height = mbl->max_width = 0;
+    mbl->textbuf = NULL;
+    return mbl;
+}
+
+#define SEPERATOR ")"
+
+static int add_menu_entry(struct menubar_listing* mbl, int idx, char* value, menu_click_cb cb)
+{
+    int width = strlen(value);
+    if (width > mbl->max_width)
+        mbl->max_width = width;
+    mbl->entries[idx] = value;
+    mbl->cbs[idx] = cb;
+    if (value[0] != ')' && value[1] != 0)
+        mbl->offsets[idx] = (idx + 1) << 4;
+    if (idx > mbl->max_height)
+        mbl->max_height = idx + 1;
+    return idx + 1;
+}
+
+static void finalize_menubar(struct menubar_listing* mbl)
+{
+    // Find out how tall/wide the window has to be
+    // max_width is the maximum width of the menubar elements, and max_height is the number of elements.
+    // Since we create a border around them that's one character wide, we add two to these values
+    int width = mbl->max_width + 2;
+    int height = mbl->max_height + 2;
+
+    if (mbl->textbuf)
+        free(mbl->textbuf);
+
+    // Create a fake subwindow so that we can fool draw_window_border into thinking this is an actual window
+    struct subwindow sw;
+    sw.cw = width;
+    sw.ch = height;
+    uint8_t* textbuf = sw.textbuf = calloc(width * height, 2);
+    mbl->textbuf = (char*)textbuf;
+    draw_window_border(&sw, 0 | NO_PIXBUF_UPDATE, 0x07);
+
+    // Now render each line of text
+    int ncol = (width + 1) << 1;
+    for (int i = 0; i < mbl->max_height; i++) {
+        char* entry = mbl->entries[i];
+        if (entry[0] == ')' && entry[1] == 0) {
+            // Seperator!
+            textbuf[ncol - 2] = 0xC6; // The |= box drawing char
+            textbuf[ncol - 1] = 0x07;
+            int k = 0;
+            for (int j = 0; j < mbl->max_width; j++, k += 2) {
+                textbuf[ncol + k] = 0xCD; // '=' box drawing character
+                textbuf[ncol + k + 1] = 0x07;
+            }
+            textbuf[ncol + k] = 0xB5; // =|
+            textbuf[ncol + k + 1] = 0x07;
+        } else {
+            int j = 0;
+            while (*entry) {
+                textbuf[ncol + j] = *entry;
+                textbuf[ncol + j + 1] = 0x07;
+                entry++;
+                j += 2;
+            }
+        }
+        ncol += width << 1;
+    }
 }
 
 void display_set_resolution(int width, int height)
@@ -814,12 +910,14 @@ void display_init(void)
 #ifdef EMSCRIPTEN
     display_mouse_capture_update(1);
 #endif
-    int menupos = 2;
-    menupos = make_menu_item(0, menupos, "File", render_menubar_info);
-
     struct menubar_listing* menulist = init_menubar_listing(5);
     int idx = 0;
+    idx = add_menu_entry(menulist, idx, SEPERATOR, NULL);
     idx = add_menu_entry(menulist, idx, "Exit", NULL);
+    finalize_menubar(menulist);
+
+    int menupos = 2;
+    menupos = make_menu_item(0, menupos, "File", render_menubar_info, menulist);
     UNUSED(create_subwindow);
     UNUSED(destroy_subwindow);
 }
