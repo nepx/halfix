@@ -772,7 +772,8 @@ void cpu_exception(int vec, int code)
         }
 #ifndef EMSCRIPTEN
         CPU_LOG("HALFIX EXCEPTION: %02x(%04x) @ EIP=%08x lin=%08x\n", vec, code, VIRT_EIP(), LIN_EIP());
-        if(LIN_EIP() == 0x00010063) __asm__("int3");
+        //if(vec==6)__asm__("int3");
+        //if(LIN_EIP() == 0x00010063) __asm__("int3");
 #endif
         current_exception = vec;
         if (cpu_interrupt(vec, code, INTERRUPT_TYPE_EXCEPTION, VIRT_EIP()))
@@ -1185,22 +1186,23 @@ int iret(uint32_t tss_eip, int is32)
         if (cpu.eflags & EFLAGS_VM) {
             // Virtual 8086 Mode iret
             if (get_iopl() == 3) {
-                int esp_mask;
+                // All of the EFLAGS bits that won't be modified.
+                int eflags_mask;
                 if (is32) {
                     pop32(eip);
                     pop32(cs);
                     pop32(eflags);
-                    esp_mask = EFLAGS_VM | EFLAGS_IOPL | EFLAGS_VIP | EFLAGS_VIF;
+                    eflags_mask = EFLAGS_VM | EFLAGS_IOPL | EFLAGS_VIP | EFLAGS_VIF;
                 } else {
                     pop16(eip);
                     pop16(cs);
                     pop16(eflags);
-                    esp_mask = EFLAGS_IOPL | 0xFFFF0000;
+                    eflags_mask = EFLAGS_IOPL | 0xFFFF0000;
                 }
                 set_esp();
 
                 cpu_load_csip_virtual(cs, eip);
-                cpu_set_eflags((eflags & ~esp_mask) | (cpu.eflags & esp_mask));
+                cpu_set_eflags((eflags & ~eflags_mask) | (cpu.eflags & eflags_mask));
             } else { // iopl < 3
                 if (cpu.cr[4] & CR4_VME) {
                     if (is32)
