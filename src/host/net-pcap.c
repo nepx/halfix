@@ -63,22 +63,25 @@ int net_init(char* netarg)
 
 int net_send(void* req, int reqlen)
 {
+    LOG("NET", "Sending %d bytes over the network\n", reqlen);
     if (pcap_sendpacket(pcap_adhandle, req, reqlen) < 0) {
         LOG("NET", "Unable to send frame (data= ((uint8_t*)%p) len=%d)\n", req, reqlen);
         return -1;
     }
     return 0;
 }
-
+static void (*recv_cb)(void* data, int len);
 static void pcap_recv(u_char* param, const struct pcap_pkthdr* header, const u_char* pkt_data)
 {
     UNUSED(param);
     printf("packet recv: len=%d data=%p\n", header->caplen, pkt_data);
+    recv_cb((void*)pkt_data, header->caplen);
 }
 
 // Poll pcap network device
-void net_poll(void)
+void net_poll(void (*cb)(void* data, int len))
 {
+    recv_cb = cb;
     int retv = pcap_dispatch(pcap_adhandle, 1, pcap_recv, NULL);
     if (retv < 0)
         FATAL("NET", "Failed to poll for packets\n");
