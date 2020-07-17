@@ -450,8 +450,10 @@ static void ne2000_pci_remap(uint8_t* dev, unsigned int newbase)
         dev[0x10] = newbase | 1;
         dev[0x11] = newbase >> 8;
 
-        io_unregister_read(ne2000.iobase, 32);
-        io_unregister_write(ne2000.iobase, 32);
+        if(ne2000.iobase != 0) {
+            io_unregister_read(ne2000.iobase, 32);
+            io_unregister_write(ne2000.iobase, 32);
+        }
         io_register_read(newbase, 32, ne2000_read, NULL, NULL);
         io_register_write(newbase, 32, ne2000_write, NULL, NULL);
         io_register_read(newbase + 16, 1, ne2000_read, ne2000_read_mem16, ne2000_read_mem32);
