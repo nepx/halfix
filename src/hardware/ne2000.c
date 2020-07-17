@@ -40,7 +40,7 @@
 
 #define NE2K_DEVID 5
 
-#define NE2K_MEMSTART 
+#define NE2K_MEMSTART
 
 #define NE2K_MEMSZ (32 << 10)
 struct ne2000 {
@@ -394,7 +394,6 @@ static void ne2000_write(uint32_t port, uint32_t data)
                 }
                 net_send(&ne2000.mem[ne2000.tpsr], ne2000.tcnt);
                 ne2000.tsr |= 1;
-                __asm__("int3");
                 ne2000_trigger_irq(ISR_PTX); // TODO: timing
             }
             break; // TODO
@@ -530,7 +529,6 @@ static void ne2000_receive(void* data, int len)
 
     // Determine the start, end, etc.
     int start = ne2000.curr;
-    int end = start + length_plus_header;
     // Determine the next page
     int nextpg = ne2000.curr + ((255 + length_plus_header) & ~0xFF);
     if (nextpg >= ne2000.pagestop) {
@@ -549,22 +547,22 @@ static void ne2000_receive(void* data, int len)
     memstart[2] = length_plus_header;
     memstart[3] = length_plus_header >> 8;
 
-    // TODO: 
-    __asm__("int3");
-
     if ( // If our starting page is less than the next page...
         (ne2000.curr < nextpg) ||
         // Or if we fit perfectly into the pagestart-pageend area
         (ne2000.curr + total_pages == ne2000.pagestop)) {
         memcpy(memstart + 4, data, len); // We've already written the packet address
-    }
-    if (end >= NE2K_MEMSZ) {
-        // We have to split the packet apart
+    } else {
+        // What if the packet is too big?
+        int len1 = ne2000.pagestop - ne2000.curr;
+        memcpy(memstart + 4, data, len1 - 4);
 
-        // Construct the header
-        memstart[0] = 0;
+        memstart = ne2000.mem + ne2000.pagestart;
+        // Copy the rest of the bytes to the beginning of pagestart
+        memcpy(memstart, data + (len1 - 4), len - (len1 + 4));
     }
     ne2000.curr = nextpg;
+    ne2000_trigger_irq(ISR_RXE);
 }
 
 void ne2000_poll(void)
