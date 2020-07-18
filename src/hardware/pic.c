@@ -84,7 +84,6 @@ static inline int is_master(struct pic_controller* this){
 static void pic_state(void)
 {
     // <<< BEGIN AUTOGENERATE "state" >>>
-// Auto-generated on Wed Oct 09 2019 13:00:43 GMT-0700 (PDT)
     struct bjson_object* obj = state_obj("pic", (16 + 1) * 2);
     state_field(obj, 1, "pic.ctrl[0].vector_offset", &pic.ctrl[0].vector_offset);
     state_field(obj, 1, "pic.ctrl[1].vector_offset", &pic.ctrl[1].vector_offset);
@@ -146,13 +145,15 @@ static uint32_t pic_elcr_read(uint32_t addr)
 
 static void pic_internal_update(struct pic_controller* this)
 {
-    if (this->raised_intr_line) // Wait for current interrupt to be serviced
-        return;
+    //if (this->raised_intr_line) // Wait for current interrupt to be serviced
+    //    return;
     int unmasked, isr;
 
     // Check if any interrupts are unmasked
-    if (!(unmasked = this->irr & ~this->imr))
+    if (!(unmasked = this->irr & ~this->imr)) {
+        //PIC_LOG("No unmasked interrupts\n");
         return;
+    }
 
     // Rotate IRR around so that the interrupts are located in decreasing priority (0 1 2 3 4 5 6 7)
     unmasked = rol(unmasked, this->priority_base);
@@ -215,8 +216,10 @@ static uint8_t pic_internal_get_interrupt(struct pic_controller* this)
         return this->vector_offset | 7;
     }
 
-    // If level triggered, then clear bit
+#if 0 // XXX -- this is needed for PCI interrupts, but we simulate level-triggered with edge-triggered. 
+    // If edge triggered, then clear bit
     if (!(this->elcr & irq_mask))
+#endif
         this->irr ^= irq_mask;
 
     // Set ISR if not in Automatic EOI mode
@@ -374,7 +377,7 @@ static void pic_write_ocw(struct pic_controller* this, int index, int data){
         if (data & 2)
             this->read_isr = data & 1;
         else if (data & 0x44)
-            PIC_FATAL("Unknown feature: %02x\n", data);
+            PIC_LOG("Unknown feature: %02x\n", data);
     }
     }
     }
