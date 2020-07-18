@@ -111,14 +111,18 @@ static void ne2000_reset(void)
 static void ne2000_trigger_irq(int flag)
 {
     ne2000.isr |= flag;
-    if ((ne2000.isr ^ ne2000.imr) & flag) // ISR/IMR bits differ (ISR has been set, but IMR isn't)
+    if (!((ne2000.isr & ne2000.imr) & flag))
         return;
 
-    NE2K_DEBUG("Triggering IRQ!\n");
+    NE2K_DEBUG("Triggering IRQ! (isr=%02x imr=%02x &=%02x)\n", ne2000.isr, ne2000.imr, ne2000.isr & ne2000.imr);
 
     // XXX -- the PIC doesn't support edge/level triggered interrupts yet, so we simulate it this way
     pci_set_irq_line(NE2K_DEVID, 0);
     pci_set_irq_line(NE2K_DEVID, 1);
+}
+static void ne2000_lower_irq(void)
+{
+    pci_set_irq_line(NE2K_DEVID, 0);
 }
 
 static uint32_t ne2000_asic_mem_read(void)
@@ -306,8 +310,11 @@ static void ne2000_write0(uint32_t port, uint32_t data)
         break;
     }
     case 7: // ISR
-        NE2K_DEBUG("ISR write: %02x\n", data);
-        ne2000.isr = data;
+        ne2000.isr &= ~data;
+        if (!data)
+            ne2000_lower_irq();
+        NE2K_DEBUG("ISR ack: %02x\n", ne2000.isr);
+        ne2000_trigger_irq(0);
         break;
     case 8: // Remote start address register
         NE2K_DEBUG("RSAR low: %02x\n", data);
@@ -450,7 +457,7 @@ static void ne2000_pci_remap(uint8_t* dev, unsigned int newbase)
         dev[0x10] = newbase | 1;
         dev[0x11] = newbase >> 8;
 
-        if(ne2000.iobase != 0) {
+        if (ne2000.iobase != 0) {
             io_unregister_read(ne2000.iobase, 32);
             io_unregister_write(ne2000.iobase, 32);
         }
@@ -491,7 +498,7 @@ static int ne2000_pci_write(uint8_t* ptr, uint8_t addr, uint8_t data)
         return 0;
     case 0x20 ... 0x2F: // more io bars
         return 0;
-    case 0x30 ... 0x33: // mem io bars
+    case 0x30 ... 0x33:
         return 0;
     case 0x3C: // interrupt pin
         return 0;
@@ -561,10 +568,13 @@ static void ne2000_receive(void* data, int len)
 
         memstart = ne2000.mem + ne2000.pagestart;
         // Copy the rest of the bytes to the beginning of pagestart
+        printf("addr=%p len=%d\n", data + (len1 - 4), len - (len1 + 4));
+        if ((len - (len1 + 4)) < 0)
+            __asm__("int3");
         memcpy(memstart, data + (len1 - 4), len - (len1 + 4));
     }
     ne2000.curr = nextpg;
-    ne2000_trigger_irq(ISR_RXE);
+    ne2000_trigger_irq(ISR_PRX);
 }
 
 void ne2000_poll(void)
