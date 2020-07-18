@@ -498,8 +498,8 @@ static int ne2000_pci_write(uint8_t* ptr, uint8_t addr, uint8_t data)
         return 0;
     case 0x20 ... 0x2F: // more io bars
         return 0;
-    case 0x30 ... 0x33:
-        return 0;
+    case 0x30 ... 0x33: // option rom -- ignore since we don't have one (and it messes with non-PCI vga)
+        return 1;
     case 0x3C: // interrupt pin
         return 0;
     default:
