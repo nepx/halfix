@@ -1,6 +1,7 @@
 // INI file parser.
 // Inspired by https://dev.to/dropconfig/making-an-ini-parser-5ejn
 
+#include "net.h"
 #include "pc.h"
 #include "util.h"
 #include <stdlib.h>
@@ -191,11 +192,25 @@ static int get_field_int(struct ini_section* sect, char* name, int def)
     int res = 0, i = 0;
     if (!str)
         return def; // If the field isn't there, then simply return the default
-    for (;; ++i) {
-        if (str[i] < '0' || str[i] > '9')
-            break;
-        res = res * 10 + str[i] - '0';
-    }
+    if (str[0] == '0' && str[1] == 'x')
+        for (;; ++i) {
+            int n;
+            if (str[i] >= '0' && str[i] <= '9')
+                n = str[i] - '0';
+            else if (str[i] >= 'A' && str[i] <= 'F')
+                n = str[i] - 'A';
+            else if (str[i] >= 'a' && str[i] <= 'f')
+                n = str[i] - 'a';
+            else
+                break;
+            res = (res << 4) + n;
+        }
+    else
+        for (;; ++i) {
+            if (str[i] < '0' || str[i] > '9')
+                break;
+            res = res * 10 + str[i] - '0';
+        }
     switch (str[i]) {
     case 'K':
     case 'k':
@@ -283,20 +298,20 @@ static int parse_disk(struct drive_info* drv, struct ini_section* s, int id)
     int driver = get_field_enum(s, "driver", driver_types, -1), inserted = get_field_int(s, "inserted", 0), wb = get_field_int(s, "writeback", 0);
     char* path = get_field_string(s, "file");
 
-    if(driver < 0 && inserted){
+    if (driver < 0 && inserted) {
 #ifndef EMSCRIPTEN
-        // Try auto-detecting driver type if not specified. 
+        // Try auto-detecting driver type if not specified.
         driver = drive_autodetect_type(path);
-        if(driver < 0)
+        if (driver < 0)
             FATAL("INI", "Unable to determine driver to use for ata%d-%s!\n", id >> 1, id & 1 ? "slave" : "master");
-        
+
 #else
-        // The wrapper code already knows what driver we have. It knows best. 
+        // The wrapper code already knows what driver we have. It knows best.
         driver = 0;
 #endif
     }
 
-    if(driver == 0 && wb) 
+    if (driver == 0 && wb)
         printf("WARNING: Disk %d uses async (chunked) driver but writeback is not supported!!\n", id);
     drv->modify_backing_file = wb;
     if (path && inserted) {
@@ -306,7 +321,7 @@ static int parse_disk(struct drive_info* drv, struct ini_section* s, int id)
             return drive_init(drv, path);
         else
             return drive_simple_init(drv, path);
-#else   
+#else
         UNUSED(driver);
         EM_ASM_({ window["drive_init"]($0, $1, $2); }, drv, path, id);
 #endif
@@ -365,6 +380,52 @@ int parse_cfg(struct pc_settings* pc, char* data)
     if (res) {
         fprintf(stderr, "Unable to initialize floppy drive images\n");
         goto fail;
+    }
+
+    // Check for network
+    struct ini_section* net = get_section(global, "ne2000");
+    if (net) {
+        pc->ne2000.enabled = get_field_int(net, "enabled", 1);
+        pc->ne2000.pci = get_field_int(net, "pci", pc->pci_enabled);
+        pc->ne2000.port_base = get_field_int(net, "iobase", 0x300);
+        pc->ne2000.irq = get_field_int(net, "irq", 3);
+        char* mac = get_field_string(net, "mac");
+        if (!mac) {
+            for (int i = 0; i < 6; i++)
+                pc->ne2000.mac_address[i] = 0; // Setting address to all zeros will let the controller decide.
+        } else {
+            // XXX - messy loop
+            for (int k = 0, i = 0; k < 6; k++) {
+                // MAC addresses must be in the form AA:AA:AA:AA:AA:AA
+                int mac_part = 0;
+                if (k != 0)
+                    if (mac[i++] != ':')
+                        fprintf(stderr, "Malformed MAC address\n");
+
+                for (int j = 0; j < 2; j++) {
+                    int n;
+                    if (mac[j + i] >= '0' && mac[j + i] <= '9')
+                        n = mac[j + i] - '0';
+                    else if (mac[j + i] >= 'A' && mac[j + i] <= 'F')
+                        n = mac[j + i] - 'A';
+                    else if (mac[j + i] >= 'a' && mac[j + i] <= 'f')
+                        n = mac[j + i] - 'a';
+                    else
+                        FATAL("INI", "Malformed MAC address\n");
+                    mac_part = (mac_part << 4) | n;
+                }
+                i += 2;
+            }
+        }
+#ifndef EMSCRIPTEN
+        if (pc->ne2000.enabled) {
+            // Emscripten network configuration is done in libhalfix.js -- there's nothing to do here.
+            char* cfg = get_field_string(net, "arg"); // "arg" is a parameter to the network driver
+            net_init(cfg);
+        }
+#endif
+    } else {
+        pc->ne2000.enabled = 0;
     }
 
     // Determine boot order
