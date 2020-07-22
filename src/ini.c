@@ -442,6 +442,7 @@ int parse_cfg(struct pc_settings* pc, char* data)
 
     UNUSED(get_section);
 
+    free_ini(global);
     return 0;
 fail:
     free_ini(global);
