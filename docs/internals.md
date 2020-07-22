@@ -79,6 +79,8 @@ The loop ensures that at least one instruction will be run every time `cpu_execu
 
 ### `cpu_get_trace`
 
+*Functional description: retreives a `struct decoded_instruction` corresponding to the current value of `cpu.eip_phys`*
+
 Traces are indexed by physical address, which seems strange at first since most protected mode code uses paging. The `I_NEXT(i)` macro, amongst other things, increments only the physical EIP value. The reason behind this is because the same physical page can be mapped in multiple locations in memory using paging, but there will be at most one physical page containing the code (and thus, every duplicate can share the same code). 
 
 Previous versions of Halfix had issues with the same physical page being mapped in different virtual memory locations (as sometimes happens with shared libraries). It was caused by treating relative jumps as absolute ones with an immediate operand (i.e. instead of `jmp eax` it was `jmp abs 0x10000000`), so code compiled at virtual address, say, `0x12345000` wouldn't work properly when the virtual address was `0xFFFFF000`. This version treats relative jumps as relative jumps so code is, again, position independent. 
@@ -104,5 +106,38 @@ Note that with paging, if you verify one byte of a page for reading/writing, the
 `cpu_get_trace` begins by checking whether the top 20 bits of the current physical EIP (`phys_eip`) match the top 20 bits of the last physical EIP (`last_phys_eip`) we've translated (during startup, `phys_eip` is `0xFFFF0` and `last_phys_eip` is `0`, so it still works then). If they differ, then some paging checks are run, first verifying that the page is readable and then, in the case that PAE is supported, checking the TLB attribute bits\*. If either are invalid, we call `cpu_mmu_translate` using our still-valid linear EIP, which does the paging translation for us (the `| 8` forces `cpu_mmu_translate` to watch for the NX bit). Then some of our values are recomputed: `phys_eip` is converted from a pointer to a memory offset (using `PTR_TO_PHYS` and the TLB linear-to-physical resolution algorithm, which is similar to how the `eip_bias` thing works), `eip_bias` and `last_phys_eip` are computed given this new value. 
 
 \* (Note that if PAE support is off, `cpu.tlb_attrs[lin_eip >> 12] & TLB_ATTR_NX` will always evaluate to zero). 
+
+If a page fault occurs while we compute `phys_eip`, then all we're left with is the linear address, pulled from the IDT. But without a second call to `cpu_mmu_translate`, we can't tell what `phys_eip` is. 
+
+One solution is to simply wrap `cpu_get_trace` in a giant loop: 
+
+```c
+struct decoded_instruction* cpu_get_trace(void)
+{
+    while (1) {
+        if ((cpu.phys_eip ^ cpu.last_phys_eip) > 4095) {
+            if (cpu_mmu_translate(lin_eip, cpu.tlb_shift_read | 8))
+                continue; // Start from the top again
+        }
+
+        struct decoded_instruction* i = get_trace_somehow();
+        return i; // Exit out of loop
+    }
+}
+```
+
+Emscripten generates suboptimal code in this case (using a multitude of `label` variables instead of one main loop), even with `-O3`. A slightly stranger, but no less correct, way is to return a dummy instruction that immediately calls `cpu_get_trace` once executed. This eliminates the need for the `while` loop, and simple tests have shown a 5-10% increase in performance, making this optimization "worth it." 
+
+The dummy instruction in question is `temporary_placeholder`, and it simply invokes `op_trace_end`, whose sole purpose is to call `cpu_get_trace`. 
+
+All translated instructions in the `struct decoded_instruction` format are kept in a huge table called `cpu.trace_cache`. During runtime, it's filled with instruction traces, seemingly plucked at random from main memory, invalidated traces (from `cpu/smc.c`), and garbage data from previous translations. To make sense of the trace cache, `cpu_get_trace` consults the an array of `struct trace_info`, `cpu.trace_info`. 
+
+The "ideal" `cpu.trace_info` array would encompass every single byte in system memory so that there are absolutely no collisions. However, in practice we have a great deal less memory available to us (especially in the browser, with Emscripten), so we use a smaller table and accept the fact that we'll see collisions from time to time. It's possible to hash `cpu.phys_eip` so that collisions become less frequent, but there's not much of a performance boost if we do enable hashing, I've found. 
+
+In the case that we either experience a `cpu.trace_info` collision *or* the corresponding trace entry isn't present, we overwrite the current values within that particular entry. 
+
+To prevent buffer overflows, `cpu_decode_instruction` caps the maximum trace length to `MAX_TRACE_SIZE` instructions, which is hard-coded to 31 at the time of writing. While 31 instructions may seem stifling, the vast majority of traces are shorter than this; in fact, the optimal number of instructions per trace is eight, since `TRACE_INFO_ENTRIES / TRACE_CACHE_SIZE = 8`. I've found that this is a reasonable ratio for most real-world software. 
+
+
 
 TBC
