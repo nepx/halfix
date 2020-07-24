@@ -163,7 +163,7 @@ void cpu_shift8(int op, uint8_t* dest, uint8_t src)
             break;
         case 2: // RCL
             op1 = *dest;
-            op2 = src % 9;
+            op2 = (src & 31) % 9;
             if (op2) {
                 cf = cpu_get_cf();
                 res = (op1 << op2) | (cf << (op2 - 1)) | (op1 >> (9 - op2));
@@ -175,7 +175,7 @@ void cpu_shift8(int op, uint8_t* dest, uint8_t src)
             break;
         case 3: // RCR
             op1 = *dest;
-            op2 = src % 9;
+            op2 = (src & 31) % 9;
             if (op2) {
                 cf = cpu_get_cf();
                 res = (op1 >> op2) | (cf << (8 - op2)) | (op1 << (9 - op2));
@@ -251,7 +251,7 @@ void cpu_shift16(int op, uint16_t* dest, uint16_t src)
             break;
         case 2:
             op1 = *dest;
-            op2 = src % 17;
+            op2 = (src & 31) % 17;
             if (op2) {
                 cf = cpu_get_cf();
                 res = (op1 << op2) | (cf << (op2 - 1)) | (op1 >> (17 - op2));
@@ -263,7 +263,7 @@ void cpu_shift16(int op, uint16_t* dest, uint16_t src)
             break;
         case 3:
             op1 = *dest;
-            op2 = src % 17;
+            op2 = (src & 31) % 17;
             if (op2) {
                 int cf = cpu_get_cf();
                 res = (op1 >> op2) | (cf << (16 - op2)) | (op1 << (17 - op2));
