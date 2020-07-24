@@ -337,7 +337,7 @@ void cpu_shift32(int op, uint32_t* dest, uint32_t src)
             break;
         case 2:
             op1 = *dest;
-            op2 = src % 33;
+            op2 = src & 31;
             if (op2) {
                 cf = cpu_get_cf();
                 if (op2 == 1)
@@ -352,7 +352,7 @@ void cpu_shift32(int op, uint32_t* dest, uint32_t src)
             break;
         case 3:
             op1 = *dest;
-            op2 = src % 33;
+            op2 = src & 31;
             if (op2) {
                 cf = cpu_get_cf();
                 if (op2 == 1)
