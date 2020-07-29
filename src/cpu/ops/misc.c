@@ -7,13 +7,16 @@
 
 #define EXCEPTION_HANDLER return 1
 
+// If every define below is commented, then it'll pretend to be a generic Pentium-compatible CPU.
 // Uncomment this to make the CPU pretend it's a 486 (necessary for NT 3.51 install)
 //#define I486_SUPPORT 
 // Uncomment this to make the CPU pretend it's a Pentium 4
 //#define P4_SUPPORT
 // Uncomment this to make the CPU pretend it's a Core Duo
 // Required for Windows 8
-#define CORE_DUO_SUPPORT
+//#define CORE_DUO_SUPPORT
+// Uncomment this to make the CPU pretend it's an Intel Atom N270
+#define ATOM_N270_SUPPORT
 
 void cpuid(void)
 {
@@ -21,7 +24,7 @@ void cpuid(void)
     switch (cpu.reg32[EAX]) {
     // TODO: Allow this instruction to be customized
     case 0:
-#ifdef CORE_DUO_SUPPORT
+#if defined(CORE_DUO_SUPPORT) || defined(ATOM_N270_SUPPORT)
         cpu.reg32[EAX] = 10;
 #elif defined (I486_SUPPORT)
         cpu.reg32[EAX] = 1;
@@ -42,6 +45,11 @@ void cpuid(void)
         cpu.reg32[EAX] = 0x000006EC;
         cpu.reg32[ECX] = 0xC189;
         cpu.reg32[EDX] = 0x9febf9ff | cpu_apic_connected() << 9;
+        cpu.reg32[EBX] = 0x00010800;
+#elif defined(ATOM_N270_SUPPORT)
+        cpu.reg32[EAX] = 0x000106C2;
+        cpu.reg32[ECX] = 0x40C39D;
+        cpu.reg32[EDX] = 0xBFEBF9FF | cpu_apic_connected() << 9;
         cpu.reg32[EBX] = 0x00010800;
 #elif defined (I486_SUPPORT)
         cpu.reg32[EAX] = 0x402;
@@ -67,6 +75,11 @@ void cpuid(void)
         cpu.reg32[ECX] = 0;
         cpu.reg32[EDX] = 0x2c04307d;
         cpu.reg32[EBX] = 0xF0;
+#elif defined(ATOM_N270_SUPPORT)
+        cpu.reg32[EAX] = 0x4fba5901;
+        cpu.reg32[ECX] = 0;
+        cpu.reg32[EDX] = 0;
+        cpu.reg32[EBX] = 0x0e3080c0;
 #else
         cpu.reg32[EAX] = 0x00410601;
         cpu.reg32[ECX] = 0;
@@ -74,27 +87,47 @@ void cpuid(void)
         cpu.reg32[EBX] = 0;
 #endif
         break;
-#ifdef CORE_DUO_SUPPORT
+#if defined(CORE_DUO_SUPPORT) || defined(ATOM_N270_SUPPORT)
     case 4:
         switch (cpu.reg32[ECX]) {
-
         case 0:
+#if defined (CORE_DUO_SUPPORT)
             cpu.reg32[EAX] = 0x04000121;
             cpu.reg32[EBX] = 0x01C0003F;
             cpu.reg32[ECX] = 0x0000003F;
             cpu.reg32[EDX] = 0x00000001;
+#else // ATOM_N270_SUPPORT
+            cpu.reg32[EAX] = 0x00004121;
+            cpu.reg32[EBX] = 0x0140003f;
+            cpu.reg32[ECX] = 0x0000003F;
+            cpu.reg32[EDX] = 0x00000001;
+#endif
             break;
         case 1:
+#if defined (CORE_DUO_SUPPORT)
             cpu.reg32[EAX] = 0x04000122;
             cpu.reg32[EBX] = 0x01C0003F;
             cpu.reg32[ECX] = 0x0000003F;
             cpu.reg32[EDX] = 0x00000001;
+#else // ATOM_N270_SUPPORT
+            cpu.reg32[EAX] = 0x00004122;
+            cpu.reg32[EBX] = 0x01C0003f;
+            cpu.reg32[ECX] = 0x0000003F;
+            cpu.reg32[EDX] = 0x00000001;
+#endif
             break;
         case 2:
+#if defined (CORE_DUO_SUPPORT)
             cpu.reg32[EAX] = 0x04004143;
             cpu.reg32[EBX] = 0x01C0003F;
             cpu.reg32[ECX] = 0x00000FFF;
             cpu.reg32[EDX] = 0x00000001;
+#else // ATOM_N270_SUPPORT
+            cpu.reg32[EAX] = 0x00004143;
+            cpu.reg32[EBX] = 0x01C0003F;
+            cpu.reg32[ECX] = 0x000003FF;
+            cpu.reg32[EDX] = 0x00000001;
+#endif
             break;
         default:
             cpu.reg32[EAX] = 0;
@@ -104,27 +137,42 @@ void cpuid(void)
             return;
         }
         break;
-#ifdef CORE_DUO_SUPPORT
     case 5: 
+#ifdef CORE_DUO_SUPPORT
         cpu.reg32[EAX] = 0x00000040;
         cpu.reg32[ECX] = 0x00000003;
         cpu.reg32[EDX] = 0x00022220;
         cpu.reg32[EBX] = 0x00000040;
-        break;
+#else
+        cpu.reg32[EAX] = 0x00000040;
+        cpu.reg32[ECX] = 0x00000003;
+        cpu.reg32[EDX] = 0x00020220;
+        cpu.reg32[EBX] = 0x00000040;
 #endif
+        break;
     case 6:
         cpu.reg32[EAX] = 1;
         cpu.reg32[ECX] = 1;
         cpu.reg32[EDX] = 0;
         cpu.reg32[EBX] = 2;
         break;
+#ifdef ATOM_N270_SUPPORT
+    case 0x40000001:
+#endif
     case 10:
+#ifdef CORE_DUO_SUPPORT
         cpu.reg32[EAX] = 0x07280201;
         cpu.reg32[EBX] = 0x00000000;
         cpu.reg32[ECX] = 0x00000000;
         cpu.reg32[EDX] = 0x00000000;
-        break;
+#else
+        cpu.reg32[EAX] = 0x07280203;
+        cpu.reg32[EBX] = 0x00000000;
+        cpu.reg32[ECX] = 0x00000000;
+        cpu.reg32[EDX] = 0x00002501;
 #endif
+        break;
+#endif // defined(CORE_DUO_SUPPORT) || defined(ATOM_N270_SUPPORT)
     case 0x80000000:
 #ifdef P4_SUPPORT
         cpu.reg32[EAX] = 0x80000004;
@@ -139,6 +187,10 @@ void cpuid(void)
         cpu.reg32[EDX] = 0x00100000;
         cpu.reg32[EBX] = 0;
         cpu.reg32[ECX] = cpu.reg32[EAX] = 0;
+#elif defined(ATOM_N270_SUPPORT)
+        cpu.reg32[EAX] = 0;
+        cpu.reg32[ECX] = 1;
+        cpu.reg32[EDX] = cpu.reg32[EBX] = 0;
 #else
         cpu.reg32[EBX] = 0;
         cpu.reg32[ECX] = cpu.reg32[EDX] = cpu.reg32[EAX] = 0;
@@ -150,6 +202,8 @@ void cpuid(void)
             "              Intel(R) Pentium(R) 4 CPU 1.80GHz"
 #elif defined(CORE_DUO_SUPPORT)
             "Intel(R) Core(TM) Duo CPU      T2400  @ 1.83GHz"
+#elif defined(ATOM_N270_SUPPORT)
+            "         Intel(R) Atom(TM) CPU N270   @ 1.60GHz"
 #else
             "Halfix Virtual CPU                             "
 #endif
