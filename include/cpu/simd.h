@@ -212,6 +212,15 @@ enum {
 };
 
 enum {
+    // 66 0F 7C
+    HADDPD_XGoXEo,
+    HADDPS_XGoXEo,
+    // 66 0F 7D
+    HSUBPD_XGoXEo,
+    HSUBPS_XGoXEo
+};
+
+enum {
     // 0F 7E
     MOVD_EdMGd,
     MOVD_EdXGd,
@@ -422,6 +431,7 @@ int execute_0F58_5F(struct decoded_instruction* i);
 int execute_0F60_67(struct decoded_instruction* i);
 int execute_0F68_6F(struct decoded_instruction* i);
 int execute_0F70_76(struct decoded_instruction* i);
+int execute_0F7C_7D(struct decoded_instruction* i);
 int execute_0F7E_7F(struct decoded_instruction* i);
 int execute_0FC2_C6(struct decoded_instruction* i);
 int execute_0FD0_D7(struct decoded_instruction* i);

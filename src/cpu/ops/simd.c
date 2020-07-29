@@ -2563,7 +2563,7 @@ int execute_0FE0_E7(struct decoded_instruction* i)
         CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 1));
         dest32 = get_sse_reg_dest(I_REG(flags));
-        uint32_t dword1 = *(uint32_t*)result_ptr, dword2 = *(uint32_t*)(result_ptr + 4);
+        uint32_t dword1 = *(uint32_t *)result_ptr, dword2 = *(uint32_t *)(result_ptr + 4);
         *(uint64_t*)(&dest32[0]) = int32_to_float64(dword1);
         *(uint64_t*)(&dest32[2]) = int32_to_float64(dword2);
         fp_exception = cpu_sse_handle_exceptions();
@@ -2695,4 +2695,54 @@ int cpu_emms(void)
     CHECK_MMX;
     fpu.tag_word = 0xFFFF;
     return 0;
+}
+
+// SSE3
+int execute_0F7C_7D(struct decoded_instruction* i)
+{
+    uint32_t flags = i->flags, *dest32;
+    union {
+        uint32_t b32[4];
+        uint64_t b64[2];
+    } temp;
+    switch (i->imm8 & 3) {
+    case HADDPD_XGoXEo:
+        CHECK_SSE;
+        // dest64[0] = dest64[0] + dest64[1]
+        // dest64[1] = src64[0] + src64[1]
+        // dest64[2] = dest64[2] + dest64[3]
+        // dest64[3] = src64[2] + src64[2]
+        EX(get_sse_read_ptr(flags, i, 4, 1)); // alignment forced
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        temp.b64[0] = float64_add(*(float64*)(&dest32[0]), *(float64*)(&dest32[2]), &status);
+        temp.b64[1] = float64_add(*(float64*)(result_ptr), *(float64*)(result_ptr + 8), &status);
+        break;
+    case HADDPS_XGoXEo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        temp.b32[0] = float32_add(dest32[0], dest32[1], &status);
+        temp.b32[1] = float32_add(dest32[2], dest32[3], &status);
+        temp.b32[2] = float32_add(*(float32*)(result_ptr), *(float32*)(result_ptr + 4), &status);
+        temp.b32[3] = float32_add(*(float32*)(result_ptr + 8), *(float32*)(result_ptr + 12), &status);
+        break;
+    case HSUBPD_XGoXEo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        temp.b64[0] = float64_sub(*(float64*)(&dest32[0]), *(float64*)(&dest32[2]), &status);
+        temp.b64[1] = float64_sub(*(float64*)(result_ptr), *(float64*)(result_ptr + 8), &status);
+        break;
+    case HSUBPS_XGoXEo:
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 1));
+        dest32 = get_sse_reg_dest(I_REG(flags));
+        temp.b32[0] = float32_sub(dest32[0], dest32[1], &status);
+        temp.b32[1] = float32_sub(dest32[2], dest32[3], &status);
+        temp.b32[2] = float32_sub(*(float32*)(result_ptr), *(float32*)(result_ptr + 4), &status);
+        temp.b32[3] = float32_sub(*(float32*)(result_ptr + 8), *(float32*)(result_ptr + 12), &status);
+        break;
+    }
+    memcpy(dest32, temp.b32, 16);
+    return cpu_sse_handle_exceptions();
 }

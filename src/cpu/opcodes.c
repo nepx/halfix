@@ -9,6 +9,10 @@
 
 #define EXCEPTION_HANDLER EXCEP()
 
+#if 0
+#include "binlog.c"  
+#endif
+
 #ifdef INSTRUMENT
 #define INSTRUMENT_INSN() cpu_instrument_execute()
 #else
@@ -617,6 +621,12 @@ OPTYPE op_int(struct decoded_instruction* i)
 }
 OPTYPE op_into(struct decoded_instruction* i)
 {
+#if 1
+#ifndef EMSCRIPTEN
+    __asm__("int3");
+    NEXT2(i->flags);
+#endif
+#endif
     if (cpu_get_of()) {
         if (cpu_interrupt(4, 0, INTERRUPT_TYPE_SOFTWARE, VIRT_EIP() + i->flags))
             EXCEP();
@@ -3101,6 +3111,10 @@ OPTYPE op_sse_68_6F(struct decoded_instruction* i){
 }
 OPTYPE op_sse_70_76(struct decoded_instruction* i){
     if(execute_0F70_76(i)) EXCEP();
+    NEXT(i->flags);
+}
+OPTYPE op_sse_7C_7D(struct decoded_instruction* i){
+    if(execute_0F7C_7D(i)) EXCEP();
     NEXT(i->flags);
 }
 OPTYPE op_sse_7E_7F(struct decoded_instruction* i){

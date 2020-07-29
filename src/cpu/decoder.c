@@ -2692,6 +2692,26 @@ static int decode_0F77(struct decoded_instruction* i)
     return 0;
 }
 
+static const int decode_7C_7F[4] = {
+    HADDPD_XGoXEo,
+    HADDPS_XGoXEo,
+    HSUBPD_XGoXEo,
+    HSUBPS_XGoXEo
+};
+static int decode_sse7C_7D(struct decoded_instruction* i)
+{
+    uint8_t opcode = rawp[-1] & 1, modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    if(sse_prefix != SSE_PREFIX_F2 && sse_prefix != SSE_PREFIX_66)
+        i->handler = op_ud_exception;
+    else 
+        i->handler = op_sse_7C_7D;
+    I_SET_OP(flags, modrm >= 0xC0);
+    i->flags = flags;
+    i->imm8 = decode_7C_7F[opcode << 1 | (sse_prefix == SSE_PREFIX_F2)];
+    return 0;
+}
+
 static const int decode_7E_7F[2 * 4] = {
     MOVD_EdMGd, // 0F 7E
     MOVD_EdXGd, // 66 0F 7E
@@ -3882,8 +3902,8 @@ static const decode_handler_t table0F[256] = {
     /* 0F 79 */ decode_invalid0F,
     /* 0F 7A */ decode_invalid0F,
     /* 0F 7B */ decode_invalid0F,
-    /* 0F 7C */ decode_invalid0F,
-    /* 0F 7D */ decode_invalid0F,
+    /* 0F 7C */ decode_sse7C_7D,
+    /* 0F 7D */ decode_sse7C_7D,
     /* 0F 7E */ decode_sse7E_7F,
     /* 0F 7F */ decode_sse7E_7F,
     /* 0F 80 */ decode_jccv,

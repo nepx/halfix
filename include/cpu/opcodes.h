@@ -474,6 +474,7 @@ OPTYPE op_sse_58_5F(struct decoded_instruction* i);
 OPTYPE op_sse_60_67(struct decoded_instruction* i);
 OPTYPE op_sse_68_6F(struct decoded_instruction* i);
 OPTYPE op_sse_70_76(struct decoded_instruction* i);
+OPTYPE op_sse_7C_7D(struct decoded_instruction* i);
 OPTYPE op_sse_7E_7F(struct decoded_instruction* i);
 OPTYPE op_sse_C2_C6(struct decoded_instruction* i);
 OPTYPE op_sse_D0_D7(struct decoded_instruction* i);
