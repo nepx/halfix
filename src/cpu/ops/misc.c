@@ -7,6 +7,8 @@
 
 #define EXCEPTION_HANDLER return 1
 
+// Uncomment this to make the CPU pretend it's a 486 (necessary for NT 3.51 install)
+//#define I486_SUPPORT 
 // Uncomment this to make the CPU pretend it's a Pentium 4
 //#define P4_SUPPORT
 // Uncomment this to make the CPU pretend it's a Core Duo
@@ -21,6 +23,8 @@ void cpuid(void)
     case 0:
 #ifdef CORE_DUO_SUPPORT
         cpu.reg32[EAX] = 10;
+#elif defined (I486_SUPPORT)
+        cpu.reg32[EAX] = 1;
 #else
         cpu.reg32[EAX] = 2; // Windows NT doesn't like big CPU levels!
 #endif
@@ -39,6 +43,11 @@ void cpuid(void)
         cpu.reg32[ECX] = 0xC189;
         cpu.reg32[EDX] = 0x9febf9ff | cpu_apic_connected() << 9;
         cpu.reg32[EBX] = 0x00010800;
+#elif defined (I486_SUPPORT)
+        cpu.reg32[EAX] = 0x402;
+        cpu.reg32[ECX] = 0;
+        cpu.reg32[EDX] = 1; // FPU
+        cpu.reg32[EBX] = 0;
 #else
         cpu.reg32[EAX] = 0x000006a0;
         cpu.reg32[ECX] = 0;
@@ -46,6 +55,7 @@ void cpuid(void)
         cpu.reg32[EBX] = 0x00010000;
 #endif
         break;
+#ifndef I486_SUPPORT
     case 2:
 #ifdef P4_SUPPORT
         cpu.reg32[EAX] = 0x665b5001;
@@ -183,6 +193,7 @@ void cpuid(void)
         cpu.reg32[EAX] = 0x2028; // TODO: 0x2024 for 36-bit address space?
         cpu.reg32[ECX] = cpu.reg32[EDX] = cpu.reg32[EBX] = 0;
         break;
+#endif /* ndef I486_SUPPORT */
     default:
         CPU_DEBUG("Unknown CPUID level: 0x%08x\n", cpu.reg32[EAX]);
     case 0x80860000 ... 0x80860007: // Transmeta
