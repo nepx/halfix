@@ -508,7 +508,7 @@ static void cpu_pslldq(uint64_t* a, int shift, int mask)
         a[1] = a[0];
         a[0] = 0;
     } else if (shift > 64) {
-        a[1] = a[0] << (shift - 32);
+        a[1] = a[0] << (shift - 64);
         a[0] = 0;
     } else {
         a[0] <<= shift; // Bottom bits should be 0
