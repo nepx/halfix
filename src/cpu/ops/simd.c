@@ -428,6 +428,19 @@ static void pshuf(void* dest, void* src, int imm, int shift)
     memcpy(dest, res, 4 << shift);
 }
 
+// Not the same as pshuf
+static void pshufb(void* dest, void* src, int bytes)
+{
+    int8_t* src8 = src;
+    uint8_t res[16], *dest8 = dest;
+    int mask = bytes - 1;
+    // https://www.chessprogramming.org/SSSE3#PSHUFB
+    for (int i = 0; i < bytes; i++) {
+        res[i] = src8[i] < 0 ? 0 : dest8[src8[i] & mask];
+    }
+    memcpy(dest, res, bytes);
+}
+
 static void cpu_psraw(uint16_t* a, int shift, int mask, int wordcount)
 {
     // SAR but with MMX/SSE operands
@@ -2705,38 +2718,29 @@ int execute_0F7C_7D(struct decoded_instruction* i)
         uint32_t b32[4];
         uint64_t b64[2];
     } temp;
+    CHECK_SSE;
+    EX(get_sse_read_ptr(flags, i, 4, 1)); // alignment forced
+    dest32 = get_sse_reg_dest(I_REG(flags));
     switch (i->imm8 & 3) {
     case HADDPD_XGoXEo:
-        CHECK_SSE;
         // dest64[0] = dest64[0] + dest64[1]
         // dest64[1] = src64[0] + src64[1]
         // dest64[2] = dest64[2] + dest64[3]
         // dest64[3] = src64[2] + src64[2]
-        EX(get_sse_read_ptr(flags, i, 4, 1)); // alignment forced
-        dest32 = get_sse_reg_dest(I_REG(flags));
         temp.b64[0] = float64_add(*(float64*)(&dest32[0]), *(float64*)(&dest32[2]), &status);
         temp.b64[1] = float64_add(*(float64*)(result_ptr), *(float64*)(result_ptr + 8), &status);
         break;
     case HADDPS_XGoXEo:
-        CHECK_SSE;
-        EX(get_sse_read_ptr(flags, i, 4, 1));
-        dest32 = get_sse_reg_dest(I_REG(flags));
         temp.b32[0] = float32_add(dest32[0], dest32[1], &status);
         temp.b32[1] = float32_add(dest32[2], dest32[3], &status);
         temp.b32[2] = float32_add(*(float32*)(result_ptr), *(float32*)(result_ptr + 4), &status);
         temp.b32[3] = float32_add(*(float32*)(result_ptr + 8), *(float32*)(result_ptr + 12), &status);
         break;
     case HSUBPD_XGoXEo:
-        CHECK_SSE;
-        EX(get_sse_read_ptr(flags, i, 4, 1));
-        dest32 = get_sse_reg_dest(I_REG(flags));
         temp.b64[0] = float64_sub(*(float64*)(&dest32[0]), *(float64*)(&dest32[2]), &status);
         temp.b64[1] = float64_sub(*(float64*)(result_ptr), *(float64*)(result_ptr + 8), &status);
         break;
     case HSUBPS_XGoXEo:
-        CHECK_SSE;
-        EX(get_sse_read_ptr(flags, i, 4, 1));
-        dest32 = get_sse_reg_dest(I_REG(flags));
         temp.b32[0] = float32_sub(dest32[0], dest32[1], &status);
         temp.b32[1] = float32_sub(dest32[2], dest32[3], &status);
         temp.b32[2] = float32_sub(*(float32*)(result_ptr), *(float32*)(result_ptr + 4), &status);
@@ -2745,4 +2749,34 @@ int execute_0F7C_7D(struct decoded_instruction* i)
     }
     memcpy(dest32, temp.b32, 16);
     return cpu_sse_handle_exceptions();
+}
+
+// SSSE3
+int execute_0F38(struct decoded_instruction* i)
+{
+    uint32_t flags = i->flags;
+    switch (i->imm8) {
+    case 0: // PSHUFB
+        CHECK_MMX;
+        EX(get_mmx_read_ptr(flags, i, 2));
+        pshufb(get_mmx_reg_dest(I_REG(flags)), result_ptr, 8);
+        break;
+    default:
+        CPU_FATAL("TODO: implement 0F 38 %02x", i->imm8);
+    }
+    return 0;
+}
+int execute_660F38(struct decoded_instruction* i)
+{
+    uint32_t flags = i->flags;
+    switch (i->imm8) {
+    case 0: // PSHUFB
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 0)); // no unalign excep
+        pshufb(get_sse_reg_dest(I_REG(flags)), result_ptr, 16);
+        break;
+    default:
+        CPU_FATAL("TODO: implement 660F 38 %02x", i->imm8);
+    }
+    return 0;
 }

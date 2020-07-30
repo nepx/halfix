@@ -2398,6 +2398,22 @@ static int decode_0F32(struct decoded_instruction* i)
     return 0;
 }
 
+static int decode_0F38(struct decoded_instruction* i)
+{
+    // Opcode ordering:
+    //  [prefixes] 0F 38 <minor opcode> <modr/m> [sib] [disp]
+    // The minor opcode we put in imm8
+    i->imm8 = rb();
+
+    uint8_t modrm = rb();
+    int flags = parse_modrm(i, modrm, 6);
+    if(sse_prefix == SSE_PREFIX_66) i->handler = op_sse_6638;
+    else i->handler = op_sse_38;
+    I_SET_OP(flags, modrm >= 0xC0);
+    i->flags = flags;
+    return 0;
+}
+
 static int decode_sysenter_sysexit(struct decoded_instruction* i) // 0F34, 0F35
 {
     i->flags = 0;
@@ -3834,7 +3850,7 @@ static const decode_handler_t table0F[256] = {
     /* 0F 35 */ decode_sysenter_sysexit,
     /* 0F 36 */ decode_invalid0F,
     /* 0F 37 */ decode_invalid0F,
-    /* 0F 38 */ decode_invalid0F,
+    /* 0F 38 */ decode_0F38,
     /* 0F 39 */ decode_invalid0F,
     /* 0F 3A */ decode_invalid0F,
     /* 0F 3B */ decode_invalid0F,

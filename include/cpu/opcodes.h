@@ -469,6 +469,8 @@ OPTYPE op_fxrstor(struct decoded_instruction* i);
 // SSE
 OPTYPE op_sse_10_17(struct decoded_instruction* i);
 OPTYPE op_sse_28_2F(struct decoded_instruction* i);
+OPTYPE op_sse_38(struct decoded_instruction* i);
+OPTYPE op_sse_6638(struct decoded_instruction* i);
 OPTYPE op_sse_50_57(struct decoded_instruction* i);
 OPTYPE op_sse_58_5F(struct decoded_instruction* i);
 OPTYPE op_sse_60_67(struct decoded_instruction* i);

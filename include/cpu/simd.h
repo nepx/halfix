@@ -426,6 +426,8 @@ int cpu_sse_exception(void);
 int cpu_emms(void);
 int execute_0F10_17(struct decoded_instruction* i);
 int execute_0F28_2F(struct decoded_instruction* i);
+int execute_0F38(struct decoded_instruction* i);
+int execute_660F38(struct decoded_instruction* i);
 int execute_0F50_57(struct decoded_instruction* i);
 int execute_0F58_5F(struct decoded_instruction* i);
 int execute_0F60_67(struct decoded_instruction* i);
