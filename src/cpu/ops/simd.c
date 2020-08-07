@@ -508,7 +508,7 @@ static void cpu_pslldq(uint64_t* a, int shift, int mask)
         a[1] = a[0];
         a[0] = 0;
     } else if (shift > 64) {
-        a[1] = a[0] << (shift - 64);
+        a[1] = a[0] << (shift - 64L);
         a[0] = 0;
     } else {
         a[0] <<= shift; // Bottom bits should be 0
@@ -839,6 +839,28 @@ static void psadbw(void* dest, void* src, int qwordcount)
         dest8[offs | 0] = sum;
         dest8[offs | 1] = sum >> 8;
     }
+}
+
+static void pabsb(void* dest, void* src, int bytecount)
+{
+    int8_t* src8 = src;
+    uint8_t* dest8 = dest;
+    for (int i = 0; i < bytecount; i++)
+        dest8[i] = src8[i] < 0 ? -src8[i] : src8[i];
+}
+static void pabsw(void* dest, void* src, int wordcount)
+{
+    int16_t* src16 = src;
+    uint16_t* dest16 = dest;
+    for (int i = 0; i < wordcount; i++)
+        dest16[i] = src16[i] < 0 ? -src16[i] : src16[i];
+}
+static void pabsd(void* dest, void* src, int dwordcount)
+{
+    int32_t* src32 = src;
+    uint32_t* dest32 = dest;
+    for (int i = 0; i < dwordcount; i++)
+        dest32[i] = src32[i] < 0 ? -src32[i] : src32[i];
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -2761,6 +2783,21 @@ int execute_0F38(struct decoded_instruction* i)
         EX(get_mmx_read_ptr(flags, i, 2));
         pshufb(get_mmx_reg_dest(I_REG(flags)), result_ptr, 8);
         break;
+    case 0x1C: // PABSB
+        CHECK_MMX;
+        EX(get_mmx_read_ptr(flags, i, 2));
+        pabsb(get_mmx_reg_dest(I_REG(flags)), result_ptr, 8);
+        break;
+    case 0x1D: // PABSW
+        CHECK_MMX;
+        EX(get_mmx_read_ptr(flags, i, 2));
+        pabsw(get_mmx_reg_dest(I_REG(flags)), result_ptr, 4);
+        break;
+    case 0x1E: // PABSD
+        CHECK_MMX;
+        EX(get_mmx_read_ptr(flags, i, 2));
+        pabsd(get_mmx_reg_dest(I_REG(flags)), result_ptr, 2);
+        break;
     default:
         CPU_FATAL("TODO: implement 0F 38 %02x", i->imm8);
     }
@@ -2774,6 +2811,21 @@ int execute_660F38(struct decoded_instruction* i)
         CHECK_SSE;
         EX(get_sse_read_ptr(flags, i, 4, 0)); // no unalign excep
         pshufb(get_sse_reg_dest(I_REG(flags)), result_ptr, 16);
+        break;
+    case 0x1C: // PABSB
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 0)); // no unalign excep
+        pabsb(get_sse_reg_dest(I_REG(flags)), result_ptr, 16);
+        break;
+    case 0x1D: // PABSW
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 0)); // no unalign excep
+        pabsw(get_sse_reg_dest(I_REG(flags)), result_ptr, 8);
+        break;
+    case 0x1E: // PABSD
+        CHECK_SSE;
+        EX(get_sse_read_ptr(flags, i, 4, 0)); // no unalign excep
+        pabsd(get_sse_reg_dest(I_REG(flags)), result_ptr, 4);
         break;
     default:
         CPU_FATAL("TODO: implement 660F 38 %02x", i->imm8);
