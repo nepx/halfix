@@ -103,29 +103,7 @@
             "include"
         ],
         "additional_flags": [
-            "@flags=!gtk", 
-            "@flags=!win32"
-        ]
-    },
-    "src/display-gtk3.c": {
-        "tasks": [],
-        "rebuild_flags": [],
-        "dependencies": [
-            "include/display.h",
-            "include/devices.h",
-            "include/util.h",
-            "include/io.h",
-            "include/pc.h",
-            "include/drive.h",
-            "include/state.h",
-            "include/util.h",
-            "include/state.h"
-        ],
-        "include_paths": [
-            "include"
-        ],
-        "additional_flags": [
-            "@flags=gtk",
+            "@flags=!tui", 
             "@flags=!win32"
         ]
     },
@@ -147,7 +125,7 @@
             "include"
         ],
         "additional_flags": [
-            "@flags=!gtk",
+            "@flags=!tui",
             "@flags=win32"
         ]
     },
@@ -203,6 +181,71 @@
             "include"
         ],
         "additional_flags": [
+        ]
+    },
+    "src/netdrv.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/drive.h",
+            "include/state.h",
+            "include/state.h",
+            "include/util.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+            "@flags=netdrv"
+        ]
+    },
+    "src/display-tui.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/drive.h",
+            "include/state.h",
+            "include/state.h",
+            "include/util.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+            "@flags=tui",
+            "@flags=!win32"
+        ]
+    },
+    "src/host/net-pcap.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/drive.h",
+            "include/state.h",
+            "include/state.h",
+            "include/util.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+            "@flags=net"
+        ]
+    },
+    "src/host/net-none.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/drive.h",
+            "include/state.h",
+            "include/state.h",
+            "include/util.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [
+            "@flags=!net"
         ]
     }
 }
