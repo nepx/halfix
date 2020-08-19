@@ -9,6 +9,7 @@ typedef uint32_t (*mmio_read_handler)(uint32_t address, int size);
 typedef void (*mmio_write_handler)(uint32_t address, uint32_t data, int size);
 typedef void (*abort_handler)(void);
 typedef void* (*mem_refill_handler)(uint32_t address, int write);
+typedef uint32_t (*ptr_to_phys_handler)(void* ptr);
 
 // Register a handler that will be invoked every time the CPU tries to read from a memory-mapped area.
 // Memory mapped areas are defined as any memory regions above the physical memory range or between 0xA0000 <= x < 0x100000
@@ -32,6 +33,8 @@ void cpu_register_pic_ack(abort_handler h);
 void cpu_register_fpu_irq(abort_handler h);
 // Register a handler to provide the emulator with pages of physical memory
 void cpu_register_mem_refill_handler(mem_refill_handler h);
+// Register a handler to provide the emulator with a way to convert pointers to physical addresses
+void cpu_register_ptr_to_phys(ptr_to_phys_handler h);
 // Register a handler to provide the emulator with pages of linear memory (useful for simulation of mmap in user mode)
 void cpu_register_lin_refill_handler(mem_refill_handler h);
 

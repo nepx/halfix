@@ -198,6 +198,9 @@ struct trace_info {
     uint32_t phys, state_hash;
     struct decoded_instruction* ptr;
     uint32_t flags;
+#ifdef DYNAREC
+    uint32_t calls; // Used by the dynamic recompiler to determine whether the block should be compiled
+#endif
 };
 
 struct cpu {
@@ -372,7 +375,13 @@ extern struct cpu cpu;
 
 #define MEM32(e) *(uint32_t*)(cpu.mem + e)
 #define MEM16(e) *(uint16_t*)(cpu.mem + e)
+#ifdef LIBCPU
+uint32_t cpulib_ptr_to_phys(void*);
+#define PTR_TO_PHYS(ptr) cpulib_ptr_to_phys(ptr)
+#else
+// Converts pointer to a physical address
 #define PTR_TO_PHYS(ptr) (uint32_t)(uintptr_t)((void*)ptr - cpu.mem)
+#endif
 
 // Based on the linear address, the TLB tag for this entry, and the shift for the current mode
 #define TLB_ENTRY_INVALID8(addr, tag, shift) (tag >> shift & 1)

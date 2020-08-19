@@ -51,7 +51,22 @@ static io_read_handler io_read8 = dummy_read, io_read16 = dummy_read, io_read32 
 static io_write_handler io_write8 = dummy_write, io_write16 = dummy_write, io_write32 = dummy_write;
 static abort_handler onabort = dummy, pic_ack = dummy, fpu_irq = dummy;
 static mem_refill_handler mrh = NULL, mrh_lin = NULL;
+static ptr_to_phys_handler ptph = NULL;
 static int apic_enabled;
+
+uint32_t cpulib_ptr_to_phys(void* p)
+{
+    if (ptph)
+        return ptph(p);
+    else
+        return (uint32_t)((uintptr_t)p - (uintptr_t)cpu.mem);
+}
+
+EXPORT
+void cpu_register_ptr_to_phys(ptr_to_phys_handler h)
+{
+    ptph = h;
+}
 
 EXPORT
 void cpu_register_mem_refill_handler(mem_refill_handler h)
