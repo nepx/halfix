@@ -29,7 +29,8 @@
 
 static int dev_kvm_fd, vm_fd, vcpu_fd, exit_reason = EXIT_STATUS_NORMAL, irq_line_state = 0, fast_return_requested = 0;
 static uint32_t memsz;
-static struct kvm_run *kvm_run, *mem;
+static struct kvm_run* kvm_run;
+static void* mem;
 
 int cpu_get_exit_reason(void)
 {
@@ -112,10 +113,11 @@ static int kvm_register_area(int flags, uint64_t guest_addr, void* host_addr, ui
     struct kvm_userspace_memory_region memreg;
     memreg.slot = slot++;
     memreg.flags = flags;
-    memreg.guest_phys_addr = guest_addr;
+    memreg.guest_phys_addr = (uint32_t)guest_addr;
     memreg.memory_size = size;
     memreg.userspace_addr = (uintptr_t)host_addr;
-    printf("%08x sz=%x\n", (uint32_t)guest_addr, (uint32_t)size);
+    //printf("slot=%d flags=%d phys=%08x sz=%08x p=%p\n", memreg.slot, memreg.flags, (uint32_t)memreg.guest_phys_addr, (uint32_t)memreg.memory_size, host_addr);
+
     if (ioctl(vm_fd, KVM_SET_USER_MEMORY_REGION, &memreg) < 0) {
         perror("KVM_SET_USER_MEMORY_REGION");
         return -1;
@@ -128,6 +130,7 @@ int cpu_init_mem(int size)
     mem = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     int c = kvm_register_area(0, 0, mem, 0xA0000);
     c |= kvm_register_area(0, 1 << 20, mem + (1 << 20), size - (1 << 20));
+    memsz = size;
     return c;
 }
 
@@ -135,7 +138,10 @@ void* cpu_get_ram_ptr(void) { return mem; }
 
 int cpu_add_rom(int addr, int length, void* data)
 {
-    if(addr < )
+    if ((uint32_t)addr < memsz) {
+        memcpy(mem + addr, data, length);
+        return kvm_register_area(KVM_MEM_READONLY, addr, mem + addr, (length + 0xFFF) & ~0xFFF);
+    }
     return kvm_register_area(KVM_MEM_READONLY, addr, data, (length + 0xFFF) & ~0xFFF);
 }
 
@@ -183,10 +189,13 @@ int cpu_run(int cycles)
     setitimer(ITIMER_REAL, &itimer, NULL);
 
     // Just like the emulated cpu_run, we loop until we hit a hlt, a device wants us to exit, or we've run out of cycles
-    if (setjmp(top) != 0) {
+    if (setjmp(top) == 0) {
+    top:
         if (fast_return_requested)
             goto done;
         int res = ioctl(vcpu_fd, KVM_RUN, 0);
+        if (res == -EINTR)
+            goto done;
         if (res < 0) {
             perror("KVM_RUN");
             CPU_FATAL("cannot run cpu");
@@ -195,16 +204,89 @@ int cpu_run(int cycles)
         UNUSED(cycles);
 
         switch (kvm_run->exit_reason) {
-        case KVM_EXIT_HLT:
-            exit_reason = EXIT_STATUS_HLT;
+        case KVM_EXIT_IO: { // 2
+            void* data = kvm_run->io.data_offset + (void*)kvm_run;
+            for (uint32_t i = 0; i < kvm_run->io.count; i++) {
+                if (kvm_run->io.direction == KVM_EXIT_IO_OUT) {
+                    switch (kvm_run->io.size) {
+                    case 1: // byte
+                        io_writeb(kvm_run->io.port, *(uint8_t*)data);
+                        break;
+                    case 2: // word
+                        io_writew(kvm_run->io.port, *(uint16_t*)data);
+                        break;
+                    case 4: // dword
+                        io_writed(kvm_run->io.port, *(uint32_t*)data);
+                        break;
+                    default:
+                        CPU_FATAL("unknown io sz=%d\n", kvm_run->io.size);
+                    }
+                } else {
+                    switch (kvm_run->io.size) {
+                    case 1: // byte
+                        *(uint8_t*)data = io_readb(kvm_run->io.port);
+                        break;
+                    case 2: // word
+                        *(uint16_t*)data = io_readw(kvm_run->io.port);
+                        break;
+                    case 4: // dword
+                        *(uint32_t*)data = io_readd(kvm_run->io.port);
+                        break;
+                    default:
+                        CPU_FATAL("unknown io sz=%d\n", kvm_run->io.size);
+                    }
+                }
+                data += kvm_run->io.size;
+            }
             break;
+        }
+        case KVM_EXIT_MMIO: { // 6
+            void* data = kvm_run->mmio.data;
+            if (kvm_run->mmio.is_write) {
+                switch (kvm_run->mmio.len) {
+                case 1:
+                    io_handle_mmio_write(kvm_run->mmio.phys_addr, *(uint8_t*)data, 0);
+                    break;
+                case 2:
+                    io_handle_mmio_write(kvm_run->mmio.phys_addr, *(uint16_t*)data, 1);
+                    break;
+                case 4:
+                    io_handle_mmio_write(kvm_run->mmio.phys_addr, *(uint32_t*)data, 2);
+                    break;
+                case 8:
+                    io_handle_mmio_write(kvm_run->mmio.phys_addr, *(uint32_t*)data, 2);
+                    io_handle_mmio_write(kvm_run->mmio.phys_addr + 4, *(uint32_t*)(data + 4), 2);
+                    break;
+                }
+            } else {
+                switch (kvm_run->mmio.len) {
+                case 1:
+                    *(uint8_t*)data = io_handle_mmio_read(kvm_run->mmio.phys_addr, 0);
+                    break;
+                case 2:
+                    *(uint16_t*)data = io_handle_mmio_read(kvm_run->mmio.phys_addr, 1);
+                    break;
+                case 4:
+                    *(uint32_t*)data = io_handle_mmio_read(kvm_run->mmio.phys_addr, 2);
+                    break;
+                case 8:
+                    *(uint32_t*)data = io_handle_mmio_read(kvm_run->mmio.phys_addr, 2);
+                    *(uint32_t*)(data + 4) = io_handle_mmio_read(kvm_run->mmio.phys_addr + 4, 2);
+                    break;
+                }
+            }
+            break;
+        }
+        case KVM_EXIT_HLT: // 5
+            exit_reason = EXIT_STATUS_HLT;
+            goto done;
         default:
             printf("todo: exit reason %d\n", kvm_run->exit_reason);
             break;
         }
+        goto top;
     }
 done:
-    exit(1);
     return 0;
 }
 
