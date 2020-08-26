@@ -11,7 +11,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -28,7 +28,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -43,7 +43,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -67,7 +67,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -83,7 +83,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -100,7 +100,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -115,7 +115,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -132,7 +132,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -149,7 +149,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -164,7 +164,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -191,7 +191,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -208,7 +208,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -224,7 +224,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -242,7 +242,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -257,7 +257,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -274,7 +274,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -291,7 +291,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -312,7 +312,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -339,7 +339,7 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
 
         ]
     },
@@ -366,8 +366,24 @@
         "include_paths": [
             "include"
         ],
-        "additional_flags": [ 
+        "additional_flags": [ "@flags=!kvm"
+        ]
+    },
+    "src/cpu/ops/kvm.c": {
+        "tasks": [],
+        "rebuild_flags": [],
+        "dependencies": [
+            "include/cpu/cpu.h",
+            "include/cpu/instruction.h",
+            "include/util.h",
+            "include/cpu/opcodes.h",
+            "include/cpu/instruction.h"
+        ],
+        "include_paths": [
+            "include"
+        ],
+        "additional_flags": [ "@flags=kvm"
 
         ]
-    }
+    },
 }
