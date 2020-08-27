@@ -67,6 +67,17 @@ int cpu_init(void)
         goto fail1;
     }
 
+    // Initialize TSS
+    uint64_t addr = 0xFFF00000 - 0x2000;
+    if (ioctl(vm_fd, KVM_SET_IDENTITY_MAP_ADDR, &addr) < 0) {
+        perror("KVM_SET_IDENTITY_MAP_ADDR");
+        goto fail2;
+    }
+    if (ioctl(vm_fd, KVM_SET_TSS_ADDR, addr + 0x1000) < 0) {
+        perror("KVM_SET_TSS_ADDR");
+        goto fail2;
+    }
+
     // init vcpu
     vcpu_fd = ioctl(vm_fd, KVM_CREATE_VCPU, 0);
     if (vcpu_fd < 0) {
@@ -170,33 +181,78 @@ void cpu_lower_intr_line(void)
     irq_line_state = 0;
 }
 
+#ifdef __x86_64__
+#define R(n) ((uint32_t)(regs.r##n))
+#else // i386
+#define R(n) regs.e##n
+#endif
+void cpu_debug(void)
+{
+    struct kvm_regs regs;
+    if (ioctl(vcpu_fd, KVM_GET_REGS, &regs) < 0)
+        CPU_FATAL("kvm get regs failed\n");
+    fprintf(stderr, "EAX: %08x ECX: %08x EDX: %08x EBX: %08x\n", R(ax), R(cx), R(dx), R(bx));
+    fprintf(stderr, "ESP: %08x EBP: %08x ESI: %08x EDI: %08x\n", R(ax), R(cx), R(dx), R(bx));
+    fprintf(stderr, "EFLAGS: %08x EIP: %08x\n", R(flags), R(ip));
+
+    struct kvm_sregs sregs;
+    if (ioctl(vcpu_fd, KVM_GET_SREGS, &sregs) < 0)
+        CPU_FATAL("kvm get regs failed\n");
+    fprintf(stderr, "ES.sel=%04x ES.base=%08x, ES.lim=%08x\n", sregs.es.selector, (uint32_t)sregs.es.base, (uint32_t)sregs.es.limit);
+    fprintf(stderr, "CS.sel=%04x CS.base=%08x, CS.lim=%08x\n", sregs.cs.selector, (uint32_t)sregs.cs.base, (uint32_t)sregs.cs.limit);
+    fprintf(stderr, "SS.sel=%04x SS.base=%08x, SS.lim=%08x\n", sregs.ss.selector, (uint32_t)sregs.ss.base, (uint32_t)sregs.ss.limit);
+    fprintf(stderr, "DS.sel=%04x DS.base=%08x, DS.lim=%08x\n", sregs.ds.selector, (uint32_t)sregs.ds.base, (uint32_t)sregs.ds.limit);
+    fprintf(stderr, "FS.sel=%04x FS.base=%08x, FS.lim=%08x\n", sregs.fs.selector, (uint32_t)sregs.fs.base, (uint32_t)sregs.fs.limit);
+    fprintf(stderr, "GS.sel=%04x GS.base=%08x, GS.lim=%08x\n", sregs.gs.selector, (uint32_t)sregs.gs.base, (uint32_t)sregs.gs.limit);
+    fprintf(stderr, "CR0: %08x CR2: %08x CR3: %08x CR4: %08x\n", (uint32_t)sregs.cr0, (uint32_t)sregs.cr2, (uint32_t)sregs.cr3, (uint32_t)sregs.cr4);
+
+    fprintf(stderr, "GDT.base=%08x GDT.limit=%08x\n", (uint32_t)sregs.gdt.base, (uint32_t)sregs.gdt.limit);
+    fprintf(stderr, "LDT.base=%08x LDT.limit=%08x\n", (uint32_t)sregs.ldt.base, (uint32_t)sregs.ldt.limit);
+    fprintf(stderr, "IDT.base=%08x IDT.limit=%08x\n", (uint32_t)sregs.idt.base, (uint32_t)sregs.idt.limit);
+    fprintf(stderr, "TR.base =%08x TR.limit =%08x\n", (uint32_t)sregs.tr.base, (uint32_t)sregs.tr.limit);
+}
+
 static jmp_buf top;
 int cpu_run(int cycles)
 {
-    if (irq_line_state) {
-        struct kvm_interrupt intr;
-        intr.irq = pic_get_interrupt();
-        if (ioctl(vcpu_fd, KVM_INTERRUPT, &intr) < 0) {
-            CPU_FATAL("unable to inject interrupt");
-        }
-    }
-
     struct itimerval itimer;
     itimer.it_interval.tv_sec = 0;
     itimer.it_interval.tv_usec = 0;
     itimer.it_value.tv_sec = 0;
+    if (cycles < 10 * 1000)
+        cycles = 10000;
     itimer.it_value.tv_usec = cycles;
+#if 1
     setitimer(ITIMER_REAL, &itimer, NULL);
+#else
+    UNUSED(itimer);
+#endif
 
+    UNUSED(top);
     // Just like the emulated cpu_run, we loop until we hit a hlt, a device wants us to exit, or we've run out of cycles
-    if (setjmp(top) == 0) {
+    /*if (setjmp(top) == 0) */
+    {
     top:
-        if (fast_return_requested)
+        if (irq_line_state) {
+            if (kvm_run->if_flag) {
+                struct kvm_interrupt intr;
+                intr.irq = pic_get_interrupt();
+                if (ioctl(vcpu_fd, KVM_INTERRUPT, &intr) < 0) {
+                    CPU_FATAL("unable to inject interrupt");
+                }
+                irq_line_state = 0;
+            } else
+                kvm_run->request_interrupt_window = 1;
+        }
+
+        if (fast_return_requested) {
+            fast_return_requested = 0;
             goto done;
+        }
         int res = ioctl(vcpu_fd, KVM_RUN, 0);
-        if (res == -EINTR)
-            goto done;
         if (res < 0) {
+            if (errno == EINTR)
+                goto done;
             perror("KVM_RUN");
             CPU_FATAL("cannot run cpu");
         }
@@ -242,6 +298,7 @@ int cpu_run(int cycles)
         }
         case KVM_EXIT_MMIO: { // 6
             void* data = kvm_run->mmio.data;
+            //printf("ADDR: %08x %d\n", (uint32_t)kvm_run->mmio.phys_addr, kvm_run->mmio.is_write);
             if (kvm_run->mmio.is_write) {
                 switch (kvm_run->mmio.len) {
                 case 1:
@@ -277,17 +334,27 @@ int cpu_run(int cycles)
             }
             break;
         }
+        case KVM_EXIT_IRQ_WINDOW_OPEN: // 7
+            kvm_run->request_interrupt_window = 0;
+            goto top;
         case KVM_EXIT_HLT: // 5
+            printf("HLT CALLED\n");
             exit_reason = EXIT_STATUS_HLT;
             goto done;
+        case KVM_EXIT_FAIL_ENTRY:
+            CPU_LOG(" == CPU FAILURE ==\n");
+            cpu_debug();
+            CPU_FATAL("Failed to enter: %llx\n", kvm_run->fail_entry.hardware_entry_failure_reason);
         default:
             printf("todo: exit reason %d\n", kvm_run->exit_reason);
+            abort();
             break;
         }
         goto top;
     }
 done:
-    return 0;
+    printf("LOOP EXITING\n");
+    return cycles;
 }
 
 uint32_t cpu_read_phys(uint32_t addr)
@@ -313,5 +380,5 @@ void cpu_request_fast_return(int e)
 }
 void cpu_cancel_execution_cycle(int r)
 {
-    cpu_cancel_execution_cycle(r);
+    cpu_request_fast_return(r);
 }
