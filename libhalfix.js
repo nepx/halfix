@@ -13,6 +13,9 @@
 
         this.fast = options["fast"] || false;
 
+        this.reportSpeed = options["reportSpeed"] || function (n) { };
+        console.log(options.reportSpeed);
+
         this.paused = false;
 
         /** @type {ImageData} */
@@ -288,20 +291,52 @@
         document.head.appendChild(script);
     };
 
+    var savestate_files = {};
+    function u8tostr(u) {
+        var str = "";
+        for (var i = 0; i < u.length; i = i + 1 | 0)str += String.fromCharCode(u[i]);
+        return str;
+    }
+    /**
+     * Load savestate from directory
+     * @param {string} statepath
+     * @param {function} cb
+     */
+    Halfix.prototype["loadStateXHR"] = function (statepath, cb) {
+        loadFiles([
+            statepath + "/state.bin",
+            statepath + "/ram",
+            statepath + "/vram",
+            statepath + "/diskinfo.json"], function (err, data) {
+                if (err) throw err;
+                savestate_files["/state.bin"] = data[0];
+                savestate_files["/ram"] = data[1];
+                savestate_files["/vram"] = data[2];
+                savestate_files["/diskinfo.json"] = JSON.parse(u8tostr(data[3]));
+
+                wrap("emscripten_load_state")();
+
+                delete data[3]; // try to get this gc'ed 
+
+                cb();
+            }, true);
+    };
+
     /**
      * Pause the emulator
      * @param {boolean} paused
      */
-    Halfix.prototype["pause"] = function(paused){
+    Halfix.prototype["pause"] = function (paused) {
         this.paused = paused;
     };
 
     /**
      * Send a fullscreen request to the brower. 
      */
-    Halfix.prototype["fullscreen"] = function(){
+    Halfix.prototype["fullscreen"] = function () {
         Module["requestFullscreen"]();
     };
+    var cyclebase = 0;
     Halfix.prototype["run"] = function () {
         if (this.paused) return;
         try {
@@ -310,6 +345,8 @@
             var elapsed = (temp = new Date().getTime()) - now;
             if (elapsed >= 1000) {
                 var curcycles = cycles();
+                this.reportSpeed(((curcycles - cyclebase) / (elapsed) / (1000)).toFixed(2));
+                console.log(((curcycles - cyclebase) / (elapsed) / (1000)).toFixed(2));
                 //$("speed").innerHTML = ((curcycles - cyclebase) / (elapsed) / (1000)).toFixed(2);
                 cyclebase = curcycles;
                 now = temp;
@@ -338,7 +375,7 @@
         now = new Date().getTime();
         cycles = wrap("emscripten_get_cycles");
         run = wrap("emscripten_run");
-        
+
         wrap("emscripten_set_fast")(_halfix.fast);
         init_cb();
     }
@@ -855,6 +892,37 @@
             a = a.substring(0, a.length - 1 | 0);
         return a + b; //normalize_path(a + b);
     }
+
+    // Some more savestate-related functions
+    /**
+     * Load file from file cache
+     * @param {number} pathstr Pointer to path string
+     * @param {number} addr Address to load the data
+     */
+    window["loadFile"] = function (pathstr, addr) {
+        var path = readstr(pathstr);
+        var data = savestate_files[path];
+        if (!data) throw new Error("ENOENT: " + path);
+        memcpy(addr, data);
+        return addr;
+    };
+    /**
+     * Load file from file cache and allocate a buffer to store it in. 
+     * It is the responsibility of the caller to free the memory. 
+     * @param {number} pathstr Pointer to path string
+     * @param {number} addr Address to load the data
+     */
+    window["loadFile2"] = function (pathstr, addr) {
+        var path = readstr(pathstr);
+        var data = savestate_files[path];
+        if (!data) throw new Error("ENOENT: " + path);
+        var len = data.length;
+        var addr = alloc(len);
+        _allocs.pop();
+        memcpy(addr, data);
+        console.log(path, data, addr);
+        return addr;
+    };
 
     if (typeof module !== "undefined" && module["exports"])
         module["exports"] = Halfix;

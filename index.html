@@ -112,6 +112,9 @@
             </nav>
             <main role="main" class="col-md-9 ml-sm-auto col-lg-10 px-4">
                 <div class="text-center">
+                    <span><span id="speed">0</span> MIPS</span>
+                </div>
+                <div class="text-center">
                     <canvas id="canvas" height="480" width="640">Your browser does not support canvas</canvas>
                 </div>
             </main>
@@ -314,7 +317,7 @@
             return decodeURIComponent(results[2].replace(/\+/g, ' '));
         }
 
-        var halfix;
+        var halfix, savestate = null;
 
         function pause() {
             $("#btn_pause").attr("disabled", "disabled").blur();
@@ -329,7 +332,12 @@
                 halfix = new Halfix(options);
 
                 halfix.init(function() {
-                    halfix.run();
+                    if (savestate)
+                        halfix.loadStateXHR(savestate, function() {
+                            halfix.run();
+                        });
+                    else
+                        halfix.run();
                 });
             } else {
                 halfix.pause(false);
@@ -362,13 +370,16 @@
                     if (obj2) {
                         opts[str] = obj2;
                     }
-                }else{
-                    if(getParameterByName("hd" + letters[i]) || getParameterByName("cd" + letters[i])){
+                } else {
+                    if (getParameterByName("hd" + letters[i]) || getParameterByName("cd" + letters[i])) {
                         var str = getParameterByName("hd" + letters[i]) ? "hd" + letters[i] : "cd" + letters[i];
                         opts[str] = getParameterByName(str);
                     }
                 }
             }
+
+            savestate = getParameterByName("savestate");
+
             opts.canvas = document.getElementById("canvas");
         }
 
@@ -458,7 +469,12 @@
                 }
             });
 
-            var opts = {};
+            var speed = document.getElementById("speed");
+            var opts = {
+                reportSpeed: function(s) {
+                    speed.innerHTML = s;
+                }
+            };
             $("#btn_start").on("click", function() {
                 if (opts) {
                     mkConfig(opts);
@@ -477,8 +493,7 @@
             });
 
             if (getParameterByName("autostart")) {
-                var opts = {};
-                    mkConfig(opts);
+                mkConfig(opts);
                 run(opts);
             }
         });
