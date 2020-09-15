@@ -9,6 +9,8 @@
         this.canvas = this.options["canvas"] || null;
         this.ctx = this.canvas ? this.canvas.getContext("2d") : null;
 
+        this.total_memory = 256;
+
         this.config = this.buildConfiguration();
 
         this.fast = options["fast"] || false;
@@ -178,6 +180,8 @@
             v++;
             return v;
         }
+
+        this.total_memory = roundUp(mem + 32 + vgamem) * 1024 * 1024 | 0;
         //Module["TOTAL_MEMORY"] = roundUp(mem + 32 + vgamem) * 1024 * 1024 | 0;
         config.push("memory=" + mem + "M");
         config.push("vgamemory=" + vgamem + "M");
@@ -282,6 +286,7 @@
 
         // Set up our module instance
         global["Module"]["canvas"] = this.canvas;
+        global["Module"]["TOTAL_MEMORY"] = this.total_memory;
 
         init_cb = cb;
 
@@ -337,6 +342,14 @@
         Module["requestFullscreen"]();
     };
     var cyclebase = 0;
+
+    function run_again(me, x) {
+        if (requests_in_progress !== 0) {
+            setTimeout(function () { run_again(me, x); }, x)
+        } else
+            me["run"]();
+    }
+
     Halfix.prototype["run"] = function () {
         if (this.paused) return;
         try {
@@ -353,7 +366,7 @@
             }
             var me = this;
             setTimeout(function () {
-                me["run"]();
+                run_again(me, x);
             }, x);
         } catch (e) {
             $("error").innerHTML = "Exception thrown -- see JavaScript console";
@@ -385,9 +398,27 @@
 
     // Set up some stuff that we might find helpful
 
-    const SAVE_LOGS = false;
+    const SAVE_LOGS = true;
     var arr = [];
     Module["printErr"] = function (ln) { if (SAVE_LOGS) arr.push(ln); };
+    function save(filename, data) {
+        var blob = new Blob([data], { type: 'text/csv' });
+        if (window.navigator.msSaveOrOpenBlob) {
+            window.navigator.msSaveBlob(blob, filename);
+        }
+        else {
+            var elem = window.document.createElement('a');
+            elem.href = window.URL.createObjectURL(blob);
+            elem.download = filename;
+            document.body.appendChild(elem);
+            elem.click();
+            document.body.removeChild(elem);
+        }
+    }
+    function saveLog() {
+        save("test.txt", arr.join("\n"));
+    }
+    window["saveLog"] = saveLog;
     Module["print"] = function (ln) { console.log(ln); };
 
     global["update_screen"] = function () {
