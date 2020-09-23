@@ -90,7 +90,6 @@ static uint32_t pci_read(uint32_t addr)
 {
     int offset = addr & 3;
     uint32_t retval = -1;
-    printf("%08x %08x\n", addr, pci.configuration_address_register);
     switch (addr & ~3) {
     case 0xCF8: // PCI Status Register
         return pci.configuration_address_register >> (offset * 8) & 0xFF;
@@ -638,17 +637,29 @@ void pci_init(struct pc_settings* pc)
 
 void pci_set_irq_line(int dev, int state)
 {
-    uint8_t *config = pci.configuration_address_spaces[dev & 0xFF], *config2 = pci.configuration_address_spaces[DEV_82371SB_ID];
+#if 1
+    uint8_t *config = pci.configuration_address_spaces[(dev << 3) & 0xFF], *config2 = pci.configuration_address_spaces[(DEV_82371SB_ID << 3) & 0xFF];
     if (!config)
         PCI_FATAL("Trying to raise IRQ line for non-existent device!\n");
 
-    int pin = config[0x3D] - 1,
-        devN = (uint8_t)((dev >> 3) - 1),
-        fudge = (state == 0) << 1, // if (lower) fudge = 2; else fudge = 0
-        pin_offset = 0x60 + ((pin + devN - fudge) & 3);
-
-    if (state)
+    if (state == 1) {
+        int pin = config[0x3D] - 1,
+            devN = (uint8_t)(dev - 1),
+            pin_offset = 0x60 + ((pin + devN) & 3);
         pic_raise_irq(config2[pin_offset]);
-    else
+    } else {
+        int pin = config[0x3D],
+            devN = dev,
+            pin_offset = 0x60 + ((pin + devN - 2) & 3);
         pic_lower_irq(config2[pin_offset]);
+    }
+#else
+    uint8_t* config = pci.configuration_address_spaces[(dev << 3) & 0xFF];
+    if (!config)
+        PCI_FATAL("Trying to raise IRQ line for non-existent device!\n");
+    if (state)
+        pic_raise_irq(config[0x3C]);
+    else
+        pic_lower_irq(config[0x3C]);
+#endif
 }
