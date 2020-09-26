@@ -137,7 +137,7 @@ static void kbd_state(void)
     state_field(obj, 1, "kbd.keyboard_command", &kbd.keyboard_command);
     state_field(obj, 1, "kbd.mouse_command", &kbd.mouse_command);
     state_field(obj, 1, "kbd.mouse_button_state", &kbd.mouse_button_state);
-// <<< END AUTOGENERATE "state" >>>
+    // <<< END AUTOGENERATE "state" >>>
     kbd_queue_state(obj, &kbd.queues[0], 0);
     kbd_queue_state(obj, &kbd.queues[1], 1);
     kbd_mouse_down(0, 0, 0); // Release all the mouse buttons
@@ -397,10 +397,14 @@ static void kbd_write(uint32_t port, uint32_t data)
                 break;
             case 0xF0: // Get/set keyboard scancode set
                 kbd.command = data;
-                kbd_add(KBD_QUEUE, 0xFA); 
+                kbd_add(KBD_QUEUE, 0xFA);
                 break;
             case 0x05: // Windows NT 4.0 uses this one, don't know what it does.
                 kbd_add(KBD_QUEUE, 0xFE); // RESEND
+                break;
+            case 0xFA: // ATKBD_CMD_SETALL_MBR
+            case 0xE8: // ATKBD "get id," according to Linux kernel sources
+                kbd_add(AUX_QUEUE, 0xFE);
                 break;
 #if 0
             case 0:
@@ -502,7 +506,7 @@ static void kbd_write(uint32_t port, uint32_t data)
             break;
         case 0xF0: // Keyboard scancode set
             kbd_add(KBD_QUEUE, 0xFA);
-            if(data == 0)
+            if (data == 0)
                 kbd_add(KBD_QUEUE, 2);
             kbd.keyboard_command = NO_COMMAND;
             break;
