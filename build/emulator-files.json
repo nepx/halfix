@@ -385,5 +385,5 @@
         "additional_flags": [ "@flags=kvm"
 
         ]
-    },
+    }
 }
