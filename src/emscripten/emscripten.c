@@ -85,11 +85,21 @@ EMSCRIPTEN_KEEPALIVE
 double emscripten_get_cycles(void){
     return (double)cpu_get_cycles();
 }
+EMSCRIPTEN_KEEPALIVE
+double emscripten_get_now(void){
+    return (double)get_now(); 
+}
 
 void pc_set_fast(int yes);
 EMSCRIPTEN_KEEPALIVE
 void emscripten_set_fast(int val){
     pc_set_fast(val);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void emscripten_dyncall_vii(void* func, void* a, int b){
+    // All *_cb() functions have the following signature: void (void*, int)
+    ((void(*)(void*, int))func)(a, b);
 }
 
 // does nothing

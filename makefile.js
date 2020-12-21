@@ -189,8 +189,10 @@ if (!result) result = "halfix";
 
 if (build_type === "emscripten") {
     end_flags.push("-s", "WASM=" + wasm);
-    end_flags.push(
-        "-s", "\"EXTRA_EXPORTED_RUNTIME_METHODS=['dynCall_vii']\"");
+    // Emscripten no longer supports dynCall, apparently. 
+    // Should've known better than to rely on an internal, undocumented method. 
+    //end_flags.push(
+    //    "-s", "\"EXTRA_EXPORTED_RUNTIME_METHODS=['dynCall_vii']\"");
     console.log(end_flags);
 }
 

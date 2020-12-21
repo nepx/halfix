@@ -381,12 +381,15 @@
     // Emscripten support code
     // ========================================================================
 
+    var dynCall_vii;
     var cycles, now;
     function run_wrapper2() {
         wrap("emscripten_init")();
 
         now = new Date().getTime();
         cycles = wrap("emscripten_get_cycles");
+        get_now = wrap("emscripten_get_now");
+        dynCall_vii = wrap("emscripten_dyncall_vii");
         run = wrap("emscripten_run");
 
         wrap("emscripten_set_fast")(_halfix.fast);
@@ -891,7 +894,7 @@
      * @param {number} arg2 The second argument
      */
     function fptr_vii(cb, cb_ptr, arg2) {
-        Module["dynCall_vii"](cb, cb_ptr, arg2);
+        dynCall_vii(cb, cb_ptr, arg2);
     }
     /**
      * Copy a string into JavaScript
