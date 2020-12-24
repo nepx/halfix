@@ -1123,8 +1123,11 @@ int callf(uint32_t eip, uint32_t cs, uint32_t oldeip, int is32)
                     return 0;
                 } else if (dpldiff > 0) // DPL > CPL
                     EXCEPTION_GP(gate_cs_offset);
+                else // Work around GCC warning about fallthrough cases
+                    goto __workaround_gcc;
             // Otherwise, DPL == CPL -- fallthrough to conforming code segment
             case 0x1C ... 0x1F: // Conforming code segment
+__workaround_gcc:
                 init_fast_push(cpu.reg32[ESP], cpu.seg_base[SS], cpu.esp_mask, cpu.tlb_shift_write, is32);
                 if (cs_type == CALL_GATE_386) {
                     push32(cpu.seg[CS]);
@@ -1141,6 +1144,7 @@ int callf(uint32_t eip, uint32_t cs, uint32_t oldeip, int is32)
                 EXCEPTION_GP(gate_cs_offset);
             }
             ABORT(); // Unreachable
+            break; // even more unreachable, but keep gcc happy
         }
         case AVAILABLE_TSS_286:
         case AVAILABLE_TSS_386:
