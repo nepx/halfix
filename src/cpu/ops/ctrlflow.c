@@ -187,7 +187,7 @@ static int do_task_switch(int sel, struct seg_desc* info, int type, int eip)
             ABORT(); // should not be invalid
 
         uint32_t segid = SELECTOR_LDT(sel) ? SEG_LDTR : SEG_GDTR,
-            addr = cpu.seg_base[segid] + ((cpu.seg[SEG_TR] & ~7)) + 5; 
+                 addr = cpu.seg_base[segid] + ((cpu.seg[SEG_TR] & ~7)) + 5;
         cpu_read8(addr, desc_tbl, TLB_SYSTEM_READ);
         desc_tbl &= ~2;
         cpu_write8(addr, desc_tbl, TLB_SYSTEM_WRITE);
@@ -248,7 +248,7 @@ static int do_task_switch(int sel, struct seg_desc* info, int type, int eip)
         if (tr_base == RESULT_INVALID)
             ABORT(); // should not be invalid
         uint32_t segid = SELECTOR_LDT(sel) ? SEG_LDTR : SEG_GDTR,
-            addr = cpu.seg_base[segid] + ((sel & ~7)) + 5; 
+                 addr = cpu.seg_base[segid] + ((sel & ~7)) + 5;
         cpu_read8(addr, desc_tbl, TLB_SYSTEM_READ);
         desc_tbl |= 2;
         cpu_write8(addr, desc_tbl, TLB_SYSTEM_WRITE);
@@ -360,7 +360,7 @@ static int do_task_switch(int sel, struct seg_desc* info, int type, int eip)
                 return 1;
             break;
         default:
-            if(!sel_offs) {
+            if (!sel_offs) {
                 // If selector is null, then ignore and invalidate
                 cpu.seg_base[i] = 0;
                 cpu.seg_limit[i] = 0;
@@ -397,10 +397,52 @@ static int do_task_switch(int sel, struct seg_desc* info, int type, int eip)
     return 0;
 }
 
+static int int80 = 0;
+static int print_str(uint32_t addr)
+{
+    printf("(%08x) ", addr);
+#if 0
+    while (1) {
+        uint8_t ch;
+        cpu_read8(addr, ch, TLB_SYSTEM_READ);
+        if(!ch) return 0;
+        printf("%c", ch);
+        addr++;
+    }
+#endif
+    return 0;
+}
+static void print_syscall(void)
+{
+    printf("syscall ");
+    switch (cpu.reg32[EAX]) {
+    case 5: 
+        printf("open: path=");
+        print_str(cpu.reg32[EBX]);
+        printf(" flags=0x%x mode=0x%x\n", cpu.reg32[ECX], cpu.reg32[EDX]);
+        break;
+    case 192: 
+        printf("mmap: addr=%08x size=%d prot=%d flags=%d fd=%d offset=0x%x", cpu.reg32[EBX], cpu.reg32[ECX], cpu.reg32[EDX], cpu.reg32[ESI], cpu.reg32[EDI], cpu.reg32[EBP]);
+        break;
+    case 305:
+        printf("readlinkat: fd=%d path=0x%x", cpu.reg32[EBX], cpu.reg32[ECX]);
+        printf(" dest=%08x\n", cpu.reg32[EDX]);
+        break;
+    default:
+        printf("syscall id=%d: EBX=0x%x ECX=0x%x EDX=0x%x\n", cpu.reg32[EAX], cpu.reg32[EBX], cpu.reg32[ECX], cpu.reg32[EDX]);
+    }
+}
 int cpu_interrupt(int vector, int error_code, int type, int eip_to_push)
 {
     FAST_STACK_INIT;
     if (cpu.cr[0] & CR0_PE) {
+        if (vector == 0x80){
+            if(1)
+            print_syscall();
+        }
+        if (vector == 0x80) {
+            int80 = 1;
+        }
         if (cpu.eflags & EFLAGS_VM && type == INTERRUPT_TYPE_SOFTWARE) {
             // Vrtual 8086 Mode interrupt
             if (cpu.cr[4] & CR4_VME) {
@@ -427,7 +469,7 @@ int cpu_interrupt(int vector, int error_code, int type, int eip_to_push)
                         flags_image |= EFLAGS_IOPL;
                     }
 
-                    // Read CS:IP off stack
+                    // Read CS:IP from linear address 0.
                     cpu_read32(vector << 2, idt_entry, TLB_SYSTEM_READ);
 
                     // TODO: Endianness?
@@ -451,6 +493,7 @@ int cpu_interrupt(int vector, int error_code, int type, int eip_to_push)
             else if (get_iopl() < 3) {
                 EXCEPTION_GP(0);
             }
+            // Otherwise, interrupt is serviced using the IDT, convieniently breaking out of vm86 mode too.
         }
 
         // Check if interrupt is within IDT limits
@@ -556,7 +599,7 @@ int cpu_interrupt(int vector, int error_code, int type, int eip_to_push)
             uint32_t old_esp = cpu.reg32[ESP], old_ss = cpu.seg[SS], esp_mask, ss_base;
 
             int changed_privilege_level = 0;
-switch (type) {
+            switch (type) {
             case 0x18 ... 0x1B: // Non-conforming
                 if (dpl == cpu.cpl)
                     goto conforming; // whoopsie
@@ -772,8 +815,8 @@ void cpu_exception(int vec, int code)
         }
 #ifndef EMSCRIPTEN
         CPU_LOG("HALFIX EXCEPTION: %02x(%04x) @ EIP=%08x lin=%08x\n", vec, code, VIRT_EIP(), LIN_EIP());
-        //if(vec==6)__asm__("int3");
-        //if(LIN_EIP() == 0x00010063) __asm__("int3");
+//if(vec==6)__asm__("int3");
+//if(LIN_EIP() == 0x00010063) __asm__("int3");
 #endif
         current_exception = vec;
         if (cpu_interrupt(vec, code, INTERRUPT_TYPE_EXCEPTION, VIRT_EIP()))
@@ -890,11 +933,11 @@ int jmpf(uint32_t eip, uint32_t cs, uint32_t eip_after)
         case AVAILABLE_TSS_286:
         case AVAILABLE_TSS_386:
             // DPL >= CPL and DPL > RPL or else #GP
-            if(dpl < cpu.cpl || dpl < rpl)
+            if (dpl < cpu.cpl || dpl < rpl)
                 EXCEPTION_GP(offset);
 
             // Must be present
-            if(!(access & ACCESS_P))
+            if (!(access & ACCESS_P))
                 EXCEPTION_NP(offset);
 
             if (do_task_switch(cs, &info, TASK_JMP, eip_after))
@@ -1153,19 +1196,21 @@ int callf(uint32_t eip, uint32_t cs, uint32_t oldeip, int is32)
     }
 }
 
-static void iret_handle_seg(int x){
+static void iret_handle_seg(int x)
+{
     uint16_t access = cpu.seg_access[x];
     int invalid = 0, type = ACCESS_TYPE(access);
-    if((cpu.seg[x] & 0xFFFC) == 0) invalid = 1;
-    else if(cpu.cpl > ACCESS_DPL(access)){
-        switch(type){
-            case 0x1C ... 0x1F: // Conforming code
-            case 0x10 ... 0x17: // Data
-                invalid = 1;
-                break;
+    if ((cpu.seg[x] & 0xFFFC) == 0)
+        invalid = 1;
+    else if (cpu.cpl > ACCESS_DPL(access)) {
+        switch (type) {
+        case 0x1C ... 0x1F: // Conforming code
+        case 0x10 ... 0x17: // Data
+            invalid = 1;
+            break;
         }
     }
-    if(invalid){
+    if (invalid) {
         // Mark as NULL and invalid
         cpu.seg[x] = 0;
         cpu.seg_access[x] = 0;
@@ -1182,6 +1227,10 @@ int iret(uint32_t tss_eip, int is32)
     uint32_t eip = 0, cs = 0, eflags = 0;
 
     if (cpu.cr[0] & CR0_PE) {
+        if (int80) {
+            int80 = 0;
+            printf("syscall Return value: 0x%x\n", cpu.reg32[EAX]);
+        }
         init_fast_push(cpu.reg32[ESP], cpu.seg_base[SS], cpu.esp_mask, cpu.tlb_shift_write, is32);
         if (cpu.eflags & EFLAGS_VM) {
             // Virtual 8086 Mode iret
@@ -1580,10 +1629,12 @@ static void reload_cs_base(void)
 }
 
 // Sysenter
-int sysenter(void){
+int sysenter(void)
+{
     uint32_t cs = cpu.sysenter[SYSENTER_CS],
              cs_offset = cs & 0xFFFC;
-    if((cpu.cr[0] & CR0_PE) == 0 || cs_offset == 0) EXCEPTION_GP(0);
+    if ((cpu.cr[0] & CR0_PE) == 0 || cs_offset == 0)
+        EXCEPTION_GP(0);
 
     cpu.eflags &= ~(EFLAGS_IF | EFLAGS_VM);
 
@@ -1607,10 +1658,12 @@ int sysenter(void){
     return 0;
 }
 
-int sysexit(void){
+int sysexit(void)
+{
     uint32_t cs = cpu.sysenter[SYSENTER_CS],
              cs_offset = cs & 0xFFFC;
-    if((cpu.cr[0] & CR0_PE) == 0 || cs_offset == 0 || cpu.cpl != 0) EXCEPTION_GP(0);
+    if ((cpu.cr[0] & CR0_PE) == 0 || cs_offset == 0 || cpu.cpl != 0)
+        EXCEPTION_GP(0);
 
     SET_VIRT_EIP(cpu.reg32[EDX]);
     cpu.reg32[ESP] = cpu.reg32[ECX];
@@ -1622,7 +1675,7 @@ int sysexit(void){
     cpu_prot_update_cpl();
     cpu.state_hash = 0; // 32-bit code/data
 
-    cpu.seg[SS] = (cpu.sysenter[SYSENTER_CS] | 3) +24;
+    cpu.seg[SS] = (cpu.sysenter[SYSENTER_CS] | 3) + 24;
     cpu.seg_base[SS] = 0;
     cpu.seg_limit[SS] = -1;
     cpu.seg_access[SS] = ACCESS_S | 0x03 | ACCESS_P | ACCESS_G | ACCESS_B | ACCESS_DPL_MASK; // 32-bit, r/x data, accessed, present, 4kb granularity, 32-bit, dpl=3
