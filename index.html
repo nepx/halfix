@@ -163,8 +163,8 @@
                         <small id="hlp_vmemsz" class="form-text text-muted">Megabytes of video memory</small>
                     </div>
                 </div>
-            </div>
         </div>
+    </div>
     </div>
 
     <!-- BIOS modal -->
@@ -342,7 +342,8 @@
             return decodeURIComponent(results[2].replace(/\+/g, ' '));
         }
 
-        var halfix, savestate = null;
+        var halfix, savestate = null,
+            alreadyRunning = false;
 
         function pause() {
             $("#btn_pause").attr("disabled", "disabled").blur();
@@ -351,6 +352,14 @@
         }
 
         function run(options) {
+            if (alreadyRunning) {
+                $("#btn_start").attr("disabled", "disabled").blur();
+                $("#btn_pause").removeAttr("disabled").blur();
+                halfix.pause(false);
+                halfix.run();
+                return;
+            }
+            alreadyRunning = true;
             $("#btn_start").attr("disabled", "disabled").blur();
             $("#btn_pause").removeAttr("disabled").blur();
             $("#btn_ctrlaltdel").removeAttr("disabled");
@@ -509,10 +518,14 @@
                     speed.innerHTML = s;
                 }
             };
+
+            // Emscripten may override our "run"
+            var run = window.run;
             $("#btn_start").on("click", function() {
-                if (opts) {
-                    mkConfig(opts);
-                }
+                if (!alreadyRunning)
+                    if (opts) {
+                        mkConfig(opts);
+                    }
                 run(opts);
                 opts = null;
             });
