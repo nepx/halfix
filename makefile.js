@@ -38,7 +38,7 @@ var end_flags = [], fincc_flags = [];
 // "));
 end_flags = "-lSDL -lSDLmain -lm -lz".split(" ");
 
-if(os.endianness() === "BE"){
+if (os.endianness() === "BE") {
     console.warn("WARNING: This emulator has not been tested on big-endian platforms and may not work.");
     flags.push("-DCFG_BIG_ENDIAN");
 }
@@ -525,7 +525,8 @@ function done_compiling() {
         for (var i = 0; i < all_files.length; i++) {
             cmdstring += find_object_file_name(all_files[i]) + " ";
         }
-        cmdstring += end_flags.join(" ");
+        if (fincc !== "ar")
+            cmdstring += end_flags.join(" ");
         // if (build_type !== "emscripten") { // apparently, emscripten has it built
         // in! how nice of them
         //    cmdstring += ["", "-lSDL", "-lSDLmain", "-I/usr/include/SDL"].join("
