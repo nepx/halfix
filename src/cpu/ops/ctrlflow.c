@@ -397,52 +397,10 @@ static int do_task_switch(int sel, struct seg_desc* info, int type, int eip)
     return 0;
 }
 
-static int int80 = 0;
-static int print_str(uint32_t addr)
-{
-    printf("(%08x) ", addr);
-#if 0
-    while (1) {
-        uint8_t ch;
-        cpu_read8(addr, ch, TLB_SYSTEM_READ);
-        if(!ch) return 0;
-        printf("%c", ch);
-        addr++;
-    }
-#endif
-    return 0;
-}
-static void print_syscall(void)
-{
-    printf("syscall ");
-    switch (cpu.reg32[EAX]) {
-    case 5: 
-        printf("open: path=");
-        print_str(cpu.reg32[EBX]);
-        printf(" flags=0x%x mode=0x%x\n", cpu.reg32[ECX], cpu.reg32[EDX]);
-        break;
-    case 192: 
-        printf("mmap: addr=%08x size=%d prot=%d flags=%d fd=%d offset=0x%x", cpu.reg32[EBX], cpu.reg32[ECX], cpu.reg32[EDX], cpu.reg32[ESI], cpu.reg32[EDI], cpu.reg32[EBP]);
-        break;
-    case 305:
-        printf("readlinkat: fd=%d path=0x%x", cpu.reg32[EBX], cpu.reg32[ECX]);
-        printf(" dest=%08x\n", cpu.reg32[EDX]);
-        break;
-    default:
-        printf("syscall id=%d: EBX=0x%x ECX=0x%x EDX=0x%x\n", cpu.reg32[EAX], cpu.reg32[EBX], cpu.reg32[ECX], cpu.reg32[EDX]);
-    }
-}
 int cpu_interrupt(int vector, int error_code, int type, int eip_to_push)
 {
     FAST_STACK_INIT;
     if (cpu.cr[0] & CR0_PE) {
-        if (vector == 0x80){
-            if(1)
-            print_syscall();
-        }
-        if (vector == 0x80) {
-            int80 = 1;
-        }
         if (cpu.eflags & EFLAGS_VM && type == INTERRUPT_TYPE_SOFTWARE) {
             // Vrtual 8086 Mode interrupt
             if (cpu.cr[4] & CR4_VME) {
@@ -1231,10 +1189,6 @@ int iret(uint32_t tss_eip, int is32)
     uint32_t eip = 0, cs = 0, eflags = 0;
 
     if (cpu.cr[0] & CR0_PE) {
-        if (int80) {
-            int80 = 0;
-            printf("syscall Return value: 0x%x\n", cpu.reg32[EAX]);
-        }
         init_fast_push(cpu.reg32[ESP], cpu.seg_base[SS], cpu.esp_mask, cpu.tlb_shift_write, is32);
         if (cpu.eflags & EFLAGS_VM) {
             // Virtual 8086 Mode iret
