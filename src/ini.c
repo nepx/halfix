@@ -285,6 +285,13 @@ static const struct ini_enum driver_types[] = {
     { "net", 2 },
     { NULL, 0 }
 };
+static const struct ini_enum virtio_types[] = {
+    { "9p", VIRTIO_9P },
+    { "p9", VIRTIO_9P },
+    { "9pfs", VIRTIO_9P },
+    { "p9fs", VIRTIO_9P },
+    { NULL, 0 }
+};
 
 static int parse_disk(struct drive_info* drv, struct ini_section* s, int id)
 {
@@ -330,6 +337,16 @@ static int parse_disk(struct drive_info* drv, struct ini_section* s, int id)
     return 0;
 }
 
+static char* dupstr(char* src)
+{
+    if (!src)
+        return NULL;
+    int len = strlen(src);
+    char* res = malloc(len + 1);
+    strcpy(res, src);
+    return res;
+}
+
 #ifdef EMSCRIPTEN
 EMSCRIPTEN_KEEPALIVE
 #endif
@@ -363,6 +380,7 @@ int parse_cfg(struct pc_settings* pc, char* data)
     pc->floppy_enabled = get_field_int(global, "floppy", 1);
     pc->vbe_enabled = get_field_int(global, "vbe", 1);
     pc->pci_vga_enabled = get_field_int(global, "pcivga", 0);
+    pc->boot_kernel = get_field_int(global, "kernel", 0);
 
     // Now figure out disk image information
     int res = parse_disk(&pc->drives[0], get_section(global, "ata0-master"), 0);
@@ -426,6 +444,38 @@ int parse_cfg(struct pc_settings* pc, char* data)
 #endif
     } else {
         pc->ne2000.enabled = 0;
+    }
+
+    if (pc->boot_kernel) {
+        struct ini_section* kernel = get_section(global, "kernel");
+        pc->kernel_cmdline = dupstr(get_field_string(kernel, "cmdline"));
+        pc->kernel_img = dupstr(get_field_string(kernel, "image"));
+    } else {
+        pc->kernel_cmdline = NULL;
+        pc->kernel_img = NULL;
+    }
+
+    char sid[50];
+    for (int i = 0; i < MAX_VIRTIO_DEVICES; i++) {
+        sprintf(sid, "virtio%d", i);
+        struct ini_section* virtio = get_section(global, sid);
+        struct virtio_cfg* cfg = &pc->virtio[i];
+        cfg->type = -1;
+        if (!virtio)
+            continue;
+
+        int x = get_field_enum(virtio, "type", virtio_types, -1);
+        if (x == -1) {
+            fprintf(stderr, "Unknown virtio%d type - ignoring\n", i);
+            continue;
+        }
+        cfg->type = x;
+        switch (x) {
+        case VIRTIO_9P:
+            cfg->fs9p.path = dupstr(get_field_string(virtio, "path"));
+            cfg->fs9p.ro = get_field_int(virtio, "readonly", 1);
+            break;
+        }
     }
 
     // Determine boot order
