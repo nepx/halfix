@@ -153,6 +153,9 @@ for (var i = 0; i < argv.length; i++) {
         case "--cc":
             cc = fincc = argv[++i];
             break;
+        case "--fincc":
+            fincc = argv[++i];
+            break;
         case "--disable-debug":
             flags.splice(flags.indexOf("-g3"), 1);
             break;
