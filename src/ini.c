@@ -490,6 +490,14 @@ int parse_cfg(struct pc_settings* pc, char* data)
         pc->boot_sequence[2] = get_field_enum(boot, "c", boot_types, BOOT_FLOPPY);
     }
 
+    // Get CPU information
+    struct ini_section* cpu = get_section(global, "cpu");
+    if (cpu == NULL) {
+        pc->cpu.cpuid_limit_winnt = 0;
+    } else {
+        pc->cpu.cpuid_limit_winnt = get_field_int(cpu, "cpuid_limit_winnt", 0);
+    }
+
     UNUSED(get_section);
 
     free_ini(global);

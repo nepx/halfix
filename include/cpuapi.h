@@ -26,6 +26,8 @@ struct cpu_config
     char *vendor_name;
     int level;
 
+    int cpuid_limit_winnt;
+
     struct cpuid_level_info features[FEATURE_SIZE_MAX];
 };
 

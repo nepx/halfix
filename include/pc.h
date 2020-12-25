@@ -2,6 +2,7 @@
 #define PC_H
 
 #include "drive.h"
+#include "cpuapi.h" // for struct cpu_config
 #include <stdint.h>
 
 struct loaded_file {
@@ -85,6 +86,8 @@ struct pc_settings {
     struct ne2000_settings ne2000;
 
     struct drive_info floppy_drives[2];
+
+    struct cpu_config cpu;
 
     struct virtio_cfg virtio[MAX_VIRTIO_DEVICES];
 
