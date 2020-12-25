@@ -8,6 +8,17 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
+    <style>
+        .progress {
+            text-align: center;
+        }
+        
+        .progress-value {
+            position: absolute;
+            right: 0;
+            left: 0;
+        }
+    </style>
 </head>
 
 <body>
@@ -121,6 +132,9 @@
                 </div>
                 <div class="text-center">
                     <canvas id="canvas" height="480" width="640">Your browser does not support canvas</canvas>
+                </div>
+                <div class="text-center">
+                    <span>Downloading <code id="pbt">nothing</code><progress id="pb" max="100" value="0"></progress>
                 </div>
             </main>
         </div>
@@ -301,7 +315,7 @@
                         <small id="hlp_fast" class="form-text text-muted">If checked, the emulator runs as fast as possible, causing time to become desynchronized.</small>
                     </div>
                     <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="inp_winnt" checked />
+                        <input class="form-check-input" type="checkbox" id="inp_winnt" />
                         <label class="form-check-label" for="inp_winnt" aria-describedby="hlp_winnt">
                         Work around Windows NT CPUID bug
                     </label>
@@ -373,6 +387,13 @@
             opts.pcivga = $("#inp_pcivga")[0].checked;
             opts.floppy = $("#inp_floppy")[0].checked;
             opts.winnt_hack = getParameterByName("winnt") ? true : $("#inp_winnt")[0].checked;
+
+            var pbt = $("#pbt"),
+                pb = $("#pb")[0];
+            opts.onprogress = function(file, cur, tot) {
+                pbt.html(file);
+                pb.setAttribute("value", (cur / tot * 100) | 0);
+            };
 
             var letters = ["a", "b", "c", "d"];
             for (var i = 0; i < 4; i++) {

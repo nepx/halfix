@@ -23,6 +23,8 @@
         this.image_data = null;
 
         this.config = this.buildConfiguration();
+
+        this.onprogress = options["onprogress"] || function (a, b, c) { };
     }
 
     var _cache = [];
@@ -108,10 +110,12 @@
     };
 
     /**
-     * @param {number} progress Fraction of completion * 100 
+     * @param {string} f name of file
+     * @param {number} a current position
+     * @param {number} b end
      */
-    Halfix.prototype.updateNetworkProgress = function (progress) {
-
+    Halfix.prototype.updateNetworkProgress = function (f, a, b) {
+        this.onprogress(f, a, b);
     };
     /**
      * @param {number} total Total bytes loaded
@@ -227,8 +231,7 @@
 
                 xhr.onprogress = function (e) {
                     if (e.lengthComputable) {
-                        var now = e.loaded / e.total * 100 | 0;
-                        _halfix.updateNetworkProgress(now - lastProgress | 0);
+                        _halfix.updateNetworkProgress(path, e.loaded, e.total);
                         lastProgress = now;
                     }
                 };
