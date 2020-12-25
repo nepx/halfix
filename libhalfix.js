@@ -11,9 +11,8 @@
 
         this.total_memory = 256;
 
-        this.config = this.buildConfiguration();
-
         this.fast = options["fast"] || false;
+        this.winnt_hack = options["winnt_hack"] || false;
 
         this.reportSpeed = options["reportSpeed"] || function (n) { };
         console.log(options.reportSpeed);
@@ -22,6 +21,8 @@
 
         /** @type {ImageData} */
         this.image_data = null;
+
+        this.config = this.buildConfiguration();
     }
 
     var _cache = [];
@@ -199,10 +200,15 @@
         config.push("b=" + bootOrder[1] + "d");
         config.push("c=" + bootOrder[2] + "d");
 
+        config.push("[cpu]");
+        config.push("cpuid_limit_winnt=" + (this.winnt_hack ? "1" : "0"));
+        config.push(""); // Trailing empty line
+
         return config.join("\n");
     }
     Halfix.prototype["send_ctrlaltdel"] = function () {
-        send_ctrlaltdel();
+        send_ctrlaltdel(1);
+        send_ctrlaltdel(0);
     };
 
     function loadFiles(paths, cb, gz) {

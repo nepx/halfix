@@ -300,6 +300,13 @@
                     </label>
                         <small id="hlp_fast" class="form-text text-muted">If checked, the emulator runs as fast as possible, causing time to become desynchronized.</small>
                     </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="inp_winnt" checked />
+                        <label class="form-check-label" for="inp_winnt" aria-describedby="hlp_winnt">
+                        Work around Windows NT CPUID bug
+                    </label>
+                        <small id="hlp_winnt" class="form-text text-muted">If checked, the reported CPUID level is set to 2. Other functionality isn't compromised. </small>
+                    </div>
                 </div>
             </div>
         </div>
@@ -365,6 +372,7 @@
             opts.pci = $("#inp_pci")[0].checked;
             opts.pcivga = $("#inp_pcivga")[0].checked;
             opts.floppy = $("#inp_floppy")[0].checked;
+            opts.winnt_hack = getParameterByName("winnt") ? true : $("#inp_winnt")[0].checked;
 
             var letters = ["a", "b", "c", "d"];
             for (var i = 0; i < 4; i++) {
