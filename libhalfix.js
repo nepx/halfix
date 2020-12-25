@@ -201,6 +201,9 @@
 
         return config.join("\n");
     }
+    Halfix.prototype["send_ctrlaltdel"] = function () {
+        send_ctrlaltdel();
+    };
 
     function loadFiles(paths, cb, gz) {
         var resultCounter = paths.length | 0,
@@ -381,7 +384,7 @@
     // Emscripten support code
     // ========================================================================
 
-    var dynCall_vii;
+    var dynCall_vii, send_ctrlaltdel;
     var cycles, now;
     function run_wrapper2() {
         wrap("emscripten_init")();
@@ -391,6 +394,7 @@
         get_now = wrap("emscripten_get_now");
         dynCall_vii = wrap("emscripten_dyncall_vii");
         run = wrap("emscripten_run");
+        send_ctrlaltdel = wrap("display_send_ctrl_alt_del");
 
         wrap("emscripten_set_fast")(_halfix.fast);
         init_cb();
