@@ -182,7 +182,7 @@
         }
 
         this.total_memory = roundUp(mem + 32 + vgamem) * 1024 * 1024 | 0;
-        //Module["TOTAL_MEMORY"] = roundUp(mem + 32 + vgamem) * 1024 * 1024 | 0;
+        //Module["INITIAL_MEMORY"] = roundUp(mem + 32 + vgamem) * 1024 * 1024 | 0;
         config.push("memory=" + mem + "M");
         config.push("vgamemory=" + vgamem + "M");
         this.buildDrive(config, "a", 0, "master");
@@ -286,7 +286,7 @@
 
         // Set up our module instance
         global["Module"]["canvas"] = this.canvas;
-        global["Module"]["TOTAL_MEMORY"] = this.total_memory;
+        global["Module"]["INITIAL_MEMORY"] = this.total_memory;
 
         init_cb = cb;
 
@@ -308,6 +308,7 @@
      * @param {function} cb
      */
     Halfix.prototype["loadStateXHR"] = function (statepath, cb) {
+        var me = this;
         loadFiles([
             statepath + "/state.bin",
             statepath + "/ram",
@@ -519,7 +520,6 @@
             strcpy(strptr, p);
             wrap("drive_emscripten_init")(info_ptr, strptr, dataptr, id);
             gc();
-
             global["drives"][id] = image;
             requests_in_progress = requests_in_progress - 1 | 0;
             if (requests_in_progress === 0) run_wrapper2();
