@@ -221,6 +221,7 @@ int pc_init(struct pc_settings* pc)
 {
     if (cpu_init() == -1)
         return -1;
+    cpu_set_cpuid(&pc->cpu);
     io_init();
     dma_init();
     cmos_init(pc->current_time);

@@ -755,6 +755,7 @@ void fdc_dma_complete(void)
     case 0x0D:
     case 0x4D: { // Format track
     fdc_handle_format(NULL, 0);
+    break;
     }
     case 0x05:
     case 0x25:

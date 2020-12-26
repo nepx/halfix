@@ -11,9 +11,8 @@
 
         this.total_memory = 256;
 
-        this.config = this.buildConfiguration();
-
         this.fast = options["fast"] || false;
+        this.winnt_hack = options["winnt_hack"] || false;
 
         this.reportSpeed = options["reportSpeed"] || function (n) { };
         console.log(options.reportSpeed);
@@ -22,6 +21,10 @@
 
         /** @type {ImageData} */
         this.image_data = null;
+
+        this.config = this.buildConfiguration();
+
+        this.onprogress = options["onprogress"] || function (a, b, c) { };
     }
 
     var _cache = [];
@@ -107,10 +110,12 @@
     };
 
     /**
-     * @param {number} progress Fraction of completion * 100 
+     * @param {string} f name of file
+     * @param {number} a current position
+     * @param {number} b end
      */
-    Halfix.prototype.updateNetworkProgress = function (progress) {
-
+    Halfix.prototype.updateNetworkProgress = function (f, a, b) {
+        this.onprogress(f, a, b);
     };
     /**
      * @param {number} total Total bytes loaded
@@ -199,8 +204,16 @@
         config.push("b=" + bootOrder[1] + "d");
         config.push("c=" + bootOrder[2] + "d");
 
+        config.push("[cpu]");
+        config.push("cpuid_limit_winnt=" + (this.winnt_hack ? "1" : "0"));
+        config.push(""); // Trailing empty line
+
         return config.join("\n");
     }
+    Halfix.prototype["send_ctrlaltdel"] = function () {
+        send_ctrlaltdel(1);
+        send_ctrlaltdel(0);
+    };
 
     function loadFiles(paths, cb, gz) {
         var resultCounter = paths.length | 0,
@@ -218,8 +231,7 @@
 
                 xhr.onprogress = function (e) {
                     if (e.lengthComputable) {
-                        var now = e.loaded / e.total * 100 | 0;
-                        _halfix.updateNetworkProgress(now - lastProgress | 0);
+                        _halfix.updateNetworkProgress(path, e.loaded, e.total);
                         lastProgress = now;
                     }
                 };
@@ -382,7 +394,7 @@
     // Emscripten support code
     // ========================================================================
 
-    var dynCall_vii;
+    var dynCall_vii, send_ctrlaltdel;
     var cycles, now;
     function run_wrapper2() {
         wrap("emscripten_init")();
@@ -392,6 +404,7 @@
         get_now = wrap("emscripten_get_now");
         dynCall_vii = wrap("emscripten_dyncall_vii");
         run = wrap("emscripten_run");
+        send_ctrlaltdel = wrap("display_send_ctrl_alt_del");
 
         wrap("emscripten_set_fast")(_halfix.fast);
         init_cb();

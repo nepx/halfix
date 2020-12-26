@@ -17,10 +17,18 @@
 //#define CORE_DUO_SUPPORT
 // Uncomment this to make the CPU pretend it's an Intel Atom N270
 #define ATOM_N270_SUPPORT
+static int winnt_limit_cpuid;
+
+// Sets CPUID information. Currently unimplemented
+int cpu_set_cpuid(struct cpu_config* x)
+{
+    winnt_limit_cpuid = x->cpuid_limit_winnt;
+    return 0;
+}
 
 void cpuid(void)
 {
-    CPU_LOG("CPUID called with EAX=%08x\n", cpu.reg32[EAX]);
+    //CPU_LOG("CPUID called with EAX=%08x\n", cpu.reg32[EAX]);
     switch (cpu.reg32[EAX]) {
     // TODO: Allow this instruction to be customized
     case 0:
@@ -34,6 +42,9 @@ void cpuid(void)
         cpu.reg32[ECX] = 0x6c65746e;
         cpu.reg32[EDX] = 0x49656e69;
         cpu.reg32[EBX] = 0x756e6547; // GenuineIntel
+
+        if (winnt_limit_cpuid)
+            cpu.reg32[EAX] = 2;
         break;
     case 1:
 #ifdef P4_SUPPORT
@@ -157,6 +168,7 @@ void cpuid(void)
         cpu.reg32[EBX] = 2;
         break;
 #ifdef ATOM_N270_SUPPORT
+    case 0x40000000:
     case 0x40000001:
 #endif
     case 10:
@@ -250,7 +262,9 @@ void cpuid(void)
 #endif /* ndef I486_SUPPORT */
     default:
         CPU_DEBUG("Unknown CPUID level: 0x%08x\n", cpu.reg32[EAX]);
+        goto __annoying_gcc_workaround;
     case 0x80860000 ... 0x80860007: // Transmeta
+__annoying_gcc_workaround:
         cpu.reg32[EAX] = 0;
         cpu.reg32[ECX] = cpu.reg32[EDX] = cpu.reg32[EBX] = 0;
         break;

@@ -283,6 +283,7 @@ void cpu_shift16(int op, uint16_t* dest, uint16_t src)
                 cpu.laux = SHL16;
                 break;
             } else res = *dest;
+            break;
         case 5:
             src &= 31;
             if(src) {
@@ -400,11 +401,12 @@ void cpu_shift32(int op, uint32_t* dest, uint32_t src)
 
 int cpu_muldiv8(int op, uint32_t src)
 {
-    uint32_t result, result_mod;
+    uint32_t result = 0 /* annoying gcc workaround */, result_mod;
     int8_t low, high;
     switch (op & 7) {
     case 0 ... 3:
         ABORT();
+        break;
     case 4: // mul
         result = src * cpu.reg8[AL];
         cpu.lop1 = 0;
@@ -447,11 +449,12 @@ int cpu_muldiv8(int op, uint32_t src)
 }
 int cpu_muldiv16(int op, uint32_t src)
 {
-    uint32_t result, result_mod, original;
+    uint32_t result = 0 /* annoying gcc workaround */, result_mod, original;
     int16_t low, high;
     switch (op & 7) {
     case 0 ... 3:
         ABORT();
+        break;
     case 4: // mul
         result = src * cpu.reg16[AX];
         cpu.lop1 = 0;
@@ -497,11 +500,12 @@ int cpu_muldiv16(int op, uint32_t src)
 }
 int cpu_muldiv32(int op, uint32_t src)
 {
-    uint64_t result, result_mod, original;
+    uint64_t result = 0 /* annoying gcc workaround */, result_mod, original;
     int32_t low, high;
     switch (op & 7) {
     case 0 ... 3:
         ABORT();
+        break;
     case 4: // mul
         result = (uint64_t)src * cpu.reg32[EAX];
         cpu.lop1 = 0;

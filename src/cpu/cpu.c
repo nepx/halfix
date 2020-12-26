@@ -151,13 +151,6 @@ int cpu_add_rom(int addr, int size, void* data)
     return 0;
 }
 
-// Sets CPUID information. Currently unimplemented
-int cpu_set_cpuid(struct cpu_config* x)
-{
-    UNUSED(x);
-    return 0;
-}
-
 int cpu_get_exit_reason(void)
 {
     return cpu.exit_reason;

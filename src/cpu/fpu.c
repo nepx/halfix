@@ -31,9 +31,11 @@ FADD:
 */
 // There are no read-modify-write operations, thank god.
 
+#ifndef LIBCPU
 #define FPU_DEBUG
 #ifdef FPU_DEBUG
 #include <math.h>
+#endif
 #endif
 
 #include "cpu/cpu.h"
