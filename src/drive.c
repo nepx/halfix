@@ -109,6 +109,7 @@ static void join_path(char* dest, int alen, char* a, char* b)
         alen++;
     }
     strcpy(dest + alen, b);
+
 }
 
 static void drive_get_path(char* dest, char* pathbase, uint32_t x)
@@ -562,7 +563,7 @@ static void drive_internal_state(void* this_ptr, char* pn)
     struct bjson_object* obj = state_obj(pn, 4 + this->path_count + 1);
 
     state_field(obj, 4, "size", &this->size);
-    //state_field(obj, 4, "path_count", &this->path_count);
+    state_field(obj, 4, "path_count", &this->path_count);
     state_field(obj, 4, "block_count", &this->block_count);
     uint32_t* block_infos = alloca(this->block_count * 4);
 

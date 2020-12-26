@@ -82,6 +82,11 @@ void emscripten_savestate(void){
 }
 
 EMSCRIPTEN_KEEPALIVE
+void emscripten_load_state(void){
+    state_read_from_file("");
+}
+
+EMSCRIPTEN_KEEPALIVE
 double emscripten_get_cycles(void){
     return (double)cpu_get_cycles();
 }
