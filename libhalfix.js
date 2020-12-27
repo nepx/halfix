@@ -298,7 +298,8 @@
 
         // Set up our module instance
         global["Module"]["canvas"] = this.canvas;
-        global["Module"]["INITIAL_MEMORY"] = this.total_memory;
+        //global["Module"]["INITIAL_MEMORY"] = this.total_memory;
+        //global["Module"]["MEMORY_SIZE"] = this.total_memory;
 
         init_cb = cb;
 
