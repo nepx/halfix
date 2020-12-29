@@ -11,11 +11,10 @@
 #include <SDL/SDL.h>
 #include <stdlib.h>
 
-
 #ifdef EMSCRIPTEN
 #include <emscripten.h>
 
-// These are two functions that can be more efficiently offered in native JavaScript. 
+// These are two functions that can be more efficiently offered in native JavaScript.
 void emscripten_handle_resize(void* framebuffer, int w, int h);
 void emscripten_flip(void);
 #endif
@@ -28,10 +27,18 @@ void emscripten_flip(void);
     } while (0)
 
 static SDL_Surface* surface = NULL;
+#ifndef EMSCRIPTEN
+static SDL_Surface* screen = NULL;
+static void* surface_pixels;
+#endif
 
 void* display_get_pixels(void)
 {
+#ifdef EMSCRIPTEN
     return surface->pixels;
+#else
+    return surface_pixels;
+#endif
 }
 
 static int h, w, mouse_enabled = 0, mhz_rating = -1;
@@ -63,7 +70,29 @@ void display_set_resolution(int width, int height)
         return;
     }
     DISPLAY_LOG("Changed resolution to w=%d h=%d\n", width, height);
+#ifdef EMSCRIPTEN
+    // SetVideoMode already works, no need to play around with that:
+    // https://jamesfriend.com.au/working-implementation-sdlcreatergbsurfacefrom-emscripten
     surface = SDL_SetVideoMode(width, height, 32, SDL_SWSURFACE);
+#else
+
+    if (surface_pixels)
+        free(surface_pixels);
+    surface_pixels = malloc(width * height * 4);
+
+    if (surface)
+        SDL_FreeSurface(surface);
+    if (screen)
+        SDL_FreeSurface(screen);
+
+    screen = SDL_SetVideoMode(width, height, 32, SDL_SWSURFACE);
+    surface = SDL_CreateRGBSurfaceFrom(surface_pixels, width, height, 32,
+        width * 4, // pitch -- number of bytes per row
+        0x00ff0000, // red
+        0x0000ff00, // green
+        0x000000ff, // blue
+        0xff000000); // alpha
+#endif
     w = width;
     h = height;
     display_set_title();
@@ -85,7 +114,14 @@ void display_update(int scanline_start, int scanlines)
     } else {
 //printf("Updating %d scanlines starting from %d\n", scanlines, scanline_start);
 #ifndef EMSCRIPTEN
-        SDL_Flip(surface);
+        SDL_Rect rect;
+        rect.x = 0;
+        rect.y = 0;
+        rect.w = w;
+        rect.h = h;
+        //__asm__("int3");
+        SDL_BlitSurface(surface, &rect, screen, &rect);
+        SDL_Flip(screen);
 #else
         emscripten_flip();
 #endif
@@ -114,7 +150,7 @@ static int sdl_keysym_to_scancode(int sym)
 {
     int n;
     switch (sym) {
-    case SDLK_0... SDLK_9:
+    case SDLK_0 ... SDLK_9:
         n = sym - SDLK_0;
         if (!n)
             n = 10;
@@ -201,7 +237,7 @@ static int sdl_keysym_to_scancode(int sym)
         return 0xE051;
     case SDLK_DELETE:
         return 0xE053;
-    case SDLK_F1... SDLK_F12:
+    case SDLK_F1 ... SDLK_F12:
         return 0x3B + (sym - SDLK_F1);
     case SDLK_SLASH:
         return 0x35;
@@ -289,7 +325,7 @@ void display_handle_events(void)
                     display_mouse_capture_update(1);
                 else
 #endif
-                     kbd_mouse_down(MOUSE_STATUS_NOCHANGE, MOUSE_STATUS_NOCHANGE, k);
+                    kbd_mouse_down(MOUSE_STATUS_NOCHANGE, MOUSE_STATUS_NOCHANGE, k);
                 break;
             }
             break;
@@ -314,11 +350,20 @@ void display_handle_events(void)
 #ifdef EMSCRIPTEN
 EMSCRIPTEN_KEEPALIVE
 #endif
-void display_send_ctrl_alt_del(int down){
+void display_send_ctrl_alt_del(int down)
+{
     down = down ? 0 : 0x80;
     display_kbd_send_key(0x1D | down); // CTRL
     display_kbd_send_key(0xE038 | down); // ALT
     display_kbd_send_key(0xE053 | down); // DEL
+}
+
+#ifdef EMSCRIPTEN
+EMSCRIPTEN_KEEPALIVE
+#endif
+void display_send_scancode(int key)
+{
+    display_kbd_send_key(key);
 }
 
 void display_init(void)
@@ -328,6 +373,10 @@ void display_init(void)
 
     display_set_title();
     display_set_resolution(640, 480);
+
+#ifndef EMSCRIPTEN
+    screen = SDL_SetVideoMode(640, 400, 32, SDL_SWSURFACE);
+#endif
 
     resized = 0;
 #ifdef EMSCRIPTEN
