@@ -380,7 +380,37 @@
             }
         }
 
+        // Checks for any overrides from the querystring and sets the form values as appropriate
+        function checkOverrides() {
+            // Maps between the parameter name and the selector of the input element
+            const configMappings = {
+                "mem": "#inp_memsz",
+                "vgamem": "#inp_vmemsz",
+                "apic": "#inp_apic",
+                "acpi": "#inp_acpi",
+                "pci":  "#inp_pci",
+                "pcivga": "#inp_pcivga",
+                "floppy": "#inp_floppy",
+                "winnt": "#inp_winnt",
+            };
+            
+            const entries = Object.entries(configMappings);
+            for (const [parameter, id] of entries) {
+                var value = getParameterByName(parameter);
+                if (!value)
+                    continue;
+                var input = $(id);
+                // Explict check for checkbox.
+                if (input.prop('type') == "checkbox")
+                    input[0].checked = (value == 1 || value=='') ? true : false;
+                else
+                    input.val(value);
+            }
+        }
+
         function mkConfig(opts) {
+            
+
             opts.mem = $("#inp_memsz").val();
             opts.vgamem = $("#inp_vmemsz").val();
 
@@ -541,6 +571,9 @@
             $("#btn_ctrlaltdel").on("click", function() {
                 halfix.send_ctrlaltdel();
             });
+
+            // Update the UI to match any overriden parameters in the URL. Eg mem
+            checkOverrides();
 
             if (getParameterByName("autostart")) {
                 mkConfig(opts);
