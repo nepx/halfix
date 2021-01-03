@@ -397,11 +397,11 @@
             const entries = Object.entries(configMappings);
             for (const [parameter, id] of entries) {
                 var value = getParameterByName(parameter);
-                if (!value)
+                if (value == null)
                     continue;
                 var input = $(id);
                 // Explict check for checkbox.
-                if (input.prop('type') == "checkbox")
+                if (input.prop('type') === "checkbox")
                     input[0].checked = (value == 1 || value=='') ? true : false;
                 else
                     input.val(value);
