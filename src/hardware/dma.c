@@ -222,7 +222,7 @@ static void dma_io_writeb(uint32_t port, uint32_t data)
         int channel = data & 3;
         if ((data >> 2 & 3) == 3)
             DMA_LOG("Unsupported DMA transfer mode 3\n");
-        dma.mode[channel | (offset << 4)] = data;
+        dma.mode[channel | (offset << 3)] = data;
         dma_run_transfers();
         break;
     }
