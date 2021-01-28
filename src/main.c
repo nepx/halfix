@@ -1,3 +1,4 @@
+#include "cpuapi.h"
 #include "devices.h"
 #include "display.h"
 #include "drive.h"
@@ -48,9 +49,9 @@ static void generic_help(const struct option* options)
             return;
 
         char line[100];
-        int linelength = sprintf(line, " -%s", o->name);
+        int linelength = sprintf(line, " -%s", o->alias);
         if (o->alias)
-            linelength += sprintf(line + linelength, " --%s", o->alias);
+            linelength += sprintf(line + linelength, " --%s", o->name);
 
         if (o->flags & HASARG)
             linelength += sprintf(line + linelength, " [arg]");
@@ -81,11 +82,12 @@ int main(int argc, char** argv)
             const struct option* o = options + j++;
             int long_ver = arg[1] == '-'; // XXX what if string is only 1 byte long?
 
-            if(!o->name) break;
+            if (!o->name)
+                break;
             if (!strcmp(long_ver ? o->name : o->alias, arg + (long_ver + 1))) {
                 char* data;
                 if (o->flags & HASARG) {
-                    if (!(data = argv[i++])) {
+                    if (!(data = argv[++i])) {
                         fprintf(stderr, "Expected argument to option %s\n", arg);
                         return 0;
                     }
