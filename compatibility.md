@@ -147,7 +147,7 @@ I have not tried versions besides 16.04.
 Boots on native and browser, although it takes a while. 
 
 ## ReactOS
-Works fine, from the LiveCD. though. Icons don't render when booted with VGA. However, they do render fine when VESA is enabled (remember to enable PCI VGA).
+Works fine, from the LiveCD, though. Icons don't render when booted with VGA. However, they do render fine when VESA is enabled (remember to enable PCI VGA).
 
 I have not tried versions besides 0.4.12. 
 
