@@ -559,7 +559,7 @@ int apic_next(itick_t now)
     if (apic.timer_next <= now) {
         // Raise interrupt
         if(!(info & 1)) {// LVT_DISABLED set to 0
-            APIC_LOG("  timer period %ld cur=%ld next=%ld\n", apic_get_period(), now, apic.timer_next);
+            APIC_LOG("  timer period %llu cur=%llu next=%llu\n", apic_get_period(), now, apic.timer_next);
             apic_receive_bus_message(apic.lvt[LVT_INDEX_TIMER] & 0xFF, LVT_DELIVERY_FIXED, 0);
         }
         else apic_timer_enabled = 0;
